@@ -22,16 +22,106 @@ There is no "World" object that *contains* the vehicle. There is a simulation th
 
 To avoid ambiguity, we define the following taxonomy:
 
+### Core Concepts
+
 | Term | Definition | Context |
 | :--- | :--- | :--- |
-| **Component** | The fundamental unit of **Execution**. A C++ class that implements `Stage()` and `Step()`. It owns State and Logic. | `class JetEngine : public Component` |
+| **Component** | The fundamental unit of **Execution**. A C++ class that implements `Provision()`, `Stage()`, and `Step()`. It owns State and Logic. | `class JetEngine : public Component` |
 | **Model** | A stateless unit of **Physics**. A pure function or helper class (usually from **Vulcan**) that performs a standard calculation. Components *use* Models. | `vulcan::atmosphere::usa76` |
 | **System** | The physical concept being simulated. A System is often implemented by one or more Components. | "The Propulsion System" |
 | **Entity** | A virtual unit of **Identity**. It does **not** exist as a C++ object. It is a **Namespace** acting as a prefix for signal organization. | "Falcon9" in `Falcon9.Propulsion.Thrust` |
+
+### Data Concepts
+
+| Term | Definition | Context |
+| :--- | :--- | :--- |
 | **Signal** | A discrete unit of **Data** on the Backplane. Types: `double`, `int32`, `int64`. Booleans use `int32` (0/1). | `nav.altitude`, `gnc.mode`, `aero.ref_area` |
 | **Backplane** | The centralized **Registry** where all Signals are published. **All observable/configurable numeric data lives here.** | `std::map<string, double*>` |
-| **Lifecycle** | A signal property: **Static** (set at Stage, immutable) or **Dynamic** (updated every Step). Static signals hold "parameter-like" config values. | `mass.dry` (static), `nav.vel` (dynamic) |
-| **State** | The subset of Signals that persist across time steps and require integration (differential equations). | `FuelMass`, `Velocity` |
+| **Signal Lifecycle** | A signal property: **Static** or **Dynamic**. Static signals are immutable after Stage. Dynamic signals are updated every Step. | `mass.dry` (static), `nav.vel` (dynamic) |
+| **Parameter** | A **Static Signal** loaded from config. Parameters are set at Provision/Stage and do not change during the run. Parameters ARE static signals—the terms are synonymous. | `max_thrust`, `reference_area`, `time_constant` |
+| **State** | The subset of Dynamic Signals that persist across time steps and require integration (differential equations). Components write derivatives; the integrator updates state. | `FuelMass`, `Velocity`, `spool_speed` |
+| **Derivative** | The rate of change of a State signal. Written by components during Step, consumed by the integrator. | `state_dot_velocity`, `fuel_flow_rate` |
+
+### Component Lifecycle Phases
+
+| Phase | When Called | Purpose | Key Actions |
+| :--- | :--- | :--- | :--- |
+| **Provision** | Once at application launch | Heavy lifting—allocate memory, compile graphs, parse assets | Register outputs on Backplane, load parameters from config, allocate state vectors |
+| **Stage** | Start of each episode/run | Prepare for $t=0$—reset state, solve trim, wire inputs | Resolve input pointers from Backplane, apply initial conditions, run trim solver if needed |
+| **Step** | Every time step (thousands/run) | Advance simulation by $\Delta t$ | Read inputs, compute derivatives, write outputs. **NO allocation, NO string lookups.** |
+
+### Extended Lifecycle Hooks (Optional)
+
+| Hook | When Called | Purpose |
+| :--- | :--- | :--- |
+| **PreStep** | Before any component's `Step()` | Pre-processing, sensor aggregation, input conditioning |
+| **PostStep** | After all components' `Step()` | Post-processing, logging, output aggregation |
+| **OnPhaseEnter** | When flight phase changes | Phase-specific initialization (e.g., booster ignition) |
+| **OnPhaseExit** | When leaving a flight phase | Phase-specific cleanup (e.g., log total impulse) |
+| **OnError** | When simulation encounters an error | Graceful degradation, safe mode activation |
+| **Shutdown** | Application termination | Cleanup, flush buffers, release resources |
+
+### Lifecycle Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              APPLICATION START                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PROVISION (once)                                                            │
+│  • Allocate memory, state vectors                                           │
+│  • Register outputs on Backplane                                            │
+│  • Load parameters from config                                              │
+│  • Parse static assets (tables, meshes)                                     │
+│  • Generate Data Dictionary                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    │         FOR EACH RUN/EPISODE      │
+                    ▼                                   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STAGE (per run)                                                             │
+│  • Zero state derivatives, set t=0                                          │
+│  • Apply initial conditions from RunConfig                                  │
+│  • Wire inputs (resolve signal pointers)                                    │
+│  • Run trim/equilibrium solver if needed                                    │
+│  • Build execution order (topological sort)                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    │         SIMULATION LOOP           │
+                    ▼                                   │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP (per Δt)                                                               │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
+│  │   PreStep()  │ ─► │    Step()    │ ─► │  PostStep()  │                   │
+│  │  (optional)  │    │ (all comps)  │    │  (optional)  │                   │
+│  └──────────────┘    └──────────────┘    └──────────────┘                   │
+│                              │                                               │
+│                              ▼                                               │
+│                    ┌──────────────────┐                                      │
+│                    │    Integrator    │  X_new = X + dt * f(X_dot)          │
+│                    └──────────────────┘                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ (end of run)
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │  Return to STAGE for next run       │
+                    │  (Monte Carlo, parameter sweep)     │
+                    └─────────────────────────────────────┘
+                                      │
+                                      │ (application exit)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SHUTDOWN                                                                    │
+│  • Flush recording buffers                                                  │
+│  • Close file handles                                                       │
+│  • Release resources                                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 > [!NOTE]
 > **Non-numeric config** (file paths, string identifiers) is NOT a Signal. It's loaded at Provision time into component internals. Only numeric values go on the Backplane.
@@ -416,12 +506,13 @@ public:
 ```cpp
 // Component registration - type is deduced
 template <typename Scalar>
-void JetEngine<Scalar>::Provision(Backplane<Scalar>& bp) {
+void JetEngine<Scalar>::Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) {
     // Type is captured at registration
     bp.register_output("Propulsion.Thrust", &thrust_value_, Units::Newtons);
     bp.register_output("Propulsion.FuelFlow", &fuel_flow_, Units::KgPerSec);
 
-    // Static signals
+    // Parameters (static signals loaded from config)
+    max_thrust_ = cfg.get<double>("max_thrust", 50000.0);
     bp.register_static("Propulsion.MaxThrust", &max_thrust_, Units::Newtons);
 }
 ```
@@ -522,7 +613,7 @@ template <typename Scalar>
 class Component {
 public:
     // === CORE LIFECYCLE (Required) ===
-    virtual void Provision(const ComponentConfig& config) = 0;
+    virtual void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) = 0;
     virtual void Stage(Backplane<Scalar>& bp, const RunConfig& rc) = 0;
     virtual void Step(Scalar t, Scalar dt) = 0;
 
@@ -614,7 +705,7 @@ class Autopilot : public Component<Scalar> {
 Since the hierarchy is flat, execution order is determined by **Dependency Analysis** (Topological Sort) or **Explicit Rate Grouping**.
 
 ### The Scheduler
-disk
+
 The `Scheduler` holds `std::vector<Component*>`.
 
 ```cpp
@@ -812,21 +903,26 @@ void JetEngine::Step(Scalar t, Scalar dt) {
     // 1. Get Inputs
     Scalar h = *input_alt_;
     Scalar throttle = *input_throttle_;
-    
+
     // 2. Use Vulcan to get environmental context (Functional)
     auto env = vulcan::atmosphere::usa76(h);
-    
-    // 3. Update Internal State (System Logic)
+
+    // 3. Compute Derivative (System Logic)
     // Vulcan doesn't know about "spool up time", Icarus does.
+    Scalar current_thrust = *state_thrust_;  // Read current state
     Scalar target_thrust = throttle * max_thrust_ * (env.density / rho0);
-    Scalar thrust_rate = (target_thrust - current_thrust_) / time_constant_;
-    
-    state_thrust_ += thrust_rate * dt; // Integration happens here
-    
-    // 4. Publish
-    *output_thrust_ = state_thrust_;
+    Scalar thrust_rate = (target_thrust - current_thrust) / time_constant_;
+
+    // Write derivative - integrator handles the actual integration
+    *state_dot_thrust_ = thrust_rate;
+
+    // 4. Publish output (current value, not integrated)
+    *output_thrust_ = current_thrust;
 }
 ```
+
+> [!NOTE]
+> **Components write derivatives, not integrated values.** The Simulator's integrator (Section 10) handles `state += state_dot * dt`. This ensures solver compatibility and global error control.
 
 ## 10. Memory Layout & State Ownership
 
@@ -1141,12 +1237,14 @@ entity:
       params:
         reference_area: 18.6  # m^2
         
-  # Internal wiring (within this entity)
+  # Internal wiring (within this entity, uses source→target)
   internal_wiring:
-    - source: Aero.output_lift
-      target: EOM.input_force_z
-    - source: MainEngine.output_thrust
-      target: EOM.input_force_x
+    - source: Aero.lift
+      target: ForceAggregator.input_aero_lift
+    - source: MainEngine.thrust
+      target: ForceAggregator.input_propulsion_thrust
+    - source: ForceAggregator.total_force
+      target: EOM.input_force
       
   # Exposed ports (for external wiring)
   ports:
@@ -1173,9 +1271,10 @@ entity:
 - Hide internal complexity from scenario authors.
 
 > [!IMPORTANT]
-> **Design Decision: Wiring Philosophy**
+> **Design Decision: Wiring Philosophy (Explicit Source→Target)**
+> - All wiring uses explicit `source: X, target: Y` mappings—no auto-wiring or conventions.
 > - **Internal wiring** lives in the Entity Definition (encapsulated).
-> - **External wiring** (inter-entity) lives in the Scenario/World Setup.
+> - **External wiring** (inter-entity) lives in the Scenario/World Setup (Layer C).
 > - **No inline transforms.** If you need unit conversion or signal manipulation, add an explicit Converter Component. This keeps the Backplane pure and all logic traceable.
 
 ---
@@ -1215,24 +1314,28 @@ initial_conditions:
 
 ### 13.4 Layer C: Backplane Wiring
 
-Defines HOW data flows. Can be explicit or use conventions.
+Defines HOW data flows between components using **explicit source→target mappings**.
 
 ```yaml
-# Explicit wiring (verbose but clear)
 wiring:
-  - source: Environment.Atmosphere.density
+  # External wiring: connect entities to each other
+  - source: Environment.Atmosphere.Density
     target: X15.Aero.input_density
+  - source: Environment.Atmosphere.Temperature
+    target: X15.Aero.input_temperature
+  - source: Environment.Gravity.acceleration
+    target: X15.EOM.input_gravity
+
+  # Inter-component wiring within an entity
   - source: X15.Aero.output_lift
-    target: X15.EOM.input_force_z
+    target: X15.ForceAggregator.input_aero_lift
+  - source: X15.MainEngine.output_thrust
+    target: X15.ForceAggregator.input_propulsion_thrust
 ```
 
-```yaml
-# Convention-based (auto-wire by namespace matching)
-wiring_policy: AUTO
-# Components expecting "Env.Atm.*" auto-bind to Environment.Atmosphere.*
-```
-
-**User Choice:** You can expose only vehicle-level wiring (hide world internals).
+> [!IMPORTANT]
+> **Wiring Philosophy: Explicit Source→Target.**
+> Every signal connection is declared explicitly. This makes data flow traceable, debuggable, and self-documenting. No "magic" auto-wiring—if it's not in the config, it's not connected.
 
 ---
 
