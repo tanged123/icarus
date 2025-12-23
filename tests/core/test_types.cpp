@@ -5,10 +5,7 @@
 // Types Tests
 // ============================================
 
-TEST(Types, VersionString) {
-    EXPECT_STREQ(icarus::Version(), "0.1.0");
-    EXPECT_STREQ(icarus::VersionString(), "0.1.0");
-}
+TEST(Types, VersionString) { EXPECT_STREQ(icarus::Version(), "0.1.0"); }
 
 TEST(Types, VersionComponents) {
     EXPECT_EQ(icarus::VersionMajor(), 0);
@@ -119,6 +116,48 @@ TEST(SignalRegistry, UnknownSignalThrows) {
 
 TEST(Simulator, DefaultConstruction) {
     icarus::Simulator<double> sim;
+    EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
+    EXPECT_EQ(sim.NumComponents(), 0);
+}
+
+// ============================================
+// Symbolic Backend Tests (casadi::MX)
+// ============================================
+
+TEST(SignalRegistrySymbolic, RegisterAndResolve) {
+    icarus::SignalRegistry<casadi::MX> registry;
+
+    icarus::SignalDescriptor desc;
+    desc.name = "symbolic.signal";
+    desc.type = icarus::SignalType::Float64;
+
+    auto index = registry.RegisterSignal(desc);
+    EXPECT_EQ(index, 0);
+
+    auto resolved = registry.Resolve("symbolic.signal");
+    EXPECT_EQ(resolved, index);
+}
+
+TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
+    icarus::SignalRegistry<casadi::MX> registry;
+
+    icarus::SignalDescriptor desc;
+    desc.name = "symbolic.value";
+    desc.type = icarus::SignalType::Float64;
+
+    auto index = registry.RegisterSignal(desc);
+
+    // Set a symbolic value
+    casadi::MX sym_val = casadi::MX::sym("x");
+    registry.Set(index, sym_val);
+
+    // Verify it's a valid symbolic expression
+    auto retrieved = registry.Get(index);
+    EXPECT_TRUE(retrieved.is_symbolic());
+}
+
+TEST(SimulatorSymbolic, DefaultConstruction) {
+    icarus::Simulator<casadi::MX> sim;
     EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
     EXPECT_EQ(sim.NumComponents(), 0);
 }

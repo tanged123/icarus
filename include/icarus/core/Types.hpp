@@ -103,19 +103,28 @@ struct RunConfig {
 // Version Information
 // =============================================================================
 
+// Single source of truth for version numbers
+#define ICARUS_VERSION_MAJOR 0
+#define ICARUS_VERSION_MINOR 1
+#define ICARUS_VERSION_PATCH 1
+
+// Stringify helper
+#define ICARUS_STRINGIFY(x) #x
+#define ICARUS_VERSION_STR(major, minor, patch)                                                    \
+    ICARUS_STRINGIFY(major) "." ICARUS_STRINGIFY(minor) "." ICARUS_STRINGIFY(patch)
+
 /// Major version number
-constexpr int VersionMajor() { return 0; }
+constexpr int VersionMajor() { return ICARUS_VERSION_MAJOR; }
 
 /// Minor version number
-constexpr int VersionMinor() { return 1; }
+constexpr int VersionMinor() { return ICARUS_VERSION_MINOR; }
 
 /// Patch version number
-constexpr int VersionPatch() { return 0; }
+constexpr int VersionPatch() { return ICARUS_VERSION_PATCH; }
 
-/// Version string (for display)
-constexpr const char *Version() { return "0.1.0"; }
-
-/// Version string (alias)
-constexpr const char *VersionString() { return "0.1.0"; }
+/// Version string (derived from components)
+constexpr const char *Version() {
+    return ICARUS_VERSION_STR(ICARUS_VERSION_MAJOR, ICARUS_VERSION_MINOR, ICARUS_VERSION_PATCH);
+}
 
 } // namespace icarus

@@ -14,6 +14,9 @@
 // Re-export Janus concepts
 #include <janus/core/JanusConcepts.hpp>
 
+// For Phase enum
+#include <icarus/core/Types.hpp>
+
 namespace icarus {
 
 // =============================================================================
@@ -69,7 +72,7 @@ concept ComponentType = requires(T &c, Backplane<Scalar> &bp, const ComponentCon
  * @brief Concept for components with optional extended hooks
  */
 template <typename T, typename Scalar>
-concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, int32_t phase) {
+concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, Phase phase) {
     { c.OnPhaseEnter(phase) } -> std::same_as<void>;
     { c.OnPhaseExit(phase) } -> std::same_as<void>;
 };
