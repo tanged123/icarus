@@ -38,7 +38,7 @@ Icarus is a data-oriented simulation framework that utilizes both **Janus** (mat
 ./scripts/bump_version.sh [major|minor|patch] # Bump version
 ./scripts/coverage.sh # Run coverage
 ./scripts/generate_docs.sh # Generate docs
-./scripts/install-hook.sh # Install pre-commit formatter hook
+./scripts/install-hooks.sh # Install pre-commit formatter hook
 ```
 
 ## Project Structure

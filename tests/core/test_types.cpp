@@ -5,12 +5,15 @@
 // Types Tests
 // ============================================
 
-TEST(Types, VersionString) { EXPECT_STREQ(icarus::Version(), "0.1.0"); }
+TEST(Types, VersionString) {
+    EXPECT_STREQ(icarus::Version(), ICARUS_VERSION_STR(ICARUS_VERSION_MAJOR, ICARUS_VERSION_MINOR,
+                                                       ICARUS_VERSION_PATCH));
+}
 
 TEST(Types, VersionComponents) {
-    EXPECT_EQ(icarus::VersionMajor(), 0);
-    EXPECT_EQ(icarus::VersionMinor(), 1);
-    EXPECT_EQ(icarus::VersionPatch(), 0);
+    EXPECT_EQ(icarus::VersionMajor(), ICARUS_VERSION_MAJOR);
+    EXPECT_EQ(icarus::VersionMinor(), ICARUS_VERSION_MINOR);
+    EXPECT_EQ(icarus::VersionPatch(), ICARUS_VERSION_PATCH);
 }
 
 TEST(Types, PhaseEnum) {
