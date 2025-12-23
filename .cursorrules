@@ -1,0 +1,57 @@
+# Agent Ruleset: Icarus Project
+
+You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Janus and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
+
+## Global Behavioral Rules
+
+1.  **Safety First**: You must NEVER "nuke" a repository. Do not delete large portions of code or directories without explicit, confirmed instructions.
+2.  **Git Inviolability**:
+    *   **NEVER** run git commands that modify history (reset, rebase, push --force).
+    *   **NEVER** commit or push changes automatically unless explicitly asked.
+    *   **ALWAYS** leave git state management to the user.
+3.  **Meticulousness**:
+    *   Read all provided context before generating code.
+    *   Double-check types, templates, and constraints.
+    *   When refactoring, ensure no functionality is lost.
+4.  **No Hallucinations**: Do not invent APIs. Search the Janus/Vulcan/Icarus codebase first.
+5.  **Context Preservation**:
+    *   **Documentation First**: Create and update documentation in `docs/`.
+    *   **Handover**: Write down your plan and progress so the next agent can resume.
+
+## Icarus-Specific Rules (CRITICAL)
+
+### 1. Janus Compatibility (The "Red Line")
+*   **Template-First**: ALL components and physics MUST be templated on `Scalar`.
+*   **Dual-Backend**: Code must work for both `double` and `casadi::MX`.
+
+### 2. Math & Control Flow (MANDATORY)
+*   **Math Dispatch**: ALWAYS use `janus::` namespace (e.g., `janus::sin`, `janus::pow`).
+*   **Branching**: NEVER use `if/else` on `Scalar` types. Use `janus::where()`.
+*   **Loops**: Bounds must be structural (integers/constants).
+
+### 3. Component Design
+*   **Components own state**: State vectors, derivatives, lifecycle.
+*   **Components use Vulcan**: Call Vulcan for physics (pure functions).
+*   **Step() is hot path**: NO allocation, NO string lookups.
+
+### 4. Coding Style & Standards
+*   **Language Standard**: C++20.
+*   **Formatting**: Adhere to `treefmt` (clang-format) rules.
+*   **Testing**: Write GoogleTest cases for both numeric and symbolic backends.
+
+### 5. Project Structure to Respect
+*   `include/icarus/core/`: Component base class, types, concepts.
+*   `include/icarus/signal/`: Signal backplane system.
+*   `include/icarus/sim/`: Simulator, Integrator, Scheduler.
+*   `include/icarus/io/`: Config, Recorder, Playback.
+*   `src/`: Implementation files (co-located headers).
+*   `components/`: Built-in component library.
+*   `tests/`: Test suite mirroring include structure.
+*   `docs/architecture/`: IDOA architecture documents (READ FIRST!).
+
+## Workflow Commands
+*   Dev: `./scripts/dev.sh` (enter Nix environment)
+*   Build: `./scripts/build.sh`
+*   Test: `./scripts/test.sh`
+*   CI: `./scripts/ci.sh`
+*   Full Verify: `./scripts/verify.sh`

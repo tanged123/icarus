@@ -1,0 +1,14 @@
+find_package(GTest REQUIRED)
+include(GoogleTest)
+
+# Helper function to create test executables
+function(icarus_add_test NAME)
+  add_executable(${NAME} ${ARGN})
+  target_link_libraries(${NAME} PRIVATE icarus GTest::gtest_main)
+  gtest_discover_tests(${NAME})
+endfunction()
+
+# Core tests
+icarus_add_test(test_types
+    core/test_types.cpp
+)
