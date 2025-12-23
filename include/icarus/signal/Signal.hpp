@@ -10,17 +10,17 @@ namespace icarus {
  * @brief Supported signal data types
  */
 enum class SignalType : uint8_t {
-    Float64, // double
-    Int32,   // int32_t (also used for booleans: 0/1)
-    Int64    // int64_t
+    Float64 = 0, // double
+    Int32 = 1,   // int32_t (also used for booleans: 0/1)
+    Int64 = 2    // int64_t
 };
 
 /**
  * @brief Signal lifecycle classification
  */
 enum class SignalLifecycle : uint8_t {
-    Static, // Set at Provision/Stage, immutable during run (parameters)
-    Dynamic // Updated every Step (state, outputs)
+    Static = 0, // Set at Provision/Stage, immutable during run (parameters)
+    Dynamic = 1 // Updated every Step (state, outputs)
 };
 
 /**

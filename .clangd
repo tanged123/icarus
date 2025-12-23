@@ -1,0 +1,10 @@
+CompileFlags:
+  CompilationDatabase: build/
+
+# This is the key setting - allow clangd to query any Nix clang for system headers
+Index:
+  Background: Build
+
+---
+# If using clangd via editor, you may need to pass --query-driver=/nix/store/*/bin/clang*
+# to your clangd invocation, or set this in your editor's clangd settings.

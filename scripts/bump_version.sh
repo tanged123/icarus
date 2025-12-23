@@ -62,11 +62,20 @@ if [ -f "$FLAKE_FILE" ]; then
     echo "Updated $FLAKE_FILE"
 fi
 
+# 5. Update Types.hpp version macros (if exists)
+TYPES_FILE="include/icarus/core/Types.hpp"
+if [ -f "$TYPES_FILE" ]; then
+    $SED "s/#define ICARUS_VERSION_MAJOR [0-9]*/#define ICARUS_VERSION_MAJOR $MAJOR/" "$TYPES_FILE"
+    $SED "s/#define ICARUS_VERSION_MINOR [0-9]*/#define ICARUS_VERSION_MINOR $MINOR/" "$TYPES_FILE"
+    $SED "s/#define ICARUS_VERSION_PATCH [0-9]*/#define ICARUS_VERSION_PATCH $PATCH/" "$TYPES_FILE"
+    echo "Updated $TYPES_FILE"
+fi
+
 echo "Bumping to: $NEW_VERSION"
 
 # Optional: Git tag suggestion
 echo ""
 echo "Don't forget to commit and tag:"
-echo "  git add $CMAKE_FILE $FLAKE_FILE"
+echo "  git add $CMAKE_FILE $FLAKE_FILE $TYPES_FILE"
 echo "  git commit -m \"chore: bump version to $NEW_VERSION\""
 echo "  git tag v$NEW_VERSION"
