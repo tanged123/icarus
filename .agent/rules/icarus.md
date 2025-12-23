@@ -1,5 +1,5 @@
 ---
-trigger: manual
+trigger: always_on
 ---
 
 # Agent Ruleset: Icarus Project
@@ -138,4 +138,3 @@ Always check the Janus and Vulcan references for the latest API and implemented 
 | Rotations | `vulcan::rotations::*` |
 | Time | `vulcan::time::*` |
 | Table Interpolation | `vulcan::interpolation::*` |
-
