@@ -389,8 +389,8 @@
         "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
-        "lastModified": 1766473679,
-        "narHash": "sha256-ZGR1DdKZ6tor4Cqct957VMk8MN63H1I8wXP+JkAwsIE=",
+        "lastModified": 1766474269,
+        "narHash": "sha256-mJsJzOa4oqOQd1OQ+BHjnJyE1KnVNeZCF5bTtjwJDAE=",
         "path": "/home/tanged/sources/vulcan",
         "type": "path"
       },
