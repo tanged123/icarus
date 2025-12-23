@@ -96,6 +96,43 @@ class SignalError : public Error {
 };
 
 /**
+ * @brief Type mismatch when resolving a signal
+ *
+ * Thrown when a signal is resolved with a different type than it was registered.
+ */
+class TypeMismatchError : public SignalError {
+  public:
+    TypeMismatchError(const std::string &signal_name, const std::string &expected_type,
+                      const std::string &actual_type)
+        : SignalError("Type mismatch for '" + signal_name + "': expected " + expected_type +
+                      ", got " + actual_type) {}
+};
+
+/**
+ * @brief Duplicate signal registration error
+ *
+ * Thrown when attempting to register a signal with a name that already exists.
+ */
+class DuplicateSignalError : public SignalError {
+  public:
+    DuplicateSignalError(const std::string &signal_name, const std::string &existing_owner,
+                         const std::string &new_owner)
+        : SignalError("Duplicate signal '" + signal_name + "': already registered by '" +
+                      existing_owner + "', conflicting registration from '" + new_owner + "'") {}
+};
+
+/**
+ * @brief Signal not found error
+ *
+ * Thrown when attempting to resolve a signal that does not exist.
+ */
+class SignalNotFoundError : public SignalError {
+  public:
+    explicit SignalNotFoundError(const std::string &signal_name)
+        : SignalError("Signal not found: '" + signal_name + "'") {}
+};
+
+/**
  * @brief Configuration error
  *
  * Thrown when config parsing or validation fails.

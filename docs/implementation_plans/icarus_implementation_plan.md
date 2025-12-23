@@ -42,10 +42,10 @@ Phase 4–7 (horizontal expansion)
   - [x] `include/icarus/core/Concepts.hpp` — JanusScalar constraints
   - [x] Basic error handling (`include/icarus/core/Error.hpp`)
 
-- [ ] **1.3 Signal Backplane**
-  - [ ] `include/icarus/signal/Signal.hpp` — SignalType enum, lifecycle
-  - [ ] `include/icarus/signal/Registry.hpp` — `register_output()`, `resolve()`
-  - [ ] Type-safe signal access
+- [x] **1.3 Signal Backplane**
+  - [x] `include/icarus/signal/Signal.hpp` — SignalType enum, lifecycle
+  - [x] `include/icarus/signal/Registry.hpp` — `register_output()`, `resolve()`
+  - [x] Type-safe signal access
 
 - [ ] **1.4 Component Base**
   - [ ] Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()`
@@ -304,6 +304,7 @@ Phase 4–7 (horizontal expansion)
 ## Quick Start
 
 **Day 1:**
+
 1. `include/icarus/core/Types.hpp` + `include/icarus/signal/Signal.hpp`
 2. First unit test: signal registration and retrieval
 3. Build vertically through Phase 1 → 2 → 3 with one trivial component
