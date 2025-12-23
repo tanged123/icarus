@@ -16,7 +16,7 @@ Icarus is a data-oriented simulation framework that utilizes both **Janus** (mat
 
 ```bash
 # Enter development environment
-nix develop
+./scripts/dev.sh
 
 # Build
 ./scripts/build.sh
@@ -26,6 +26,9 @@ nix develop
 
 # Run examples
 ./scripts/run_examples.sh
+
+# Or do it all at once!
+./scripts/verify.sh
 ```
 
 ## Project Structure
