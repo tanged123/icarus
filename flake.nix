@@ -13,9 +13,9 @@
       #url = "path:/home/tanged/sources/janus";
     };
     vulcan = {
-      # url = "github:tanged123/vulcan";
+      url = "github:tanged123/vulcan";
       # For local development:
-      url = "path:/home/tanged/sources/vulcan";
+      # url = "path:/home/tanged/sources/vulcan";
     };
   };
 

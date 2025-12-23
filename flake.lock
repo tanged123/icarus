@@ -389,14 +389,17 @@
         "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
-        "lastModified": 1766474269,
-        "narHash": "sha256-mJsJzOa4oqOQd1OQ+BHjnJyE1KnVNeZCF5bTtjwJDAE=",
-        "path": "/home/tanged/sources/vulcan",
-        "type": "path"
+        "lastModified": 1766474265,
+        "narHash": "sha256-JBeFZPfd7x7wT0g+6goumbOLr8VnuqFO9v/XX8HcP5c=",
+        "owner": "tanged123",
+        "repo": "vulcan",
+        "rev": "794d15fec9f9c8eee456c88f25c9c1b05389a88d",
+        "type": "github"
       },
       "original": {
-        "path": "/home/tanged/sources/vulcan",
-        "type": "path"
+        "owner": "tanged123",
+        "repo": "vulcan",
+        "type": "github"
       }
     }
   },
