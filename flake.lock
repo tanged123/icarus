@@ -79,14 +79,17 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1766467273,
-        "narHash": "sha256-VThr4N6t9c0R+zhjQmMIMfKD/9TBzwS5E/RSx5SRFPA=",
-        "path": "/home/tanged/sources/janus",
-        "type": "path"
+        "lastModified": 1766467263,
+        "narHash": "sha256-oEnuh5byk0cYCwHFP973GHnIXOLZhflctrvrt7Ii/aQ=",
+        "owner": "tanged123",
+        "repo": "janus",
+        "rev": "eb08b811e1c67411f0a4424212bed8f2bb299530",
+        "type": "github"
       },
       "original": {
-        "path": "/home/tanged/sources/janus",
-        "type": "path"
+        "owner": "tanged123",
+        "repo": "janus",
+        "type": "github"
       }
     },
     "janus_2": {
@@ -386,8 +389,8 @@
         "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
-        "lastModified": 1766472085,
-        "narHash": "sha256-hDR6hV40drpTPYqurbYmjUp4ifaaSdyPKYpRMEPanjU=",
+        "lastModified": 1766472588,
+        "narHash": "sha256-Xa2+4fGTkdq5Xb0JM8fA+GfL9bmXcMFedDuK0I3stNA=",
         "path": "/home/tanged/sources/vulcan",
         "type": "path"
       },

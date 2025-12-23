@@ -18,14 +18,16 @@ LOG_FILE="$PROJECT_ROOT/logs/verify_${TIMESTAMP}.log"
 
 echo "Starting full verification..." | tee "$LOG_FILE"
 
-echo "=== Building ===" | tee -a "$LOG_FILE"
-"$SCRIPT_DIR/build.sh" 2>&1 | tee -a "$LOG_FILE"
-
-echo "=== Running Tests ===" | tee -a "$LOG_FILE"
-"$SCRIPT_DIR/test.sh" 2>&1 | tee -a "$LOG_FILE"
-
-echo "=== Running Examples ===" | tee -a "$LOG_FILE"
-"$SCRIPT_DIR/run_examples.sh" 2>&1 | tee -a "$LOG_FILE"
+# Run build, test, and examples
+cd "$PROJECT_ROOT"
+(
+    echo '=== Building ===' && \
+    ./scripts/build.sh && \
+    echo '=== Running Tests ===' && \
+    ./scripts/test.sh && \
+    echo '=== Running Examples ===' && \
+    ./scripts/run_examples.sh
+) 2>&1 | tee -a "$LOG_FILE"
 
 ln -sf "verify_${TIMESTAMP}.log" "$PROJECT_ROOT/logs/verify.log"
 echo "Verification complete! Logs at logs/verify_${TIMESTAMP}.log"

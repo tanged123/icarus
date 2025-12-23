@@ -1,25 +1,34 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/build"
-
-# Build if needed
-if [ ! -d "$BUILD_DIR" ]; then
-    echo "Build directory not found. Building..."
-    "$SCRIPT_DIR/build.sh"
+# Ensure we are in a Nix environment
+if [ -z "$IN_NIX_SHELL" ]; then
+    echo "Not in Nix environment. Re-running inside Nix..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    "$SCRIPT_DIR/dev.sh" "$0" "$@"
+    exit $?
 fi
 
-echo "=== Running all examples ==="
-shopt -s nullglob
-for example in "$BUILD_DIR"/examples/*; do
-    if [ -x "$example" ] && [ -f "$example" ]; then
-        name=$(basename "$example")
-        echo "--- Running $name ---"
-        "$example" || echo "FAILED: $name"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "Running examples..."
+
+# Find and run all examples in the build directory
+EXAMPLES_DIR="$PROJECT_ROOT/build/examples"
+
+if [ -d "$EXAMPLES_DIR" ]; then
+    # Find all executable files in the examples directory (recursive)
+    # Sort them to ensure deterministic run order
+    # Exclude stage_separation as it's deprecated/removed
+    for exe in $(find "$EXAMPLES_DIR" -type f -executable | grep -v "stage_separation" | grep -v "CMakeFiles" | sort); do
         echo ""
-    fi
-done
-shopt -u nullglob
-echo "=== All examples completed ==="
+        echo "=== Running $(basename "$exe") ==="
+        "$exe"
+    done
+else
+    echo "Examples directory not found at $EXAMPLES_DIR. Did you build the project?"
+fi
+
+echo ""
+echo "All examples completed."

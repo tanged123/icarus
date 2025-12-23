@@ -62,8 +62,9 @@ cmake-build-*/
 *.dot
 *.json
 
-# Preserve doc images
+# Ignore 
 !docs/images/*.png
+!docs/examples/*.html
 
 # Python
 __pycache__/

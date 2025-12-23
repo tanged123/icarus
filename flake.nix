@@ -8,9 +8,9 @@
 
     # Dependencies as flake inputs
     janus = {
-      # url = "github:tanged123/janus";
+      url = "github:tanged123/janus";
       # For local development:
-      url = "path:/home/tanged/sources/janus";
+      #url = "path:/home/tanged/sources/janus";
     };
     vulcan = {
       # url = "github:tanged123/vulcan";
