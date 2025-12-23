@@ -37,10 +37,10 @@ Phase 4–7 (horizontal expansion)
   - [x] Set up CI/CD workflows
   - [x] Create agent rules (`.cursorrules`, `CLAUDE.md`)
 
-- [ ] **1.2 Types & Concepts**
-  - [ ] `include/icarus/core/Types.hpp` — Scalar template, lifecycle enum
-  - [ ] `include/icarus/core/Concepts.hpp` — JanusScalar constraints
-  - [ ] Basic error handling (`include/icarus/core/Error.hpp`)
+- [x] **1.2 Types & Concepts**
+  - [x] `include/icarus/core/Types.hpp` — Scalar template, lifecycle enum
+  - [x] `include/icarus/core/Concepts.hpp` — JanusScalar constraints
+  - [x] Basic error handling (`include/icarus/core/Error.hpp`)
 
 - [ ] **1.3 Signal Backplane**
   - [ ] `include/icarus/signal/Signal.hpp` — SignalType enum, lifecycle

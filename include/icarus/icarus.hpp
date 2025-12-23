@@ -29,17 +29,5 @@
 #include <icarus/io/Recorder.hpp>
 
 namespace icarus {
-
-/**
- * @brief Library version string
- */
-inline constexpr const char *VersionString() { return "0.1.0"; }
-
-/**
- * @brief Library version components
- */
-inline constexpr int VersionMajor() { return 0; }
-inline constexpr int VersionMinor() { return 1; }
-inline constexpr int VersionPatch() { return 0; }
-
+// Version functions are defined in core/Types.hpp
 } // namespace icarus

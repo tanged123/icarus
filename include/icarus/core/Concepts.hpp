@@ -1,43 +1,77 @@
 #pragma once
 
+/**
+ * @file Concepts.hpp
+ * @brief C++20 concepts for Icarus type constraints
+ *
+ * Re-exports Janus concepts to ensure components use identical constraints.
+ */
+
 #include <concepts>
+#include <string>
 #include <type_traits>
+
+// Re-export Janus concepts
+#include <janus/core/JanusConcepts.hpp>
 
 namespace icarus {
 
+// =============================================================================
+// Scalar Concepts
+// =============================================================================
+
 /**
- * @brief Concept for types that can be used as Scalar in Icarus.
+ * @brief Re-export JanusScalar concept
  *
- * A valid Scalar type must support:
- * - Arithmetic operations (+, -, *, /)
- * - Construction from double
- * - Default construction
+ * Satisfied by floating point types (double, float) or CasADi symbolic (MX).
+ * All Icarus components must be templated on types satisfying this concept.
+ */
+using janus::JanusScalar;
+
+/**
+ * @brief Alias for Icarus-specific documentation
  *
- * This is satisfied by both `double` and `casadi::MX`.
+ * Identical to JanusScalar, provided for clarity in Icarus context.
  */
 template <typename T>
-concept JanusScalar = requires(T a, T b, double d) {
-    // Arithmetic operations
-    { a + b } -> std::convertible_to<T>;
-    { a - b } -> std::convertible_to<T>;
-    { a * b } -> std::convertible_to<T>;
-    { a / b } -> std::convertible_to<T>;
+concept IcarusScalar = JanusScalar<T>;
 
-    // Construction from double
-    { T(d) } -> std::same_as<T>;
+// =============================================================================
+// Component Concepts
+// =============================================================================
 
-    // Default constructible
-    { T() } -> std::same_as<T>;
+// Forward declarations
+template <typename Scalar> class Backplane;
+struct ComponentConfig;
+struct RunConfig;
+
+/**
+ * @brief Concept for types that can serve as Icarus components
+ *
+ * A valid component must implement the core lifecycle methods:
+ * - Provision(): Heavy setup, register signals
+ * - Stage(): Wire inputs, apply ICs
+ * - Step(): Hot path, compute derivatives
+ */
+template <typename T, typename Scalar>
+concept ComponentType = requires(T &c, Backplane<Scalar> &bp, const ComponentConfig &cfg,
+                                 const RunConfig &rc, Scalar t, Scalar dt) {
+    // Component must have a name
+    { c.Name() } -> std::convertible_to<std::string>;
+
+    // Core lifecycle methods
+    { c.Provision(bp, cfg) } -> std::same_as<void>;
+    { c.Stage(bp, rc) } -> std::same_as<void>;
+    { c.Step(t, dt) } -> std::same_as<void>;
 };
 
 /**
- * @brief Concept for component types.
- *
- * Components must implement the core lifecycle methods.
+ * @brief Concept for components with optional extended hooks
  */
 template <typename T, typename Scalar>
-concept ComponentType = requires(T &c) {
-    { c.Name() } -> std::convertible_to<std::string>;
+concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, int32_t phase) {
+    { c.OnPhaseEnter(phase) } -> std::same_as<void>;
+    { c.OnPhaseExit(phase) } -> std::same_as<void>;
 };
 
 } // namespace icarus

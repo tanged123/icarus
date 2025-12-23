@@ -110,7 +110,7 @@ TEST(SignalRegistry, DuplicateRegistrationThrows) {
 
 TEST(SignalRegistry, UnknownSignalThrows) {
     icarus::SignalRegistry<double> registry;
-    EXPECT_THROW(registry.Resolve("nonexistent"), icarus::SignalError);
+    EXPECT_THROW((void)registry.Resolve("nonexistent"), icarus::SignalError);
 }
 
 // ============================================
