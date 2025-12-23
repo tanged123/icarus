@@ -102,9 +102,81 @@ Lookup tables require special handling for symbolic mode:
 // WRONG: Standard interpolation (not differentiable)
 double cl = table.lookup(alpha);
 
-// CORRECT: Use janus::Interpolant (CasADi-compatible)
-Scalar cl = janus::Interpolant1D(alpha_breakpoints, cl_values)(alpha);
+// CORRECT: Use janus::interpn (CasADi-compatible)
+Scalar cl = janus::interpn<Scalar>(points, values, query)(0);
 ```
+
+> **Reference:** See [janus/docs/user_guides/interpolation.md](file:///home/tanged/sources/janus/docs/user_guides/interpolation.md) for full API details.
+
+### 5.1 Interpolation Methods
+
+| Method | Continuity | Symbolic | Use Case |
+| :--- | :--- | :--- | :--- |
+| `Linear` | C0 | ✅ | General purpose, gradients at knots |
+| `BSpline` | C2 | ✅ | Optimization (smoothest) |
+| `Hermite` | C1 | ❌ | Smooth trajectories (numeric only) |
+| `Nearest` | None | ❌ | Fast lookup (numeric only) |
+
+### 5.2 Multi-Dimensional Tables
+
+```cpp
+// 1D: Cl vs alpha
+janus::NumericVector alpha_pts, cl_vals;
+janus::JanusMatrix<Scalar> query(1, 1);
+query(0, 0) = alpha;
+Scalar cl = janus::interpn<Scalar>({alpha_pts}, cl_vals, query)(0);
+
+// 2D: Cd vs (Mach, alpha)
+janus::JanusMatrix<Scalar> query2d(1, 2);
+query2d << mach, alpha;
+Scalar cd = janus::interpn<Scalar>({mach_pts, alpha_pts}, cd_grid, query2d,
+    janus::InterpolationMethod::BSpline)(0);
+```
+
+### 5.3 Extrapolation Modes
+
+```cpp
+// Default: Clamp to boundary (safe, but zero gradient outside bounds)
+auto result = janus::interpn<Scalar>(points, values, query);
+
+// Linear extrapolation with output bounds (maintains gradient for optimization)
+janus::Interpolator interp(x_pts, y_vals,
+    janus::InterpolationMethod::BSpline,
+    janus::ExtrapolationConfig::linear(lower_bound, upper_bound));
+```
+
+| Mode | Behavior | Use Case |
+| :--- | :--- | :--- |
+| `ExtrapolationConfig::clamp()` | Clamp queries to grid (default, safe) | Most applications |
+| `ExtrapolationConfig::linear()` | Linear extrapolation, unbounded | Optimization (non-zero gradient) |
+| `ExtrapolationConfig::linear(lo, hi)` | Linear with output bounds | Optimization with safety |
+
+### 5.4 Loading Tables from Config
+
+Tables can be loaded from external sources at **Provision** time and still work symbolically:
+
+```cpp
+void Aero::Provision(Backplane& bp, const ComponentConfig& cfg) {
+    // Load table data (numeric values only)
+    auto [mach_pts, alpha_pts, cd_grid] = load_table(cfg.get("cd_table_path"));
+
+    // Store for later use (Interpolator caches CasADi function)
+    cd_interp_ = janus::Interpolator({mach_pts, alpha_pts}, cd_grid,
+        janus::InterpolationMethod::BSpline);
+}
+
+void Aero::Step(Scalar t, Scalar dt) {
+    // Works for both double and MX
+    janus::JanusMatrix<Scalar> query(1, 2);
+    query << mach, alpha;
+    Scalar cd = cd_interp_(query)(0);
+}
+```
+
+Implementation of file loaders will have to be implemented on Icarus's side. See [23_external_data.md](23_external_data.md) for table file formats, loading API, and high-dimensional table considerations.
+
+> [!NOTE]
+> The interpolant's **structure** (breakpoints, grid size) is fixed at Provision. Only the **query point** can be symbolic.
 
 ---
 
@@ -156,3 +228,11 @@ When symbolic tracing fails:
 3. **Check for dynamic loops** - convert to fixed iteration with masking
 4. **Check types** - ensure all math uses `Scalar`, not `double`
 5. **Run symbolic test** - instantiate with `casadi::MX` to catch issues early
+
+---
+
+## 9. See Also
+
+- [05_execution_model.md#6-symbolic-mode--multi-rate-interaction](05_execution_model.md) - Multi-rate scheduling and symbolic mode
+- [07_janus_integration.md](07_janus_integration.md) - Full Janus integration guide
+- [08_vulcan_integration.md](08_vulcan_integration.md) - Vulcan physics models

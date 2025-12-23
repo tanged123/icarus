@@ -158,6 +158,47 @@ void JetEngine<Scalar>::Provision(Backplane<Scalar>& bp, const ComponentConfig& 
 
 ---
 
+## 5. Vector & Matrix Signal Representation
+
+While the Backplane's atomic types are `double`, `int32`, and `int64`, components frequently work with `Vec3<Scalar>` and `Mat3<Scalar>`. The Backplane handles these via **structured paths**.
+
+### 5.1 Automatic Expansion
+
+```cpp
+// Component registration
+bp.register_output("thrust", &thrust_vec_, {.units = "N"});
+
+// Creates three signals on the Backplane:
+//   Entity.Component.thrust.x  (double)
+//   Entity.Component.thrust.y  (double)
+//   Entity.Component.thrust.z  (double)
+```
+
+### 5.2 Vec3/Mat3 Storage
+
+| Type | Backplane Signals | Storage |
+| :--- | :--- | :--- |
+| `Vec3<Scalar>` | `name.x`, `name.y`, `name.z` | 3 contiguous doubles |
+| `Mat3<Scalar>` | `name.xx`, `name.xy`, ... `name.zz` | 9 contiguous doubles (row-major) |
+| `Quat<Scalar>` | `name.w`, `name.x`, `name.y`, `name.z` | 4 contiguous doubles |
+
+### 5.3 Resolution
+
+```cpp
+// Option A: Resolve as Vec3 (binds to contiguous storage)
+auto thrust_handle = bp.resolve<Vec3<Scalar>>("Entity.Component.thrust");
+
+// Option B: Resolve individual components
+auto thrust_x = bp.resolve<Scalar>("Entity.Component.thrust.x");
+auto thrust_y = bp.resolve<Scalar>("Entity.Component.thrust.y");
+auto thrust_z = bp.resolve<Scalar>("Entity.Component.thrust.z");
+```
+
+> [!TIP]
+> For telemetry/recording, the structured paths appear as separate columns, making analysis tools (pandas, MATLAB) easier to use.
+
+---
+
 ## 5. Signal Namespacing & Collision Prevention
 
 Signal names follow a hierarchical namespace convention:

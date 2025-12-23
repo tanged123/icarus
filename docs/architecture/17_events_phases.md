@@ -39,6 +39,32 @@ void Booster::Step(Scalar t, Scalar dt) {
 > [!IMPORTANT]
 > **No dynamic component creation/destruction.** All components exist for the full simulation. Use `janus::where()` to gate outputs based on phase. This preserves the symbolic graph structure.
 
+### 2.1 State Derivative Gating
+
+Components with internal state (e.g., spool dynamics, tank mass) must **also gate their derivatives** to freeze state when ghosted:
+
+```cpp
+template <typename Scalar>
+void Booster::Step(Scalar t, Scalar dt) {
+    Scalar is_active = janus::where(*phase_ == BOOST, Scalar(1.0), Scalar(0.0));
+
+    // Gate outputs
+    *output_thrust_ = thrust_raw * is_active;
+
+    // Gate state derivatives (state freezes when ghosted)
+    *state_dot_spool_ = janus::where(is_active > 0.5,
+        (target_spool - *state_spool_) / tau,
+        Scalar(0.0));
+
+    *state_dot_fuel_mass_ = janus::where(is_active > 0.5,
+        -fuel_flow_rate,
+        Scalar(0.0));
+}
+```
+
+> [!WARNING]
+> **Ungated derivatives cause state drift.** If derivatives are not gated, internal state continues evolving even when outputs are zeroed. This leads to unexpected behavior when the component reactivates.
+
 ---
 
 ## 3. Phase Execution Strategies
@@ -206,3 +232,57 @@ class Booster : public Component<Scalar> {
 ```
 
 See [04_lifecycle.md](04_lifecycle.md) for full hook documentation.
+
+---
+
+## 6. Event Evaluation Semantics
+
+To ensure deterministic, predictable behavior, event evaluation follows strict rules:
+
+### 6.1 Evaluation Order
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Per-Step Execution Order                 │
+├─────────────────────────────────────────────────────────────┤
+│ 1. PreStep hooks                                            │
+│ 2. Component.Step() (all components in scheduled order)     │
+│ 3. ──► EVENT EVALUATION ◄── (PhaseManager checks conditions)│
+│ 4. Phase transition callbacks (OnPhaseExit, OnPhaseEnter)   │
+│ 5. PostStep hooks                                           │
+│ 6. Integrator advances state                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 No Event Cascading
+
+> [!IMPORTANT]
+> **Events do not cascade within a single time step.** If Event A triggers Phase 2, and Phase 2 has an immediate exit condition, that exit is evaluated on the **next** step—not the current one.
+
+This guarantees:
+- Deterministic execution order
+- No infinite loops from circular event conditions
+- Predictable state at each time step
+
+### 6.3 Phase Change Timing
+
+Phase changes take effect **after** the current step completes:
+
+| Time | Phase | What Happens |
+| :--- | :--- | :--- |
+| t | BOOST | Step executes with BOOST active; condition `fuel < 0.01` becomes true |
+| t | — | PhaseManager detects transition, queues phase change |
+| t | — | `OnPhaseExit(BOOST)` called |
+| t | — | `OnPhaseEnter(COAST)` called |
+| t+dt | COAST | Next step executes with COAST active |
+
+### 6.4 Condition Evaluation
+
+Conditions are evaluated using signal values **after** `Step()` completes (post-integration values):
+
+```yaml
+# This condition uses the updated fuel_mass after propulsion Step()
+condition: "Propulsion.fuel_mass < 0.01"
+```
+
+Boolean operators supported: `AND`, `OR`, `NOT`, parentheses for grouping.

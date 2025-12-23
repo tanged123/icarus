@@ -12,6 +12,7 @@ This architecture documentation is organized into focused modules for easy navig
 
 | Document | Description |
 |:---------|:------------|
+| [00a_quick_start.md](00a_quick_start.md) | **Start here!** Implement your first component |
 | [01_core_philosophy.md](01_core_philosophy.md) | The "flat" simulation philosophy and terminology |
 | [02_component_protocol.md](02_component_protocol.md) | Register Outputs / Wire Inputs pattern, Data Dictionary |
 | [03_signal_backplane.md](03_signal_backplane.md) | Signal registry, storage, type-safe access |
@@ -47,6 +48,7 @@ This architecture documentation is organized into focused modules for easy navig
 | [13_configuration.md](13_configuration.md) | Configuration layers A-D, entity definitions |
 | [14_trim_optimization.md](14_trim_optimization.md) | Trim solver, equilibrium, NLP formulation |
 | [15_services.md](15_services.md) | Recording, telemetry, tooling integration |
+| [23_external_data.md](23_external_data.md) | External data loading, table formats |
 
 ### Interfaces
 

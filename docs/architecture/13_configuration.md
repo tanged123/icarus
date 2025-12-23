@@ -243,7 +243,55 @@ scheduler:
 
 ---
 
-## 8. See Also
+## 8. Configuration Debugging
+
+With 6 configuration layers, tracing "why is my parameter this value?" can be challenging. Icarus provides introspection tools:
+
+### 8.1 Config Flatten
+
+The `icarus config flatten` command outputs a single resolved YAML showing all values and their sources:
+
+```bash
+$ icarus config flatten scenarios/x15_mission.yaml
+
+# Output: Resolved configuration with provenance
+X15.MainEngine.max_thrust: 75000.0
+  # Source: entities/x15_vehicle.yaml:12 (overrides default 50000.0)
+
+X15.Aero.reference_area: 18.6
+  # Source: entities/x15_vehicle.yaml:16
+
+Environment.Atmosphere.type: USA76
+  # Source: scenarios/x15_mission.yaml:18 (default)
+```
+
+### 8.2 Wiring Graph
+
+```bash
+$ icarus config graph scenarios/x15_mission.yaml --output wiring.dot
+
+# Generates a DOT graph showing all signal connections
+# Visualize with: dot -Tpng wiring.dot -o wiring.png
+```
+
+### 8.3 Validation
+
+```bash
+$ icarus config validate scenarios/x15_mission.yaml
+
+# Checks for:
+# - Missing required parameters
+# - Unresolved signal references
+# - Type mismatches
+# - Circular wiring dependencies
+```
+
+> [!TIP]
+> Run `icarus config flatten` first when debugging unexpected behavior. It shows exactly which layer set each value.
+
+---
+
+## 9. See Also
 
 - [14_trim_optimization.md](14_trim_optimization.md) - Layer E: Trim solver configuration
 - [15_services.md](15_services.md) - Layer F: Services configuration

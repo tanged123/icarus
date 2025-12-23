@@ -130,3 +130,41 @@ private:
 
 > [!IMPORTANT]
 > **All synchronization policies are deterministic.** Given the same initial state and inputs, the simulation produces identical results regardless of wall-clock timing. Interpolation uses fixed coefficients based on rate ratios, not real timestamps.
+
+---
+
+## 6. Symbolic Mode & Multi-Rate Interaction
+
+Symbolic graph generation (for trajectory optimization, AD, etc.) has specific implications for multi-rate scheduling.
+
+### 6.1 Default: Single-Rate Snapshot
+
+> [!IMPORTANT]
+> **Symbolic graph generation assumes single-rate execution by default.** The generated CasADi function represents one "snapshot" of the dynamics at the fastest rate.
+
+When you export a symbolic graph via `Simulator<MX>::GenerateGraph()`, all components execute once per call. Rate-group logic is **not** embedded in the graph.
+
+### 6.2 Embedding Rate Transitions (Advanced)
+
+For optimizers that need to respect multi-rate behavior, rate-transition blocks can be explicitly included in the symbolic graph:
+
+```cpp
+// Rate transition appears as explicit interpolation in graph
+Scalar nav_position_interp = janus::lerp(
+    nav_position_prev,
+    nav_position_latest,
+    alpha  // Fixed coefficient based on rate ratio
+);
+```
+
+This makes the ZOH or interpolation visible to the optimizer, but increases graph complexity.
+
+### 6.3 Recommendation
+
+| Use Case | Strategy |
+| :--- | :--- |
+| Trajectory optimization | Single-rate graph (simplest) |
+| HITL / real-time | Multi-rate numeric scheduler |
+| High-fidelity symbolic | Embed rate-transition blocks |
+
+See [21_symbolic_constraints.md](21_symbolic_constraints.md) for general symbolic mode rules.

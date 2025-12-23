@@ -6,6 +6,35 @@
 
 In a 6DOF simulation, the Equations of Motion (EOM) require **total force**, **total moment**, **total mass**, **CG position**, and **inertia tensor**. Multiple components contribute to these quantities. This document defines the **registration and aggregation pattern** for force and mass.
 
+```mermaid
+flowchart LR
+    subgraph Force Sources
+        Aero["Aero<br/>(wind frame)"]
+        Prop["Propulsion<br/>(nozzle frame)"]
+        Grav["Gravity<br/>(inertial)"]
+    end
+
+    subgraph Mass Sources
+        Struct["Structure<br/>(static)"]
+        Fuel["FuelTank<br/>(dynamic)"]
+    end
+
+    Aero --> FA
+    Prop --> FA
+    Grav --> FA
+
+    Struct --> MA
+    Fuel --> MA
+
+    MA["MassAggregator"] --> FA["ForceAggregator"]
+    MA --> EOM
+    FA --> EOM["RigidBody6DOF<br/>EOM"]
+
+    style FA fill:#f9f,stroke:#333
+    style MA fill:#9ff,stroke:#333
+    style EOM fill:#ff9,stroke:#333
+```
+
 ---
 
 ## 1. What Needs Global Aggregation

@@ -6,6 +6,35 @@
 
 To satisfy `solve_ivp` and optimization solvers, the **Continuous State** must be contiguous.
 
+```mermaid
+flowchart TB
+    subgraph Simulator["Simulator (Owner)"]
+        X["X_global_<br/>[state vector]"]
+        Xdot["X_dot_global_<br/>[derivatives]"]
+    end
+
+    subgraph Components["Components (Views)"]
+        A["ComponentA.state_"]
+        B["ComponentB.state_"]
+        C["ComponentC.state_"]
+    end
+
+    X -.->|"ptr"| A
+    X -.->|"ptr"| B
+    X -.->|"ptr"| C
+
+    Xdot -.->|"ptr"| A
+    Xdot -.->|"ptr"| B
+    Xdot -.->|"ptr"| C
+
+    INT["Integrator<br/>(RK4/CVODES)"] -->|"reads X_dot"| Xdot
+    INT -->|"updates X"| X
+
+    style X fill:#9f9,stroke:#333
+    style Xdot fill:#f99,stroke:#333
+    style INT fill:#ff9,stroke:#333
+```
+
 ---
 
 ## 1. The Global State Vector

@@ -66,6 +66,30 @@ Every recording includes a versioned schema for forward/backward compatibility:
 }
 ```
 
+### 2.1 Time System Specification
+
+For aerospace applications, the simulation time system must be explicit for ephemeris lookups, ground track calculations, and correlation with real-world events:
+
+```json
+{
+  "time": {
+    "epoch": "2024-12-22T00:00:00Z",
+    "system": "MET",
+    "units": "seconds"
+  }
+}
+```
+
+| Time System | Description | Use Case |
+| :--- | :--- | :--- |
+| **MET** | Mission Elapsed Time (t=0 at sim start) | Default, simplest |
+| **UTC** | Coordinated Universal Time | Correlation with wall-clock |
+| **TAI** | International Atomic Time | Ephemeris, precise timing |
+| **GPS** | GPS Time (TAI - 19 seconds) | Navigation, GPS correlation |
+
+> [!NOTE]
+> Internal simulation always uses `double t` as seconds from epoch. The `time.system` field specifies how to interpret that value when correlating with external data.
+
 ---
 
 ## 3. Schema Compatibility Rules
