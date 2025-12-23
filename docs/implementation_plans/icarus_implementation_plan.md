@@ -7,7 +7,20 @@
 
 ## Overview
 
-This plan builds Icarus vertically through 7 phases, validating symbolic mode early (Phase 3) before expanding horizontally. Each phase has clear exit criteria and references to architectural documentation.
+This plan builds Icarus vertically through 7 implementation phases, validating symbolic mode early (Phase 3) before expanding horizontally. Each phase has clear exit criteria and references to architectural documentation.
+
+> [!IMPORTANT]
+> **Build vertically first.** Complete Phases 1→2→3 with one trivial component before expanding horizontally to aggregation and config. Symbolic validation in Phase 3 catches template violations early.
+
+```
+Phase 1 (Foundation)
+    ↓
+Phase 2 (State & Integration)
+    ↓
+Phase 3 (Symbolic Mode)     ← VALIDATE HERE before expanding
+    ↓
+Phase 4–7 (horizontal expansion)
+```
 
 ---
 
@@ -15,28 +28,49 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 **Goal:** Minimal working skeleton that compiles and tests.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Types & Concepts | `Scalar` template, `SignalType` enum, `Lifecycle` enum, basic type traits | `include/icarus/Types.hpp` |
-| Signal & Backplane | Registry, storage vectors, `register_output()`, `resolve()`, type checking | `include/icarus/Signal.hpp`, `include/icarus/Backplane.hpp` |
-| Component Base | Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()` signatures | `include/icarus/Component.hpp` |
-| Simulator Shell | Owns component list and backplane, calls lifecycle methods in sequence | `include/icarus/Simulator.hpp` |
+- [x] **1.1 Repository Bootstrap**
+  - [x] Set up repository structure (see [Repository Structure](../icarus_bootstrap_guide.md#4-repository-structure))
+  - [x] Configure Nix flake with Janus + Vulcan dependencies
+  - [x] Configure CMake build system
+  - [x] Set up CI/CD workflows
+  - [x] Create agent rules (`.cursorrules`, `CLAUDE.md`)
+
+- [ ] **1.2 Types & Concepts**
+  - [ ] `include/icarus/core/Types.hpp` — Scalar template, lifecycle enum
+  - [ ] `include/icarus/core/Concepts.hpp` — JanusScalar constraints
+  - [ ] Basic error handling (`include/icarus/core/Error.hpp`)
+
+- [ ] **1.3 Signal Backplane**
+  - [ ] `include/icarus/signal/Signal.hpp` — SignalType enum, lifecycle
+  - [ ] `include/icarus/signal/Registry.hpp` — `register_output()`, `resolve()`
+  - [ ] Type-safe signal access
+
+- [ ] **1.4 Component Base**
+  - [ ] Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()`
+  - [ ] Optional hooks (`PreStep`, `PostStep`, `OnPhaseEnter`, etc.)
+
+- [ ] **1.5 Simulator Shell**
+  - [ ] Top-level `Simulator<Scalar>` class
+  - [ ] Owns component list and backplane
+  - [ ] Calls lifecycle methods in sequence
 
 ### Architecture References
 
-- [01_core_philosophy.md](../architecture/01_core_philosophy.md) — Terminology, flat topology
-- [02_component_protocol.md](../architecture/02_component_protocol.md) — Component interface contract
-- [03_signal_backplane.md](../architecture/03_signal_backplane.md) — Signal registry, type-safe access
-- [04_lifecycle.md](../architecture/04_lifecycle.md) — Provision/Stage/Step semantics
+| Topic | Document |
+|:------|:---------|
+| Flat topology, terminology | [01_core_philosophy.md](../architecture/01_core_philosophy.md) |
+| Component interface | [02_component_protocol.md](../architecture/02_component_protocol.md) |
+| Signal registry | [03_signal_backplane.md](../architecture/03_signal_backplane.md) |
+| Lifecycle phases | [04_lifecycle.md](../architecture/04_lifecycle.md) |
 
 ### Exit Criteria
 
-- [ ] Can instantiate `Simulator<double>`
-- [ ] Add a dummy component
-- [ ] Call Provision/Stage/Step
+- [ ] Can instantiate `Simulator<double>`, add a dummy component
+- [ ] Call Provision/Stage/Step without crashes
 - [ ] Read/write signals via Backplane
+- [ ] All Phase 1 tests pass
 
 ---
 
@@ -44,18 +78,28 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 **Goal:** Actual differential equations work.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| StateVector | Global `X_global_`, `X_dot_global_`, scatter/gather via pointer binding | `include/icarus/StateVector.hpp` |
-| Integrator Interface | Abstract integrator, RK4 implementation | `include/icarus/integrators/` |
-| First Real Component | `PointMass3DOF` with position/velocity state, gravity input | `include/icarus/components/PointMass3DOF.hpp` |
+- [ ] **2.1 State Management**
+  - [ ] Global `X_global_`, `X_dot_global_` vectors
+  - [ ] State registration and ownership
+  - [ ] Scatter/gather via pointer binding to components
+
+- [ ] **2.2 Integrator Interface**
+  - [ ] Abstract `Integrator<Scalar>` interface
+  - [ ] RK4 implementation
+  - [ ] Adaptive RK45 implementation
+
+- [ ] **2.3 First Real Component**
+  - [ ] `PointMass3DOF` with position/velocity state
+  - [ ] Gravity input, integrated dynamics
 
 ### Architecture References
 
-- [09_memory_state_ownership.md](../architecture/09_memory_state_ownership.md) — Global state, scatter/gather, ODE interface
-- [04_lifecycle.md](../architecture/04_lifecycle.md) — State binding in Stage phase
+| Topic | Document |
+|:------|:---------|
+| Global state vector | [09_memory_state_ownership.md](../architecture/09_memory_state_ownership.md) |
+| State binding in Stage | [04_lifecycle.md](../architecture/04_lifecycle.md) |
 
 ### Exit Criteria
 
@@ -69,27 +113,32 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 **Goal:** Same code runs with `casadi::MX`.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Dual-Mode Validation | Instantiate `Simulator<MX>`, ensure compilation | `tests/symbolic/` |
-| Graph Export | `GenerateGraph()` returns `casadi::Function` | `include/icarus/Simulator.hpp` |
-| Symbolic Test Suite | Verify `PointMass3DOF` traces correctly | `tests/symbolic/test_point_mass_symbolic.cpp` |
+- [ ] **3.1 Dual-Mode Validation**
+  - [ ] Instantiate `Simulator<casadi::MX>`, ensure compilation
+  - [ ] No `std::` math or `if/else` on Scalar in codebase
+
+- [ ] **3.2 Graph Export**
+  - [ ] `GenerateGraph()` returns `casadi::Function`
+  - [ ] Derivatives extractable via AD
+
+- [ ] **3.3 Symbolic Test Suite**
+  - [ ] Verify `PointMass3DOF` traces correctly
+  - [ ] Numeric/symbolic output comparison tests
 
 ### Architecture References
 
-- [07_janus_integration.md](../architecture/07_janus_integration.md) — Template-first paradigm, dual backend
-- [21_symbolic_constraints.md](../architecture/21_symbolic_constraints.md) — `janus::where()`, `janus::` math, loop rules
+| Topic | Document |
+|:------|:---------|
+| Template-first paradigm | [07_janus_integration.md](../architecture/07_janus_integration.md) |
+| `janus::where()`, math rules | [21_symbolic_constraints.md](../architecture/21_symbolic_constraints.md) |
 
 ### Exit Criteria
 
 - [ ] Extract symbolic dynamics as `casadi::Function`
 - [ ] Evaluate numerically, match `Simulator<double>` output
-- [ ] No `std::` math or `if/else` on `Scalar` in codebase
-
-> [!IMPORTANT]
-> **Do this early!** Symbolic validation in Phase 3 catches template violations before you have 20 components to fix.
+- [ ] Zero template violations in codebase
 
 ---
 
@@ -97,70 +146,105 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 **Goal:** Multi-component force/moment aggregation.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Force/Mass Registration | `register_force_source()`, `register_mass_source()` with frame metadata | `include/icarus/Backplane.hpp` |
-| Aggregators | `ForceAggregator`, `MassAggregator` components | `include/icarus/components/aggregators/` |
-| RigidBody6DOF | Full rotational dynamics using Vulcan EOM utilities | `include/icarus/components/RigidBody6DOF.hpp` |
+- [ ] **4.1 Force/Mass Registration**
+  - [ ] `register_force_source()`, `register_mass_source()` with frame metadata
+  - [ ] Query sources by entity prefix
+
+- [ ] **4.2 Aggregators**
+  - [ ] `ForceAggregator` — frame transforms, moment transfer
+  - [ ] `MassAggregator` — total mass, CG, inertia tensor
+
+- [ ] **4.3 RigidBody6DOF**
+  - [ ] Full rotational dynamics using Vulcan EOM utilities
+  - [ ] Consumes aggregated force/moment/inertia
 
 ### Architecture References
 
-- [12_quantity_aggregation.md](../architecture/12_quantity_aggregation.md) — Registration pattern, frame transforms, aggregator logic
-- [08_vulcan_integration.md](../architecture/08_vulcan_integration.md) — Vulcan EOM utilities
+| Topic | Document |
+|:------|:---------|
+| Aggregation pattern | [12_quantity_aggregation.md](../architecture/12_quantity_aggregation.md) |
+| Vulcan utilities | [08_vulcan_integration.md](../architecture/08_vulcan_integration.md) |
 
 ### Exit Criteria
 
 - [ ] Tumbling rigid body with multiple force sources
 - [ ] Correct angular momentum conservation
-- [ ] Force frame transforms (wind, body, inertial) working
+- [ ] Force frame transforms working
 
 ---
 
-## Phase 5: Configuration & Wiring
+## Phase 5: Configuration & Scheduling
 
 **Goal:** YAML-driven simulation setup.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Config Loader | Parse component definitions, entity bundles, wiring | `include/icarus/config/` |
-| Scheduler | Topological sort from dependency graph, rate groups | `include/icarus/Scheduler.hpp` |
-| Data Dictionary | Auto-generate signal catalog at Provision | `include/icarus/DataDictionary.hpp` |
+- [ ] **5.1 Configuration Loader**
+  - [ ] Parse component definitions (Layer A)
+  - [ ] Entity bundles (Layer A')
+  - [ ] Scenario definitions (Layer B)
+  - [ ] Wiring (Layer C)
+
+- [ ] **5.2 Scheduler**
+  - [ ] Topological sort from dependency graph
+  - [ ] Rate groups for multi-rate simulation (Layer D)
+
+- [ ] **5.3 Data Dictionary**
+  - [ ] Auto-generate signal catalog at Provision
+  - [ ] Export as JSON/YAML
 
 ### Architecture References
 
-- [13_configuration.md](../architecture/13_configuration.md) — Configuration layers A–F, entity definitions
-- [05_execution_model.md](../architecture/05_execution_model.md) — Scheduler, rate groups, multi-rate sync
-- [06_entities_namespaces.md](../architecture/06_entities_namespaces.md) — Entity as namespace prefix
+| Topic | Document |
+|:------|:---------|
+| Configuration layers | [13_configuration.md](../architecture/13_configuration.md) |
+| Scheduler, rate groups | [05_execution_model.md](../architecture/05_execution_model.md) |
+| Entity namespaces | [06_entities_namespaces.md](../architecture/06_entities_namespaces.md) |
 
 ### Exit Criteria
 
 - [ ] Load `scenarios/rocket_launch.yaml`
 - [ ] Run simulation without hardcoded component setup
-- [ ] Data Dictionary exported as JSON/YAML
+- [ ] Data Dictionary exported
 
 ---
 
-## Phase 6: Events & Recording
+## Phase 6: Events, Recording & Services
 
 **Goal:** Complete simulation lifecycle.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Phase Manager | Condition evaluation, phase transitions, ghosting | `include/icarus/PhaseManager.hpp` |
-| Recording | `.icarec` writer with schema versioning | `include/icarus/recording/` |
-| Warmstart | Load state from recording, continue simulation | `include/icarus/Simulator.hpp` |
+- [ ] **6.1 Phase Manager**
+  - [ ] Condition evaluation (post-Step signal values)
+  - [ ] Phase transitions, ghosting, derivative gating
+  - [ ] `OnPhaseEnter`/`OnPhaseExit` hooks
+
+- [ ] **6.2 Recording**
+  - [ ] HDF5-based `.icarec` writer
+  - [ ] Schema versioning
+  - [ ] Time system specification (MET/TAI/UTC)
+
+- [ ] **6.3 Warmstart**
+  - [ ] Load state from recording
+  - [ ] Continue simulation from mid-flight
+
+- [ ] **6.4 Services**
+  - [ ] Structured logging (spdlog)
+  - [ ] Telemetry service
+  - [ ] Debug mode support
 
 ### Architecture References
 
-- [17_events_phases.md](../architecture/17_events_phases.md) — Event evaluation, ghosting, derivative gating
-- [20_recording.md](../architecture/20_recording.md) — Recording format, schema versioning, warmstart
-- [10_entity_lifecycle.md](../architecture/10_entity_lifecycle.md) — Entity birth/death, stage separation
+| Topic | Document |
+|:------|:---------|
+| Events and phases | [17_events_phases.md](../architecture/17_events_phases.md) |
+| Recording format | [20_recording.md](../architecture/20_recording.md) |
+| Entity lifecycle | [10_entity_lifecycle.md](../architecture/10_entity_lifecycle.md) |
+| Error handling | [18_error_handling.md](../architecture/18_error_handling.md) |
+| Services | [15_services.md](../architecture/15_services.md) |
 
 ### Exit Criteria
 
@@ -174,19 +258,29 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 **Goal:** Production-ready entry points.
 
-### Components
+### Tasks
 
-| Item | Description | Files |
-|:-----|:------------|:------|
-| Trim Solver | Symbolic NLP formulation, IPOPT integration | `include/icarus/trim/` |
-| C API | `icarus_create()`, `icarus_step()`, `icarus_get_signal()` | `include/icarus/icarus.h` |
-| Python Bindings | PyBind11 wrapper | `interfaces/python/` |
+- [ ] **7.1 Trim Solver**
+  - [ ] Symbolic NLP formulation
+  - [ ] Integration with `janus::Opti` / IPOPT
+
+- [ ] **7.2 C API**
+  - [ ] `icarus_create()`, `icarus_step()`, `icarus_get_signal()`
+  - [ ] FFI-compatible types
+
+- [ ] **7.3 Python Bindings**
+  - [ ] PyBind11 wrapper
+  - [ ] `import icarus` workflow
+
+- [ ] **7.4 MATLAB Bindings** (optional)
+  - [ ] MEX interface or Python bridge
 
 ### Architecture References
 
-- [14_trim_optimization.md](../architecture/14_trim_optimization.md) — Trim solver, equilibrium, NLP formulation
-- [16_external_bindings.md](../architecture/16_external_bindings.md) — C API, Python, MATLAB bindings
-- [15_services.md](../architecture/15_services.md) — Telemetry, recording service integration
+| Topic | Document |
+|:------|:---------|
+| Trim solver | [14_trim_optimization.md](../architecture/14_trim_optimization.md) |
+| External bindings | [16_external_bindings.md](../architecture/16_external_bindings.md) |
 
 ### Exit Criteria
 
@@ -200,27 +294,19 @@ This plan builds Icarus vertically through 7 phases, validating symbolic mode ea
 
 | Topic | Architecture Doc |
 |:------|:-----------------|
-| Error handling | [18_error_handling.md](../architecture/18_error_handling.md) |
 | Determinism | [19_determinism_parallelism.md](../architecture/19_determinism_parallelism.md) |
 | Testing patterns | [22_testing.md](../architecture/22_testing.md) |
 | External data/tables | [23_external_data.md](../architecture/23_external_data.md) |
+| Quick start | [00a_quick_start.md](../architecture/00a_quick_start.md) |
 
 ---
 
 ## Quick Start
 
 **Day 1:**
-1. `include/icarus/Types.hpp` + `include/icarus/Signal.hpp`
+1. `include/icarus/core/Types.hpp` + `include/icarus/signal/Signal.hpp`
 2. First unit test: signal registration and retrieval
 3. Build vertically through Phase 1 → 2 → 3 with one trivial component
-4. Symbolic mode validation in Phase 3 before expanding horizontally
+4. Symbolic mode validation in Phase 3 catches template issues early
 
-```
-Phase 1 (Foundation)
-    ↓
-Phase 2 (State & Integration)
-    ↓
-Phase 3 (Symbolic Mode)     ← VALIDATE HERE before expanding
-    ↓
-Phase 4+ (horizontal expansion)
-```
+**See also:** [icarus_bootstrap_guide.md](../icarus_bootstrap_guide.md) for repository setup, Nix configuration, and script templates.

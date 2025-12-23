@@ -1824,82 +1824,40 @@ fi
 
 ## 14. Initial Module Roadmap
 
-### Phase 1: Core Infrastructure (Bootstrap) ✓
-- [ ] Set up repository structure
-- [ ] Configure Nix flake with Janus + Vulcan dependencies
-- [ ] Configure CMake build system
-- [ ] Set up CI/CD workflows
-- [ ] Create initial documentation
-- [ ] Agent rules and context files
+> **See [implementation_plans/icarus_implementation_plan.md](implementation_plans/icarus_implementation_plan.md) for the detailed, architecture-referenced implementation plan.**
 
-### Phase 2: Core Framework
-- [ ] `Component` base class
-- [ ] `IcarusTypes.hpp` and `IcarusConcepts.hpp`
-- [ ] Basic error handling
+The implementation follows 7 major phases, built **vertically** before expanding horizontally:
 
-### Phase 3: Signal Backplane
-- [ ] `Signal` type definitions
-- [ ] `SignalRegistry` implementation
-- [ ] Type-safe signal access
+```
+Phase 1: Foundation        ← Types, Signals, Component, Simulator shell
+    ↓
+Phase 2: State & Integration  ← StateVector, RK4, PointMass3DOF
+    ↓
+Phase 3: Symbolic Mode     ← casadi::MX validation (CRITICAL checkpoint)
+    ↓
+Phase 4: Aggregation & 6DOF   ← Force/Mass aggregators, RigidBody6DOF
+    ↓
+Phase 5: Configuration     ← YAML loading, Scheduler, Data Dictionary
+    ↓
+Phase 6: Events & Recording   ← Phase manager, HDF5 recording, warmstart
+    ↓
+Phase 7: Trim & Bindings   ← NLP trim, C API, Python bindings
+```
 
-### Phase 4: Lifecycle Management
-- [ ] `Provision`, `Stage`, `Step` contexts
-- [ ] Lifecycle phase enum and transitions
-- [ ] Optional hooks (PreStep, PostStep, etc.)
+### Phase Summary
 
-### Phase 5: State Management
-- [ ] `StateVector` global state container
-- [ ] State registration and ownership
-- [ ] Derivative accumulation
+| Phase | Goal | Key Deliverables |
+|:------|:-----|:-----------------|
+| **1** | Minimal skeleton | `Component<Scalar>`, `Backplane`, `Simulator` shell |
+| **2** | Differential equations | `StateVector`, integrators, `PointMass3DOF` |
+| **3** | Symbolic validation | `Simulator<MX>` compiles, `GenerateGraph()` works |
+| **4** | Multi-body dynamics | Force/Mass aggregators, `RigidBody6DOF` |
+| **5** | Config-driven setup | YAML loading, scheduler, data dictionary |
+| **6** | Full lifecycle | Phase manager, recording, warmstart |
+| **7** | Production APIs | Trim solver, C/Python bindings |
 
-### Phase 6: Scheduler
-- [ ] Component execution ordering
-- [ ] Topological sort for dependencies
-- [ ] Rate groups for multi-rate simulation
-
-### Phase 7: Integration
-- [ ] Integrator interface
-- [ ] RK4 implementation
-- [ ] Adaptive RK45 implementation
-
-### Phase 8: Aggregators
-- [ ] Force aggregation pattern
-- [ ] Moment aggregation pattern
-
-### Phase 9: Configuration
-- [ ] Configuration loading (YAML/JSON)
-- [ ] Layer A-D configuration system
-- [ ] Entity definitions
-
-### Phase 10: Simulator
-- [ ] Top-level `Simulator<Scalar>` class
-- [ ] Numeric mode execution
-- [ ] Symbolic mode graph generation
-
-### Phase 11: Trim Solver
-- [ ] Trim problem NLP formulation
-- [ ] Integration with `janus::Opti`
-- [ ] Trim result handling
-
-### Phase 12: Recording & Playback
-- [ ] HDF5-based recording
-- [ ] Schema versioning
-- [ ] Warmstart/replay
-
-### Phase 13: Events & Phases
-- [ ] Event definition and queue
-- [ ] Flight phase management
-- [ ] Component ghosting
-
-### Phase 14: Services
-- [ ] Structured logging (spdlog)
-- [ ] Telemetry service
-- [ ] Debug mode support
-
-### Phase 15: External Bindings
-- [ ] C API
-- [ ] Python bindings (pybind11)
-- [ ] MATLAB bindings (optional)
+> [!IMPORTANT]
+> **Phase 3 is the critical checkpoint.** Validate symbolic mode before expanding horizontally. This catches template violations early.
 
 ---
 

@@ -1,0 +1,17 @@
+name: Icarus CI
+
+on: push
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v20
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+
+    - name: Build & Test (Flake Check)
+      run: ./scripts/ci.sh

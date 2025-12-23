@@ -1,0 +1,24 @@
+name: Code Coverage
+
+on: push
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v20
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+
+    - name: Run Coverage Script
+      run: nix develop --command ./scripts/coverage.sh
+
+    - name: Upload to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./build/coverage/coverage_clean.info
+        fail_ci_if_error: true

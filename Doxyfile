@@ -1,0 +1,14 @@
+PROJECT_NAME           = "Icarus"
+PROJECT_BRIEF          = "Vehicle Simulation as a Transformable Computational Graph, built on Vulcan and Janus"
+OUTPUT_DIRECTORY       = build/docs
+INPUT                  = README.md include docs/architecture docs/user_guides docs/api docs/theory
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.cpp *.md
+USE_MDFILE_AS_MAINPAGE = README.md
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+WARN_IF_UNDOCUMENTED   = NO
