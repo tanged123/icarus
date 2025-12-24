@@ -8,6 +8,7 @@
  * Provides signal registration, resolution, and access patterns.
  */
 
+#include <deque>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
@@ -398,7 +399,7 @@ template <typename Scalar> class SignalRegistry {
     // =========================================================================
 
     std::vector<SignalDescriptor> signals_;
-    std::vector<Scalar> values_; // Internal storage for legacy API
+    std::deque<Scalar> values_; // Internal storage for legacy API (deque for stable refs)
     std::unordered_map<std::string, SignalIndex> name_to_index_;
     std::string current_component_;
 };
