@@ -45,8 +45,6 @@ concept IcarusScalar = JanusScalar<T>;
 
 // Forward declarations
 template <typename Scalar> class Backplane;
-struct ComponentConfig;
-struct RunConfig;
 
 /**
  * @brief Concept for types that can serve as Icarus components
@@ -57,16 +55,16 @@ struct RunConfig;
  * - Step(): Hot path, compute derivatives
  */
 template <typename T, typename Scalar>
-concept ComponentType = requires(T &c, Backplane<Scalar> &bp, const ComponentConfig &cfg,
-                                 const RunConfig &rc, Scalar t, Scalar dt) {
-    // Component must have a name
-    { c.Name() } -> std::convertible_to<std::string>;
+concept ComponentType =
+    requires(T &c, Backplane<Scalar> &bp, const ComponentConfig &cfg, Scalar t, Scalar dt) {
+        // Component must have a name
+        { c.Name() } -> std::convertible_to<std::string>;
 
-    // Core lifecycle methods
-    { c.Provision(bp, cfg) } -> std::same_as<void>;
-    { c.Stage(bp, rc) } -> std::same_as<void>;
-    { c.Step(t, dt) } -> std::same_as<void>;
-};
+        // Core lifecycle methods
+        { c.Provision(bp, cfg) } -> std::same_as<void>;
+        { c.Stage(bp, cfg) } -> std::same_as<void>;
+        { c.Step(t, dt) } -> std::same_as<void>;
+    };
 
 /**
  * @brief Concept for components with optional extended hooks

@@ -1,0 +1,217 @@
+#pragma once
+
+/**
+ * @file Backplane.hpp
+ * @brief Component-facing facade for signal registration and resolution
+ *
+ * Part of Phase 1.4: Component Base.
+ * Wraps SignalRegistry with component context awareness.
+ */
+
+#include <icarus/signal/Handle.hpp>
+#include <icarus/signal/Registry.hpp>
+#include <icarus/signal/VecHandle.hpp>
+#include <string>
+#include <vector>
+
+namespace icarus {
+
+/**
+ * @brief Component-facing facade for signal registration and resolution
+ *
+ * Backplane adds:
+ * - Automatic full name generation (entity.component.signal)
+ * - Context tracking for dependency discovery
+ * - Cleaner API for component authors
+ *
+ * @tparam Scalar The numeric type (double or casadi::MX)
+ */
+template <typename Scalar> class Backplane {
+  public:
+    explicit Backplane(SignalRegistry<Scalar> &registry) : registry_(registry) {}
+
+    // =========================================================================
+    // Context Management
+    // =========================================================================
+
+    /**
+     * @brief Set current component context
+     *
+     * Called by Simulator before invoking component lifecycle methods.
+     */
+    void set_context(const std::string &entity, const std::string &component) {
+        entity_ = entity;
+        component_ = component;
+        registry_.set_current_component(full_prefix());
+    }
+
+    /**
+     * @brief Clear the current context
+     */
+    void clear_context() {
+        entity_.clear();
+        component_.clear();
+        registry_.clear_current_component();
+    }
+
+    /**
+     * @brief Get full prefix: entity.component (or just component if no entity)
+     */
+    [[nodiscard]] std::string full_prefix() const {
+        if (entity_.empty())
+            return component_;
+        return entity_ + "." + component_;
+    }
+
+    // =========================================================================
+    // Output Registration (Provision phase)
+    // =========================================================================
+
+    /**
+     * @brief Register a scalar output signal
+     *
+     * @param local_name Signal name (without entity/component prefix)
+     * @param data_ptr Pointer to component-owned storage
+     * @param unit Physical unit
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void register_output(const std::string &local_name, T *data_ptr, const std::string &unit = "",
+                         const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_output<T>(full_name, data_ptr, unit, description);
+        registered_outputs_.push_back(full_name);
+    }
+
+    /**
+     * @brief Register a static (immutable) signal
+     */
+    template <typename T>
+    void register_static(const std::string &local_name, const T *data_ptr,
+                         const std::string &unit = "", const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_static<T>(full_name, data_ptr, unit, description);
+        registered_outputs_.push_back(full_name);
+    }
+
+    /**
+     * @brief Register a Vec3 signal (expands to .x/.y/.z)
+     */
+    template <typename S>
+    void register_vec3(const std::string &local_name, Vec3<S> *data_ptr,
+                       const std::string &unit = "", const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_vec3<S>(full_name, data_ptr, unit, description);
+        registered_outputs_.push_back(full_name + ".x");
+        registered_outputs_.push_back(full_name + ".y");
+        registered_outputs_.push_back(full_name + ".z");
+    }
+
+    /**
+     * @brief Register a quaternion signal (expands to .w/.x/.y/.z)
+     */
+    template <typename S>
+    void register_quat(const std::string &local_name, Vec4<S> *data_ptr,
+                       const std::string &unit = "", const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_quat<S>(full_name, data_ptr, unit, description);
+        registered_outputs_.push_back(full_name + ".w");
+        registered_outputs_.push_back(full_name + ".x");
+        registered_outputs_.push_back(full_name + ".y");
+        registered_outputs_.push_back(full_name + ".z");
+    }
+
+    // =========================================================================
+    // Input Resolution (Stage phase)
+    // =========================================================================
+
+    /**
+     * @brief Resolve a signal by full path
+     *
+     * Tracks the resolution for dependency discovery.
+     *
+     * @param full_name Full signal path (e.g., "Environment.Atm.density")
+     * @return SignalHandle<T> for zero-overhead access
+     */
+    template <typename T> [[nodiscard]] SignalHandle<T> resolve(const std::string &full_name) {
+        resolved_inputs_.push_back(full_name);
+        return registry_.template resolve<T>(full_name);
+    }
+
+    /**
+     * @brief Resolve a Vec3 signal
+     */
+    template <typename S> [[nodiscard]] Vec3Handle<S> resolve_vec3(const std::string &full_name) {
+        resolved_inputs_.push_back(full_name + ".x");
+        resolved_inputs_.push_back(full_name + ".y");
+        resolved_inputs_.push_back(full_name + ".z");
+        return registry_.template resolve_vec3<S>(full_name);
+    }
+
+    /**
+     * @brief Resolve a quaternion signal
+     */
+    template <typename S> [[nodiscard]] QuatHandle<S> resolve_quat(const std::string &full_name) {
+        resolved_inputs_.push_back(full_name + ".w");
+        resolved_inputs_.push_back(full_name + ".x");
+        resolved_inputs_.push_back(full_name + ".y");
+        resolved_inputs_.push_back(full_name + ".z");
+        return registry_.template resolve_quat<S>(full_name);
+    }
+
+    /**
+     * @brief Check if a signal exists
+     */
+    [[nodiscard]] bool has_signal(const std::string &full_name) const {
+        return registry_.HasSignal(full_name);
+    }
+
+    // =========================================================================
+    // Dependency Tracking
+    // =========================================================================
+
+    /**
+     * @brief Get outputs registered by current component
+     */
+    [[nodiscard]] const std::vector<std::string> &registered_outputs() const {
+        return registered_outputs_;
+    }
+
+    /**
+     * @brief Get inputs resolved by current component
+     */
+    [[nodiscard]] const std::vector<std::string> &resolved_inputs() const {
+        return resolved_inputs_;
+    }
+
+    /**
+     * @brief Clear tracking for next component
+     */
+    void clear_tracking() {
+        registered_outputs_.clear();
+        resolved_inputs_.clear();
+    }
+
+    // =========================================================================
+    // Direct Registry Access (for Simulator)
+    // =========================================================================
+
+    [[nodiscard]] SignalRegistry<Scalar> &registry() { return registry_; }
+    [[nodiscard]] const SignalRegistry<Scalar> &registry() const { return registry_; }
+
+  private:
+    [[nodiscard]] std::string make_full_name(const std::string &local_name) const {
+        std::string prefix = full_prefix();
+        if (prefix.empty())
+            return local_name;
+        return prefix + "." + local_name;
+    }
+
+    SignalRegistry<Scalar> &registry_;
+    std::string entity_;
+    std::string component_;
+    std::vector<std::string> registered_outputs_;
+    std::vector<std::string> resolved_inputs_;
+};
+
+} // namespace icarus

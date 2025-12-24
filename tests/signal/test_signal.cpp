@@ -202,14 +202,14 @@ TEST(SignalRegistry, TypeMismatch) {
     registry.register_output("test", &value);
 
     // Try to resolve as wrong type
-    EXPECT_THROW(registry.resolve<int32_t>("test"), TypeMismatchError);
+    EXPECT_THROW((void)registry.resolve<int32_t>("test"), TypeMismatchError);
 }
 
 TEST(SignalRegistry, SignalNotFound) {
     SignalRegistry<double> registry;
 
-    EXPECT_THROW(registry.resolve<double>("nonexistent"), SignalNotFoundError);
-    EXPECT_THROW(registry.Resolve("nonexistent"), SignalNotFoundError);
+    EXPECT_THROW((void)registry.resolve<double>("nonexistent"), SignalNotFoundError);
+    EXPECT_THROW((void)registry.Resolve("nonexistent"), SignalNotFoundError);
 }
 
 TEST(SignalRegistry, DuplicateSignal) {

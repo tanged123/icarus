@@ -68,6 +68,7 @@ public:
 ```
 
 **Key observations:**
+
 1. `Backplane` is a facade (not `SignalRegistry` directly)
 2. `Stage` receives both `Backplane&` and `ComponentConfig&` (for input wiring config)
 3. Component stores `input_handles` as members for hot-path access
@@ -498,6 +499,7 @@ private:
 Update to use Backplane and track component lifecycle properly:
 
 Key changes:
+
 1. Create Backplane wrapping registry_
 2. Set context before each component lifecycle call
 3. Track registered/resolved signals for dependency graph
@@ -685,75 +687,75 @@ cd build && ctest -R component --output-on-failure
 
 ### Backplane (Backplane.hpp)
 
-- [ ] Create `Backplane<Scalar>` wrapper class
-- [ ] Implement `set_context(entity, component)`
-- [ ] Implement `clear_context()`
-- [ ] Implement `full_prefix()` for name generation
-- [ ] Implement `register_output<T>()` with full name
-- [ ] Implement `register_static<T>()` with full name
-- [ ] Implement `register_vec3<S>()` with expansion
-- [ ] Implement `register_quat<S>()` with expansion
-- [ ] Implement `resolve<T>()` with tracking
-- [ ] Implement `resolve_vec3<S>()` with tracking
-- [ ] Implement `resolve_quat<S>()` with tracking
-- [ ] Implement `has_signal()`
-- [ ] Implement `registered_outputs()` getter
-- [ ] Implement `resolved_inputs()` getter
-- [ ] Implement `clear_tracking()`
+- [x] Create `Backplane<Scalar>` wrapper class
+- [x] Implement `set_context(entity, component)`
+- [x] Implement `clear_context()`
+- [x] Implement `full_prefix()` for name generation
+- [x] Implement `register_output<T>()` with full name
+- [x] Implement `register_static<T>()` with full name
+- [x] Implement `register_vec3<S>()` with expansion
+- [x] Implement `register_quat<S>()` with expansion
+- [x] Implement `resolve<T>()` with tracking
+- [x] Implement `resolve_vec3<S>()` with tracking
+- [x] Implement `resolve_quat<S>()` with tracking
+- [x] Implement `has_signal()`
+- [x] Implement `registered_outputs()` getter
+- [x] Implement `resolved_inputs()` getter
+- [x] Implement `clear_tracking()`
 
 ### Component (Component.hpp)
 
-- [ ] Update `Provision()` signature to use `Backplane<Scalar>&`
-- [ ] Update `Stage()` signature to take `Backplane<Scalar>&` and `ComponentConfig&`
-- [ ] Add `SignalDecl` struct
-- [ ] Add `TypeName()` virtual method
-- [ ] Add `FullName()` helper method
-- [ ] Add `DeclareInputs()` virtual method
-- [ ] Add `DeclareOutputs()` virtual method
-- [ ] Add `StateSize()` virtual method
-- [ ] Add `IsProvisioned()` / `IsStaged()` state tracking
-- [ ] Add `MarkProvisioned()` / `MarkStaged()` protected methods
+- [x] Update `Provision()` signature to use `Backplane<Scalar>&`
+- [x] Update `Stage()` signature to take `Backplane<Scalar>&` and `ComponentConfig&`
+- [x] Add `SignalDecl` struct
+- [x] Add `TypeName()` virtual method
+- [x] Add `FullName()` helper method
+- [x] Add `DeclareInputs()` virtual method
+- [x] Add `DeclareOutputs()` virtual method
+- [x] Add `StateSize()` virtual method
+- [x] Add `IsProvisioned()` / `IsStaged()` state tracking
+- [x] Add `MarkProvisioned()` / `MarkStaged()` protected methods
 
 ### Simulator (Simulator.hpp)
 
-- [ ] Add `Backplane<Scalar>` member wrapping registry
-- [ ] Store `ComponentConfig` per component for Stage access
-- [ ] Update `Provision()` to use Backplane and track outputs
-- [ ] Update `Stage()` to pass ComponentConfig and track inputs
-- [ ] Call `comp->MarkProvisioned()` / `comp->MarkStaged()`
-- [ ] Add `GetBackplane()` accessor
+- [x] Add `Backplane<Scalar>` member wrapping registry
+- [x] Store `ComponentConfig` per component for Stage access
+- [x] Update `Provision()` to use Backplane and track outputs
+- [x] Update `Stage()` to pass ComponentConfig and track inputs
+- [x] Call `comp->MarkProvisioned()` / `comp->MarkStaged()`
+- [x] Add `GetBackplane()` accessor
 
 ### Concepts (Concepts.hpp)
 
-- [ ] Update forward declaration to use `Backplane`
-- [ ] Update `ComponentType` concept for new signatures
+- [x] Update forward declaration to use `Backplane`
+- [x] Update `ComponentType` concept for new signatures
 
 ### DummyComponent (DummyComponent.hpp)
 
-- [ ] Create `DummyComponent<Scalar>` class
-- [ ] Implement `Provision()` with counter/time outputs
-- [ ] Implement `Stage()` with initialization
-- [ ] Implement `Step()` incrementing counter
-- [ ] Implement `Name()`, `Entity()`, `TypeName()`
-- [ ] Implement `DeclareOutputs()`
+- [x] Create `DummyComponent<Scalar>` class
+- [x] Implement `Provision()` with counter/time outputs
+- [x] Implement `Stage()` with initialization
+- [x] Implement `Step()` incrementing counter
+- [x] Implement `Name()`, `Entity()`, `TypeName()`
+- [x] Implement `DeclareOutputs()`
 
 ### Tests (test_component.cpp)
 
-- [ ] Create `tests/core/test_component.cpp`
-- [ ] Add Backplane context tests
-- [ ] Add Backplane registration tests
-- [ ] Add Backplane resolution tests
-- [ ] Add Component lifecycle tests
-- [ ] Add Simulator integration tests
-- [ ] Add symbolic backend tests
-- [ ] Update `tests/CMakeLists.txt`
+- [x] Create `tests/core/test_component.cpp`
+- [x] Add Backplane context tests
+- [x] Add Backplane registration tests
+- [x] Add Backplane resolution tests
+- [x] Add Component lifecycle tests
+- [x] Add Simulator integration tests
+- [x] Add symbolic backend tests
+- [x] Update `tests/CMakeLists.txt`
 
 ### Integration
 
-- [ ] Update `include/icarus/icarus.hpp` to include new headers
-- [ ] Verify existing tests still pass
-- [ ] Verify `./scripts/build.sh` succeeds
-- [ ] Verify `./scripts/test.sh` all pass
+- [x] Update `include/icarus/icarus.hpp` to include new headers
+- [x] Verify existing tests still pass
+- [x] Verify `./scripts/build.sh` succeeds
+- [x] Verify `./scripts/test.sh` all pass
 
 ---
 
@@ -810,12 +812,12 @@ cd build && ctest -R component --output-on-failure
 
 ## Exit Criteria
 
-- [ ] Can instantiate `Simulator<double>`, add DummyComponent
-- [ ] Provision/Stage/Step lifecycle works without crashes
-- [ ] Signals registered with full `entity.component.signal` names
-- [ ] Backplane tracks registered outputs and resolved inputs
-- [ ] All Phase 1.4 tests pass for both `double` and `casadi::MX`
-- [ ] Existing tests from Phase 1.1-1.3 continue to pass
+- [x] Can instantiate `Simulator<double>`, add DummyComponent
+- [x] Provision/Stage/Step lifecycle works without crashes
+- [x] Signals registered with full `entity.component.signal` names
+- [x] Backplane tracks registered outputs and resolved inputs
+- [x] All Phase 1.4 tests pass for both `double` and `casadi::MX`
+- [x] Existing tests from Phase 1.1-1.3 continue to pass
 
 ---
 
