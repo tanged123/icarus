@@ -90,10 +90,10 @@ Phase 4–7 (horizontal expansion)
   - [x] RK4 implementation
   - [x] Adaptive RK45 implementation
 
-- [ ] **2.3 First Real Component**
-  - [ ] `PointMass3DOF` with position/velocity state, using Vulcan coordinate systems
-  - [ ] `PointMassGravity` with using Vulcan simple round Earth gravity model
-  - [ ] Demonstation of connecting components and running a simulation all the way through.
+- [x] **2.3 First Real Component**
+  - [x] `PointMass3DOF` with position/velocity state, using Vulcan coordinate systems
+  - [x] `PointMassGravity` with using Vulcan simple round Earth gravity model
+  - [x] Demonstration of connecting components and running a simulation all the way through.
 
 ### Architecture References
 

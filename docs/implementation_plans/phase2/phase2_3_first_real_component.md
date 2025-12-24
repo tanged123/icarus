@@ -1283,77 +1283,77 @@ TEST(PointMass3DOFSymbolic, VulcanFunctionsCompile) {
 
 ### Task 2.3a: PointMass3DOF Component
 
-- [ ] Create `components/dynamics/` directory
-- [ ] Create `PointMass3DOF.hpp` header
-- [ ] Include Vulcan headers: `vulcan/dynamics/PointMass.hpp`, `vulcan/core/VulcanTypes.hpp`
-- [ ] Implement `StateSize()` returning 6
-- [ ] Implement `Provision()` registering position/velocity/mass outputs
-- [ ] Implement `Stage()` resolving force input
-- [ ] Implement `BindState()` with IC application
-- [ ] Implement `Step()` using `vulcan::dynamics::point_mass_acceleration()`
-- [ ] Use `vulcan::Vec3<Scalar>` for position/velocity types
-- [ ] Add mass property with setter/getter
-- [ ] Add IC setters for `vulcan::Vec3<Scalar>` overloads
-- [ ] Add state accessors for testing
+- [x] Create `components/dynamics/` directory
+- [x] Create `PointMass3DOF.hpp` header
+- [x] Include Vulcan headers: `vulcan/dynamics/PointMass.hpp`, `vulcan/core/VulcanTypes.hpp`
+- [x] Implement `StateSize()` returning 6
+- [x] Implement `Provision()` registering position/velocity/mass outputs
+- [x] Implement `Stage()` resolving force input
+- [x] Implement `BindState()` with IC application
+- [x] Implement `Step()` using `vulcan::dynamics::point_mass_acceleration()`
+- [x] Use `vulcan::Vec3<Scalar>` for position/velocity types
+- [x] Add mass property with setter/getter
+- [x] Add IC setters for `vulcan::Vec3<Scalar>` overloads
+- [x] Add state accessors for testing
 
 ### Task 2.3b: PointMassGravity Component
 
-- [ ] Create `components/environment/` directory
-- [ ] Create `PointMassGravity.hpp` header
-- [ ] Include Vulcan headers: `vulcan/gravity/PointMass.hpp`, `vulcan/gravity/J2.hpp`, `vulcan/core/Constants.hpp`
-- [ ] Implement `StateSize()` returning 0 (stateless)
-- [ ] Implement `Provision()` registering force and acceleration outputs
-- [ ] Implement `Stage()` resolving position and mass inputs
-- [ ] Implement Model enum: `Constant`, `PointMass`, `J2`
-- [ ] Implement `Step()` with Constant mode using `vulcan::constants::earth::g0`
-- [ ] Implement `Step()` with PointMass mode using `vulcan::gravity::point_mass::acceleration()`
-- [ ] Implement `Step()` with J2 mode using `vulcan::gravity::j2::acceleration()`
-- [ ] Compute force from acceleration: `F = m * a`
-- [ ] Add gravitational parameter setter for other celestial bodies
+- [x] Create `components/environment/` directory
+- [x] Create `PointMassGravity.hpp` header
+- [x] Include Vulcan headers: `vulcan/gravity/PointMass.hpp`, `vulcan/gravity/J2.hpp`, `vulcan/core/Constants.hpp`
+- [x] Implement `StateSize()` returning 0 (stateless)
+- [x] Implement `Provision()` registering force and acceleration outputs
+- [x] Implement `Stage()` resolving position and mass inputs
+- [x] Implement Model enum: `Constant`, `PointMass`, `J2`
+- [x] Implement `Step()` with Constant mode using `vulcan::constants::earth::g0`
+- [x] Implement `Step()` with PointMass mode using `vulcan::gravity::point_mass::acceleration()`
+- [x] Implement `Step()` with J2 mode using `vulcan::gravity::j2::acceleration()`
+- [x] Compute force from acceleration: `F = m * a`
+- [x] Add gravitational parameter setter for other celestial bodies
 
 ### Task 2.3c: Example Applications
 
-- [ ] Create `examples/falling_mass/` directory
-- [ ] Create `main.cpp` with constant gravity validation
-- [ ] Use `vulcan::constants::earth::g0` for analytical verification
-- [ ] Add CMakeLists.txt for example
-- [ ] Create `examples/orbital_decay/` directory (optional)
-- [ ] Create `main.cpp` with orbital energy conservation demo
-- [ ] Use `vulcan::dynamics::specific_energy()` for verification
-- [ ] Add to top-level examples build
+- [x] Create `examples/falling_mass/` directory
+- [x] Create `main.cpp` with constant gravity validation
+- [x] Use `vulcan::constants::earth::g0` for analytical verification
+- [x] Add CMakeLists.txt for example
+- [x] Create `examples/orbital_decay/` directory (optional)
+- [x] Create `main.cpp` with orbital energy conservation demo
+- [x] Use `vulcan::dynamics::specific_energy()` for verification
+- [x] Add to top-level examples build
 
 ### Task 2.3d: Unit Tests
 
-- [ ] Create `tests/components/test_point_mass_3dof.cpp`
-- [ ] Include Vulcan test utilities: `vulcan/core/Constants.hpp`, `vulcan/dynamics/PointMass.hpp`
-- [ ] Add PointMass3DOF identity/state size tests
-- [ ] Add PointMass3DOF mass property tests
-- [ ] Add PointMass3DOF initial condition tests (scalar and Vec3)
-- [ ] Add PointMassGravity identity/model tests
-- [ ] Add PointMassGravity gravitational parameter tests
-- [ ] Add free fall analytical validation test (using `vulcan::constants::earth::g0`)
-- [ ] Add projectile motion test
-- [ ] Add orbital energy conservation test (using `vulcan::dynamics::specific_energy()`)
-- [ ] Add Vulcan acceleration verification test
-- [ ] Add symbolic mode compilation test
-- [ ] Add Vulcan symbolic compatibility test
-- [ ] Update `tests/CMakeLists.txt`
+- [x] Create `tests/components/test_point_mass_3dof.cpp`
+- [x] Include Vulcan test utilities: `vulcan/core/Constants.hpp`, `vulcan/dynamics/PointMass.hpp`
+- [x] Add PointMass3DOF identity/state size tests
+- [x] Add PointMass3DOF mass property tests
+- [x] Add PointMass3DOF initial condition tests (scalar and Vec3)
+- [x] Add PointMassGravity identity/model tests
+- [x] Add PointMassGravity gravitational parameter tests
+- [x] Add free fall analytical validation test (using `vulcan::constants::earth::g0`)
+- [x] Add projectile motion test
+- [x] Add orbital energy conservation test (using `vulcan::dynamics::specific_energy()`)
+- [x] Add Vulcan acceleration verification test
+- [x] Add symbolic mode compilation test
+- [x] Add Vulcan symbolic compatibility test
+- [x] Update `tests/CMakeLists.txt`
 
 ### Task 2.3e: Build Integration
 
-- [ ] Update `components/CMakeLists.txt` with new components
-- [ ] Ensure Vulcan include paths are available
-- [ ] Update `include/icarus/icarus.hpp` with component headers
-- [ ] Add `include/icarus/components/PointMass3DOF.hpp` (forwarding header)
-- [ ] Add `include/icarus/components/PointMassGravity.hpp` (forwarding header)
-- [ ] Verify `./scripts/build.sh` succeeds
-- [ ] Verify `./scripts/test.sh` all pass
-- [ ] Verify `./scripts/run_examples.sh` includes examples
+- [x] Update `components/CMakeLists.txt` with new components
+- [x] Ensure Vulcan include paths are available
+- [x] Update `include/icarus/icarus.hpp` with component headers
+- [x] Add `include/icarus/components/PointMass3DOF.hpp` (forwarding header)
+- [x] Add `include/icarus/components/PointMassGravity.hpp` (forwarding header)
+- [x] Verify `./scripts/build.sh` succeeds
+- [x] Verify `./scripts/test.sh` all pass
+- [x] Verify `./scripts/run_examples.sh` includes examples
 
 ### Task 2.3f: Documentation
 
-- [ ] Update main implementation plan checkboxes
-- [ ] Mark Phase 2.3 complete when all exit criteria pass
+- [x] Update main implementation plan checkboxes
+- [x] Mark Phase 2.3 complete when all exit criteria pass
 
 ---
 
@@ -1484,18 +1484,18 @@ Dynamics: accel = point_mass_acceleration(force, mass)  // = force/mass
 
 ## Janus Compatibility Checklist
 
-- [ ] All component code templated on `Scalar`
-- [ ] Use `vulcan::Vec3<Scalar>` (not `std::vector<double>`)
-- [ ] Use Vulcan physics functions (already Janus-compatible)
-- [ ] No `std::` math in component code (Vulcan handles this internally)
-- [ ] No `if/else` branching on `Scalar` values in traced code
-- [ ] Mode switching uses structural branching (enum, not Scalar-dependent)
-- [ ] Verify Vulcan functions compile with `casadi::MX`:
-  - [ ] `vulcan::dynamics::point_mass_acceleration<MX>()`
-  - [ ] `vulcan::gravity::point_mass::acceleration<MX>()`
-  - [ ] `vulcan::gravity::j2::acceleration<MX>()`
-- [ ] Verify `Simulator<casadi::MX>` compiles and runs
-- [ ] Verify symbolic step produces valid MX expressions
+- [x] All component code templated on `Scalar`
+- [x] Use `vulcan::Vec3<Scalar>` (not `std::vector<double>`)
+- [x] Use Vulcan physics functions (already Janus-compatible)
+- [x] No `std::` math in component code (Vulcan handles this internally)
+- [x] No `if/else` branching on `Scalar` values in traced code
+- [x] Mode switching uses structural branching (enum, not Scalar-dependent)
+- [x] Verify Vulcan functions compile with `casadi::MX`:
+  - [x] `vulcan::dynamics::point_mass_acceleration<MX>()`
+  - [x] `vulcan::gravity::point_mass::acceleration<MX>()`
+  - [x] `vulcan::gravity::j2::acceleration<MX>()`
+- [x] Verify `Simulator<casadi::MX>` compiles and runs
+- [x] Verify symbolic step produces valid MX expressions
 
 ---
 
