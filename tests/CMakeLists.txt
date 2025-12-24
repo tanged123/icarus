@@ -22,3 +22,9 @@ target_include_directories(test_component PRIVATE ${PROJECT_SOURCE_DIR}/componen
 icarus_add_test(test_signal
     signal/test_signal.cpp
 )
+
+# State management tests (Phase 2.1)
+icarus_add_test(test_state_management
+    sim/test_state_management.cpp
+)
+target_include_directories(test_state_management PRIVATE ${PROJECT_SOURCE_DIR}/components)

@@ -163,6 +163,27 @@ class StateError : public Error {
 };
 
 /**
+ * @brief State size mismatch error
+ *
+ * Thrown when a component's state size doesn't match the expected size
+ * during state binding.
+ */
+class StateSizeMismatchError : public StateError {
+  public:
+    StateSizeMismatchError(std::size_t expected, std::size_t actual)
+        : StateError("Size mismatch: expected " + std::to_string(expected) + ", got " +
+                     std::to_string(actual)),
+          expected_(expected), actual_(actual) {}
+
+    [[nodiscard]] std::size_t expected() const { return expected_; }
+    [[nodiscard]] std::size_t actual() const { return actual_; }
+
+  private:
+    std::size_t expected_;
+    std::size_t actual_;
+};
+
+/**
  * @brief Lifecycle ordering error
  *
  * Thrown when lifecycle methods are called in the wrong order.
