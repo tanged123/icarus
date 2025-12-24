@@ -47,9 +47,9 @@ Phase 4–7 (horizontal expansion)
   - [x] `include/icarus/signal/Registry.hpp` — `register_output()`, `resolve()`
   - [x] Type-safe signal access
 
-- [ ] **1.4 Component Base**
-  - [ ] Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()`
-  - [ ] Optional hooks (`PreStep`, `PostStep`, `OnPhaseEnter`, etc.)
+- [x] **1.4 Component Base**
+  - [x] Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()`
+  - [x] Optional hooks (`PreStep`, `PostStep`, `OnPhaseEnter`, etc.)
 
 - [ ] **1.5 Simulator Shell**
   - [ ] Top-level `Simulator<Scalar>` class

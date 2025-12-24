@@ -66,6 +66,24 @@ template <> struct TypeTraits<int64_t> {
     static constexpr const char *name = "Int64";
 };
 
+} // namespace icarus
+
+// Include Icarus types for SymbolicScalar specialization
+#include <icarus/core/Types.hpp>
+
+namespace icarus {
+
+/**
+ * @brief TypeTraits specialization for SymbolicScalar (casadi::MX)
+ *
+ * Symbolic scalars map to SignalType::Double since they represent
+ * floating-point values in the computational graph.
+ */
+template <> struct TypeTraits<SymbolicScalar> {
+    static constexpr SignalType type_id = SignalType::Double;
+    static constexpr const char *name = "SymbolicDouble";
+};
+
 // =============================================================================
 // SignalDescriptor (extends Vulcan's with Icarus-specific fields)
 // =============================================================================

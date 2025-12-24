@@ -13,6 +13,11 @@ icarus_add_test(test_types
     core/test_types.cpp
 )
 
+icarus_add_test(test_component
+    core/test_component.cpp
+)
+target_include_directories(test_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # Signal backplane tests (Phase 1.3)
 icarus_add_test(test_signal
     signal/test_signal.cpp

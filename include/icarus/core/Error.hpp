@@ -162,4 +162,14 @@ class StateError : public Error {
     explicit StateError(const std::string &msg) : Error("State: " + msg) {}
 };
 
+/**
+ * @brief Lifecycle ordering error
+ *
+ * Thrown when lifecycle methods are called in the wrong order.
+ */
+class LifecycleError : public Error {
+  public:
+    explicit LifecycleError(const std::string &msg) : Error("Lifecycle: " + msg) {}
+};
+
 } // namespace icarus

@@ -19,6 +19,7 @@
 #include <icarus/core/Types.hpp>
 
 // Signal
+#include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Descriptor.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/Registry.hpp>
