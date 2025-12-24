@@ -298,54 +298,54 @@ icarus_add_test(test_signal
 
 ### Signal Types (Signal.hpp)
 
-- [ ] Add `TypeTraits<double>` specialization
-- [ ] Add `TypeTraits<int32_t>` specialization
-- [ ] Add `TypeTraits<int64_t>` specialization
-- [ ] Extend `SignalDescriptor` with `owner_component`
-- [ ] Extend `SignalDescriptor` with `data_ptr`
+- [x] Add `TypeTraits<double>` specialization
+- [x] Add `TypeTraits<int32_t>` specialization
+- [x] Add `TypeTraits<int64_t>` specialization
+- [x] Extend `SignalDescriptor` with `owner_component`
+- [x] Extend `SignalDescriptor` with `data_ptr`
 
 ### Signal Handle (Handle.hpp)
 
-- [ ] Create `SignalHandle<T>` with pointer + metadata
-- [ ] Implement `operator*()`, `operator->()`
-- [ ] Implement `ptr()` for raw access
-- [ ] Implement `name()`, `unit()`, `lifecycle()` getters
-- [ ] Implement `operator bool()` for validity
+- [x] Create `SignalHandle<T>` with pointer + metadata
+- [x] Implement `operator*()`, `operator->()`
+- [x] Implement `ptr()` for raw access
+- [x] Implement `name()`, `unit()`, `lifecycle()` getters
+- [x] Implement `operator bool()` for validity
 
 ### Vec Handle (VecHandle.hpp)
 
-- [ ] Create `Vec3Handle<Scalar>` with x/y/z handles
-- [ ] Implement `get()` returning `Vec3<Scalar>`
-- [ ] Implement `set(const Vec3<Scalar>&)`
-- [ ] Create `Mat3Handle<Scalar>` (if needed; can defer)
+- [x] Create `Vec3Handle<Scalar>` with x/y/z handles
+- [x] Implement `get()` returning `Vec3<Scalar>`
+- [x] Implement `set(const Vec3<Scalar>&)`
+- [x] Create `Mat3Handle<Scalar>` (if needed; can defer)
 
 ### Registry (Registry.hpp)
 
-- [ ] Refactor `SignalRegistry` to store pointers
-- [ ] Implement `register_output<T>(name, ptr, unit, desc)`
-- [ ] Implement `register_static<T>(name, ptr, unit, desc)`
-- [ ] Implement typed `resolve<T>(name)` returning handle
-- [ ] Add `set_current_component()` / `clear_current_component()`
-- [ ] Add owner tracking in registration
-- [ ] Implement `query(pattern)` for introspection
+- [x] Refactor `SignalRegistry` to store pointers
+- [x] Implement `register_output<T>(name, ptr, unit, desc)`
+- [x] Implement `register_static<T>(name, ptr, unit, desc)`
+- [x] Implement typed `resolve<T>(name)` returning handle
+- [x] Add `set_current_component()` / `clear_current_component()`
+- [x] Add owner tracking in registration
+- [x] Implement `query(pattern)` for introspection
 
 ### Error Types (Error.hpp)
 
-- [ ] Add `TypeMismatchError`
-- [ ] Add `DuplicateSignalError`
-- [ ] Add `SignalNotFoundError`
+- [x] Add `TypeMismatchError`
+- [x] Add `DuplicateSignalError`
+- [x] Add `SignalNotFoundError`
 
 ### Tests (test_signal.cpp)
 
-- [ ] Create `tests/signal/test_signal.cpp`
-- [ ] Add TypeTraits tests
-- [ ] Add SignalHandle tests
-- [ ] Add Registry registration tests
-- [ ] Add type mismatch tests
-- [ ] Add duplicate signal tests
-- [ ] Add Vec3Handle tests
-- [ ] Add symbolic backend tests
-- [ ] Update `tests/CMakeLists.txt`
+- [x] Create `tests/signal/test_signal.cpp`
+- [x] Add TypeTraits tests
+- [x] Add SignalHandle tests
+- [x] Add Registry registration tests
+- [x] Add type mismatch tests
+- [x] Add duplicate signal tests
+- [x] Add Vec3Handle tests
+- [x] Add symbolic backend tests
+- [x] Update `tests/CMakeLists.txt`
 
 ---
 
