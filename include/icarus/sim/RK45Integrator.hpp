@@ -112,22 +112,15 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
         // Optimal step size formula: dt_new = dt * safety * (tol/error)^(1/5)
         // Use 5th root for RK45 (5th order method)
         Scalar ratio = tol / (error + Scalar{1e-15}); // Avoid division by zero
-        double ratio_dbl = static_cast<double>(ratio);
-        double factor_dbl = static_cast<double>(safety_) * std::pow(ratio_dbl, 0.2);
+        Scalar factor = safety_ * janus::pow(ratio, Scalar{0.2});
 
         // Limit growth/shrinkage
-        factor_dbl = std::max(0.1, std::min(5.0, factor_dbl));
+        factor = janus::max(Scalar{0.1}, janus::min(Scalar{5.0}, factor));
 
-        Scalar dt_new = dt * Scalar{factor_dbl};
+        Scalar dt_new = dt * factor;
 
         // Clamp to min/max
-        if constexpr (std::is_same_v<Scalar, double>) {
-            return std::max(static_cast<double>(min_dt_),
-                            std::min(static_cast<double>(max_dt_), static_cast<double>(dt_new)));
-        } else {
-            // For symbolic, return expression (clamping happens at evaluation)
-            return dt_new;
-        }
+        return janus::max(min_dt_, janus::min(max_dt_, dt_new));
     }
 
     /**
