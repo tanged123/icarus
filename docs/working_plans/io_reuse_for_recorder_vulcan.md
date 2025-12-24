@@ -2,7 +2,7 @@
 
 ## Vulcan Components to Reuse
 
-When implementing Phase 6.2 (Recording/Playback), leverage these Vulcan components:
+When implementing Phase 2 (Recording/Playback), leverage these Vulcan components:
 
 ### `vulcan::io::TelemetrySchema`
 
@@ -19,16 +19,25 @@ When implementing Phase 6.2 (Recording/Playback), leverage these Vulcan componen
 
 ## Integration Approach
 
+The Recorder will need to handle multi-type schemas:
+
 ```cpp
-// IcarusRecorder could pull signals from SignalRegistry into Frame
 class Recorder {
     TelemetrySchema schema_;
     std::vector<Frame> frames_;
     
-    void capture(const SignalRegistry<double>& registry, double time) {
+    void capture(double time) {
         Frame frame(schema_);
         frame.set_time(time);
-        // Copy from registry to frame using signal handles
+        
+        // Use SignalHandle to read from component-owned storage
+        for (const auto& sig : schema_.signals()) {
+            if (sig.type == SignalType::Double) {
+                auto handle = registry_.resolve<double>(sig.name);
+                frame.set(sig.name, *handle);
+            }
+            // Similar for Int32, Int64...
+        }
     }
 };
 ```
@@ -37,4 +46,3 @@ class Recorder {
 
 - `references/vulcan/include/vulcan/io/Frame.hpp`
 - `references/vulcan/include/vulcan/io/TelemetrySchema.hpp`
-- `references/vulcan/include/vulcan/io/HDF5Writer.hpp`

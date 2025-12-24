@@ -9,6 +9,8 @@
  */
 
 #include <icarus/signal/Signal.hpp>
+
+#include <cassert>
 #include <string>
 
 namespace icarus {
@@ -76,23 +78,39 @@ template <typename T> class SignalHandle {
 
     /**
      * @brief Get the signal name
+     * @pre Handle must be valid (check with valid() or operator bool())
      */
-    [[nodiscard]] const std::string &name() const { return meta_->name; }
+    [[nodiscard]] const std::string &name() const {
+        assert(meta_ != nullptr && "Cannot access name() on invalid handle");
+        return meta_->name;
+    }
 
     /**
      * @brief Get the signal unit
+     * @pre Handle must be valid
      */
-    [[nodiscard]] const std::string &unit() const { return meta_->unit; }
+    [[nodiscard]] const std::string &unit() const {
+        assert(meta_ != nullptr && "Cannot access unit() on invalid handle");
+        return meta_->unit;
+    }
 
     /**
      * @brief Get the signal lifecycle
+     * @pre Handle must be valid
      */
-    [[nodiscard]] SignalLifecycle lifecycle() const { return meta_->lifecycle; }
+    [[nodiscard]] SignalLifecycle lifecycle() const {
+        assert(meta_ != nullptr && "Cannot access lifecycle() on invalid handle");
+        return meta_->lifecycle;
+    }
 
     /**
      * @brief Get the full signal descriptor
+     * @pre Handle must be valid
      */
-    [[nodiscard]] const SignalDescriptor *descriptor() const { return meta_; }
+    [[nodiscard]] const SignalDescriptor *descriptor() const {
+        assert(meta_ != nullptr && "Cannot access descriptor() on invalid handle");
+        return meta_;
+    }
 
     // =========================================================================
     // Validity check

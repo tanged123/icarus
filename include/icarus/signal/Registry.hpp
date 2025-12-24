@@ -307,6 +307,7 @@ template <typename Scalar> class SignalRegistry {
      *
      * @param pattern Regex pattern to match signal names
      * @return Vector of pointers to matching descriptors
+     * @throws std::regex_error if pattern is invalid
      */
     [[nodiscard]] std::vector<const SignalDescriptor *> query(const std::string &pattern) const {
         std::vector<const SignalDescriptor *> results;

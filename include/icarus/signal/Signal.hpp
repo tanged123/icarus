@@ -38,8 +38,8 @@ using SignalLifecycle = vulcan::io::SignalLifecycle;
  * @tparam T The type to get traits for
  */
 template <typename T> struct TypeTraits {
-    // Intentionally empty - specializations provide the actual traits
-    // Attempting to use an unsupported type will cause a compile error
+    static_assert(sizeof(T) == 0, "TypeTraits not specialized for this type. "
+                                  "Supported types: double, int32_t, int64_t");
 };
 
 /**
@@ -100,7 +100,8 @@ struct SignalDescriptor {
     double max_value = std::numeric_limits<double>::infinity();
     bool is_state = false; ///< Requires integration
 
-    /// Get size in bytes (always 8 for alignment, matching Vulcan)
+    /// Get padded size in bytes (always 8 for wire format alignment, matching Vulcan)
+    /// Note: Actual data size may be smaller (e.g., int32_t is 4 bytes)
     [[nodiscard]] constexpr size_t size_bytes() const { return 8; }
 };
 
