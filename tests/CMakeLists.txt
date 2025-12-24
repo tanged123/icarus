@@ -28,3 +28,9 @@ icarus_add_test(test_state_management
     sim/test_state_management.cpp
 )
 target_include_directories(test_state_management PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Integrator tests (Phase 2.2)
+icarus_add_test(test_integrator
+    sim/test_integrator.cpp
+)
+target_include_directories(test_integrator PRIVATE ${PROJECT_SOURCE_DIR}/components)

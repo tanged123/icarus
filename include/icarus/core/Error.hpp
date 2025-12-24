@@ -163,6 +163,28 @@ class StateError : public Error {
 };
 
 /**
+ * @brief Base class for integrator errors
+ */
+class IntegratorError : public Error {
+  public:
+    explicit IntegratorError(const std::string &msg) : Error("Integrator: " + msg) {}
+};
+
+/**
+ * @brief Thrown when step size becomes too small
+ */
+class StepSizeTooSmallError : public IntegratorError {
+  public:
+    explicit StepSizeTooSmallError(double min_dt)
+        : IntegratorError("Step size below minimum: " + std::to_string(min_dt)), min_dt_(min_dt) {}
+
+    [[nodiscard]] double min_dt() const { return min_dt_; }
+
+  private:
+    double min_dt_;
+};
+
+/**
  * @brief State size mismatch error
  *
  * Thrown when a component's state size doesn't match the expected size

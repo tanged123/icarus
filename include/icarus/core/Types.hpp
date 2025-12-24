@@ -105,8 +105,8 @@ struct RunConfig {
 
 // Single source of truth for version numbers
 #define ICARUS_VERSION_MAJOR 0
-#define ICARUS_VERSION_MINOR 1
-#define ICARUS_VERSION_PATCH 1
+#define ICARUS_VERSION_MINOR 2
+#define ICARUS_VERSION_PATCH 0
 
 // Stringify helper
 #define ICARUS_STRINGIFY(x) #x
