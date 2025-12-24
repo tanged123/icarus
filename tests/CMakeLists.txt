@@ -12,3 +12,8 @@ endfunction()
 icarus_add_test(test_types
     core/test_types.cpp
 )
+
+# Signal backplane tests (Phase 1.3)
+icarus_add_test(test_signal
+    signal/test_signal.cpp
+)

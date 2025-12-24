@@ -39,30 +39,41 @@ TEST(Types, PhaseEnum) {
 // ============================================
 
 TEST(Signal, SignalTypeEnum) {
-    EXPECT_EQ(static_cast<uint8_t>(icarus::SignalType::Float64), 0);
-    EXPECT_EQ(static_cast<uint8_t>(icarus::SignalType::Int32), 1);
-    EXPECT_EQ(static_cast<uint8_t>(icarus::SignalType::Int64), 2);
+    // Verify SignalType values exist (re-exported from Vulcan)
+    auto type = icarus::SignalType::Double;
+    EXPECT_EQ(type, icarus::SignalType::Double);
+
+    type = icarus::SignalType::Int32;
+    EXPECT_EQ(type, icarus::SignalType::Int32);
+
+    type = icarus::SignalType::Int64;
+    EXPECT_EQ(type, icarus::SignalType::Int64);
 }
 
 TEST(Signal, SignalLifecycleEnum) {
-    EXPECT_EQ(static_cast<uint8_t>(icarus::SignalLifecycle::Static), 0);
-    EXPECT_EQ(static_cast<uint8_t>(icarus::SignalLifecycle::Dynamic), 1);
+    // Verify SignalLifecycle values exist (re-exported from Vulcan)
+    auto lc = icarus::SignalLifecycle::Static;
+    EXPECT_EQ(lc, icarus::SignalLifecycle::Static);
+
+    lc = icarus::SignalLifecycle::Dynamic;
+    EXPECT_EQ(lc, icarus::SignalLifecycle::Dynamic);
 }
 
 TEST(Signal, SignalDescriptor) {
     icarus::SignalDescriptor desc;
     desc.name = "test.signal";
     desc.unit = "m/s";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
     desc.lifecycle = icarus::SignalLifecycle::Dynamic;
     desc.description = "Test signal";
     desc.is_state = true;
 
     EXPECT_EQ(desc.name, "test.signal");
     EXPECT_EQ(desc.unit, "m/s");
-    EXPECT_EQ(desc.type, icarus::SignalType::Float64);
+    EXPECT_EQ(desc.type, icarus::SignalType::Double);
     EXPECT_EQ(desc.lifecycle, icarus::SignalLifecycle::Dynamic);
     EXPECT_TRUE(desc.is_state);
+    EXPECT_EQ(desc.size_bytes(), 8); // Match Vulcan's wire format
 }
 
 // ============================================
@@ -74,7 +85,7 @@ TEST(SignalRegistry, RegisterAndResolve) {
 
     icarus::SignalDescriptor desc;
     desc.name = "entity.component.output";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
 
     auto index = registry.RegisterSignal(desc);
     EXPECT_EQ(index, 0);
@@ -88,7 +99,7 @@ TEST(SignalRegistry, SetAndGet) {
 
     icarus::SignalDescriptor desc;
     desc.name = "test.value";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
 
     auto index = registry.RegisterSignal(desc);
     registry.Set(index, 42.0);
@@ -102,7 +113,7 @@ TEST(SignalRegistry, DuplicateRegistrationThrows) {
 
     icarus::SignalDescriptor desc;
     desc.name = "duplicate.signal";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
 
     registry.RegisterSignal(desc);
     EXPECT_THROW(registry.RegisterSignal(desc), icarus::SignalError);
@@ -110,7 +121,7 @@ TEST(SignalRegistry, DuplicateRegistrationThrows) {
 
 TEST(SignalRegistry, UnknownSignalThrows) {
     icarus::SignalRegistry<double> registry;
-    EXPECT_THROW((void)registry.Resolve("nonexistent"), icarus::SignalError);
+    EXPECT_THROW((void)registry.Resolve("nonexistent"), icarus::SignalNotFoundError);
 }
 
 // ============================================
@@ -132,7 +143,7 @@ TEST(SignalRegistrySymbolic, RegisterAndResolve) {
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.signal";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
 
     auto index = registry.RegisterSignal(desc);
     EXPECT_EQ(index, 0);
@@ -146,7 +157,7 @@ TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.value";
-    desc.type = icarus::SignalType::Float64;
+    desc.type = icarus::SignalType::Double;
 
     auto index = registry.RegisterSignal(desc);
 
