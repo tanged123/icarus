@@ -8,6 +8,7 @@
  * Wraps SignalRegistry with component context awareness.
  */
 
+#include <cassert>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/VecHandle.hpp>
@@ -78,6 +79,7 @@ template <typename Scalar> class Backplane {
     template <typename T>
     void register_output(const std::string &local_name, T *data_ptr, const std::string &unit = "",
                          const std::string &description = "") {
+        assert(!component_.empty() && "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         registry_.template register_output<T>(full_name, data_ptr, unit, description);
         registered_outputs_.push_back(full_name);

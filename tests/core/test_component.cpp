@@ -9,7 +9,7 @@
 #include <icarus/icarus.hpp>
 
 // Include DummyComponent from components library
-#include "../../components/testing/DummyComponent.hpp"
+#include <testing/DummyComponent.hpp>
 
 namespace icarus {
 namespace {

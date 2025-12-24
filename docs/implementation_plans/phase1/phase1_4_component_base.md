@@ -480,7 +480,7 @@ protected:
     void MarkStaged() { staged_ = true; }
     void ResetStaged() { staged_ = false; }
 
-    friend class SimulatorBase; // Allow Simulator to call Mark* methods
+    friend class Simulator; // Allow Simulator to call Mark* methods
 
 private:
     bool provisioned_ = false;

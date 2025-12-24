@@ -53,6 +53,9 @@ template <typename Scalar> class Simulator {
      * Calls Provision() on each component in order.
      */
     void Provision() {
+        if (phase_ != Phase::Uninitialized) {
+            throw LifecycleError("Provision() can only be called once");
+        }
         for (auto &comp : components_) {
             backplane_.set_context(comp->Entity(), comp->Name());
             backplane_.clear_tracking();
@@ -79,6 +82,9 @@ template <typename Scalar> class Simulator {
      * Calls Stage() on each component in order.
      */
     void Stage() {
+        if (phase_ != Phase::Provisioned) {
+            throw LifecycleError("Stage() requires prior Provision()");
+        }
         for (auto &comp : components_) {
             backplane_.set_context(comp->Entity(), comp->Name());
             backplane_.clear_tracking();
