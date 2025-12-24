@@ -312,7 +312,7 @@ template <typename Scalar> class SignalRegistry {
     /**
      * @brief Get all signal descriptors
      */
-    [[nodiscard]] const std::vector<SignalDescriptor> &GetDescriptors() const { return signals_; }
+    [[nodiscard]] const std::deque<SignalDescriptor> &GetDescriptors() const { return signals_; }
 
     /**
      * @brief Get number of registered signals
