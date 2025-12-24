@@ -18,8 +18,8 @@ This guide documents patterns and gotchas for implementing Icarus components.
 
 ## Lifecycle Responsibilities
 
-| Phase | Component Must... |
-|:------|:------------------|
+| Phase          | Component Must...                                                 |
+| :------------- | :---------------------------------------------------------------- |
 | `Provision()` | Register outputs with Backplane |
 | `Stage()` | Resolve input handles from Backplane |
 | `BindState()` | Store state pointers AND initialize output signals |
@@ -96,10 +96,10 @@ sim.AddComponent(std::move(dynamics)); // Runs second
 
 ## Stateful vs Stateless Components
 
-| Type | `StateSize()` | Has `BindState()` | Example |
-|:-----|:--------------|:------------------|:--------|
-| Stateful | > 0 | Yes | Dynamics, Integrator |
-| Stateless | 0 | No | Gravity, Atmosphere, Sensor |
+| Type      | `StateSize()` | Has `BindState()` | Example                      |
+| :-------- | :------------ | :---------------- | :--------------------------- |
+| Stateful  | > 0           | Yes               | Dynamics, Integrator         |
+| Stateless | 0             | No                | Gravity, Atmosphere, Sensor  |
 
 Stateless components compute outputs purely from inputs—they don't own integrated state.
 

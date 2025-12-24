@@ -280,13 +280,17 @@ template <typename Scalar> class SignalRegistry {
      * @brief Get signal value by name (slow path, for debugging)
      */
     [[nodiscard]] const Scalar &GetByName(const std::string &name) const {
-        return values_[Resolve(name)];
+        const SignalDescriptor &desc = signals_[Resolve(name)];
+        return *static_cast<const Scalar *>(desc.data_ptr);
     }
 
     /**
      * @brief Set signal value by name (slow path, for initialization)
      */
-    void SetByName(const std::string &name, const Scalar &value) { values_[Resolve(name)] = value; }
+    void SetByName(const std::string &name, const Scalar &value) {
+        const SignalDescriptor &desc = signals_[Resolve(name)];
+        *static_cast<Scalar *>(desc.data_ptr) = value;
+    }
 
     // =========================================================================
     // Query / Introspection (Cold Path)
