@@ -398,8 +398,8 @@ template <typename Scalar> class SignalRegistry {
     // Data Members
     // =========================================================================
 
-    std::vector<SignalDescriptor> signals_;
-    std::deque<Scalar> values_; // Internal storage for legacy API (deque for stable refs)
+    std::deque<SignalDescriptor> signals_; // Deque for stable descriptor refs
+    std::deque<Scalar> values_;            // Deque for stable value refs (legacy API)
     std::unordered_map<std::string, SignalIndex> name_to_index_;
     std::string current_component_;
 };
