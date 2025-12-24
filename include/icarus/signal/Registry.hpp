@@ -112,6 +112,9 @@ template <typename Scalar> class SignalRegistry {
     template <typename S>
     void register_vec3(const std::string &name, Vec3<S> *data_ptr, const std::string &unit = "",
                        const std::string &description = "") {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for Vec3 signal '" + name + "'");
+        }
         // Register three scalar signals pointing to Vec3 elements
         register_signal_impl<S>(name + ".x", &((*data_ptr)(0)), unit, description + " (x)",
                                 SignalLifecycle::Dynamic);
@@ -129,6 +132,9 @@ template <typename Scalar> class SignalRegistry {
     template <typename S>
     void register_quat(const std::string &name, Vec4<S> *data_ptr, const std::string &unit = "",
                        const std::string &description = "") {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for Quat signal '" + name + "'");
+        }
         register_signal_impl<S>(name + ".w", &((*data_ptr)(0)), unit, description + " (w)",
                                 SignalLifecycle::Dynamic);
         register_signal_impl<S>(name + ".x", &((*data_ptr)(1)), unit, description + " (x)",
