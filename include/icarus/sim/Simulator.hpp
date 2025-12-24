@@ -20,6 +20,17 @@
 namespace icarus {
 
 /**
+ * @brief Metadata for a component's state slice
+ *
+ * Tracks a component's position within the global state vectors.
+ */
+template <typename Scalar> struct StateSlice {
+    Component<Scalar> *owner; ///< Component that owns this slice
+    std::size_t offset;       ///< Starting index in X_global_
+    std::size_t size;         ///< Number of state variables
+};
+
+/**
  * @brief Top-level simulation coordinator
  *
  * The Simulator owns all components and the signal backplane,
@@ -79,12 +90,44 @@ template <typename Scalar> class Simulator {
     /**
      * @brief Stage all components
      *
-     * Calls Stage() on each component in order.
+     * Allocates global state vectors and binds component state pointers,
+     * then calls Stage() on each component for input wiring.
      */
     void Stage() {
         if (phase_ != Phase::Provisioned) {
             throw LifecycleError("Stage() requires prior Provision()");
         }
+
+        // =====================================================================
+        // Phase 2.1: Allocate global state vectors
+        // =====================================================================
+        std::size_t total_state_size = GetTotalStateSize();
+        X_global_.resize(total_state_size);
+        X_dot_global_.resize(total_state_size);
+        state_layout_.clear();
+
+        // Initialize to zero
+        for (std::size_t i = 0; i < total_state_size; ++i) {
+            X_global_[i] = Scalar{0};
+            X_dot_global_[i] = Scalar{0};
+        }
+
+        // Bind each component to its slice
+        std::size_t offset = 0;
+        for (auto &comp : components_) {
+            std::size_t state_size = comp->StateSize();
+
+            if (state_size > 0) {
+                comp->BindState(X_global_.data() + offset, X_dot_global_.data() + offset,
+                                state_size);
+                state_layout_.push_back({comp.get(), offset, state_size});
+                offset += state_size;
+            }
+        }
+
+        // =====================================================================
+        // Existing Stage logic (signal wiring)
+        // =====================================================================
         for (auto &comp : components_) {
             backplane_.set_context(comp->Entity(), comp->Name());
             backplane_.clear_tracking();
@@ -181,6 +224,98 @@ template <typename Scalar> class Simulator {
         return (it != inputs_.end()) ? it->second : empty;
     }
 
+    // =========================================================================
+    // State Management (Phase 2.1)
+    // =========================================================================
+
+    /**
+     * @brief Get total state vector size
+     *
+     * Sum of StateSize() across all components.
+     */
+    [[nodiscard]] std::size_t GetTotalStateSize() const {
+        std::size_t total = 0;
+        for (const auto &comp : components_) {
+            total += comp->StateSize();
+        }
+        return total;
+    }
+
+    /**
+     * @brief Get current state vector
+     *
+     * Returns a copy of X_global_ (for integrator use).
+     */
+    [[nodiscard]] JanusVector<Scalar> GetState() const { return X_global_; }
+
+    /**
+     * @brief Set state vector
+     *
+     * Copies values into X_global_. Called by integrator after advancing.
+     */
+    void SetState(const JanusVector<Scalar> &X) {
+        if (X.size() != X_global_.size()) {
+            throw StateError("State size mismatch: expected " + std::to_string(X_global_.size()) +
+                             ", got " + std::to_string(X.size()));
+        }
+        X_global_ = X;
+    }
+
+    /**
+     * @brief Compute derivatives for current state
+     *
+     * Called by integrator. Components read from X_global_ (via pointers)
+     * and write to X_dot_global_ (via pointers).
+     *
+     * @param t Current time
+     * @return Reference to derivative vector X_dot_global_
+     */
+    const JanusVector<Scalar> &ComputeDerivatives(Scalar t) {
+        // Zero derivatives (components accumulate into them)
+        for (std::size_t i = 0; i < X_dot_global_.size(); ++i) {
+            X_dot_global_[i] = Scalar{0};
+        }
+
+        // All components compute derivatives
+        // (pointers already bound, scatter/gather automatic)
+        Scalar dt = dt_nominal_;
+        for (auto &comp : components_) {
+            comp->PreStep(t, dt);
+        }
+        for (auto &comp : components_) {
+            comp->Step(t, dt);
+        }
+        for (auto &comp : components_) {
+            comp->PostStep(t, dt);
+        }
+
+        return X_dot_global_;
+    }
+
+    /**
+     * @brief Get derivative vector (after ComputeDerivatives)
+     */
+    [[nodiscard]] const JanusVector<Scalar> &GetDerivatives() const { return X_dot_global_; }
+
+    /**
+     * @brief Get state layout metadata
+     *
+     * Useful for debugging and introspection.
+     */
+    [[nodiscard]] const std::vector<StateSlice<Scalar>> &GetStateLayout() const {
+        return state_layout_;
+    }
+
+    /**
+     * @brief Set nominal timestep for derivative computation
+     */
+    void SetNominalDt(Scalar dt) { dt_nominal_ = dt; }
+
+    /**
+     * @brief Get nominal timestep
+     */
+    [[nodiscard]] Scalar GetNominalDt() const { return dt_nominal_; }
+
   private:
     std::vector<std::unique_ptr<Component<Scalar>>> components_;
     SignalRegistry<Scalar> registry_;
@@ -192,6 +327,12 @@ template <typename Scalar> class Simulator {
     std::unordered_map<Component<Scalar> *, ComponentConfig> configs_;
     std::unordered_map<Component<Scalar> *, std::vector<std::string>> outputs_;
     std::unordered_map<Component<Scalar> *, std::vector<std::string>> inputs_;
+
+    // State management (Phase 2.1)
+    JanusVector<Scalar> X_global_;                 ///< Global state vector
+    JanusVector<Scalar> X_dot_global_;             ///< Global derivative vector
+    std::vector<StateSlice<Scalar>> state_layout_; ///< Per-component metadata
+    Scalar dt_nominal_{0.01};                      ///< Nominal timestep
 };
 
 } // namespace icarus

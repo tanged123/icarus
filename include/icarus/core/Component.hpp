@@ -164,6 +164,33 @@ template <typename Scalar> class Component {
      */
     [[nodiscard]] virtual std::size_t StateSize() const { return 0; }
 
+    /**
+     * @brief Check if component has integrated state
+     */
+    [[nodiscard]] bool HasState() const { return StateSize() > 0; }
+
+    // =========================================================================
+    // State Management (Phase 2.1)
+    // =========================================================================
+
+    /**
+     * @brief Bind component to slices of global state vectors
+     *
+     * Called by Simulator during Stage(). Component stores pointers
+     * into X_global_ and X_dot_global_ for efficient access during Step().
+     *
+     * Default implementation does nothing (component has no state).
+     * Override if StateSize() > 0.
+     *
+     * @param state_ptr Pointer to X_global_[offset] for this component
+     * @param state_dot_ptr Pointer to X_dot_global_[offset] for this component
+     * @param state_size Number of state variables (matches StateSize())
+     */
+    virtual void BindState(Scalar * /*state_ptr*/, Scalar * /*state_dot_ptr*/,
+                           std::size_t /*state_size*/) {
+        // Default: no state binding (component has no integrated state)
+    }
+
     // =========================================================================
     // Lifecycle State
     // =========================================================================
