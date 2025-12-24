@@ -135,11 +135,11 @@ TEST(Simulator, DefaultConstruction) {
 }
 
 // ============================================
-// Symbolic Backend Tests (casadi::MX)
+// Symbolic Backend Tests (SymbolicScalar)
 // ============================================
 
 TEST(SignalRegistrySymbolic, RegisterAndResolve) {
-    icarus::SignalRegistry<casadi::MX> registry;
+    icarus::SignalRegistry<janus::SymbolicScalar> registry;
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.signal";
@@ -153,7 +153,7 @@ TEST(SignalRegistrySymbolic, RegisterAndResolve) {
 }
 
 TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
-    icarus::SignalRegistry<casadi::MX> registry;
+    icarus::SignalRegistry<janus::SymbolicScalar> registry;
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.value";
@@ -162,7 +162,7 @@ TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
     auto index = registry.RegisterSignal(desc);
 
     // Set a symbolic value
-    casadi::MX sym_val = casadi::MX::sym("x");
+    janus::SymbolicScalar sym_val = janus::sym("x");
     registry.Set(index, sym_val);
 
     // Verify it's a valid symbolic expression
@@ -171,7 +171,7 @@ TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
 }
 
 TEST(SimulatorSymbolic, DefaultConstruction) {
-    icarus::Simulator<casadi::MX> sim;
+    icarus::Simulator<janus::SymbolicScalar> sim;
     EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
     EXPECT_EQ(sim.NumComponents(), 0);
 }

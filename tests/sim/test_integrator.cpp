@@ -9,6 +9,7 @@
 #include "testing/StatefulComponent.hpp"
 
 #include <cmath>
+#include <vulcan/core/Constants.hpp>
 
 using namespace icarus;
 
@@ -75,7 +76,7 @@ TEST(RK4Integrator, HarmonicOscillator) {
     double t = 0.0;
     double dt = 0.001;
     double omega = 2.0;
-    double period = 2.0 * M_PI / omega;
+    double period = 2.0 * vulcan::constants::angle::pi / omega;
 
     // Integrate one full period
     int steps = static_cast<int>(period / dt);
@@ -216,13 +217,20 @@ TEST(RK45Integrator, Statistics) {
 
     rk45.ResetStatistics();
 
-    // Several steps
+    // Several adaptive steps, updating state when accepted
+    double t = 0.0;
     for (int i = 0; i < 10; ++i) {
-        rk45.AdaptiveStep(exponential_decay<double>, x, 0.0, 0.1);
+        auto result = rk45.AdaptiveStep(exponential_decay<double>, x, t, 0.1);
+        if (result.accepted) {
+            x = result.state;
+            t += result.dt_actual;
+        }
     }
 
     auto stats = rk45.GetStatistics();
     EXPECT_GT(stats.accepted_steps, 0u);
+    // State should have decayed
+    EXPECT_LT(x[0], 1.0);
 }
 
 TEST(RK45Integrator, OrderVerification) {
@@ -432,31 +440,30 @@ TEST(SimulatorIntegrator, AllMethodsProduceResults) {
 // =============================================================================
 
 TEST(IntegratorSymbolic, RK4Compiles) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     RK4Integrator<MX> rk4;
-    auto x = janus::sym_vec("x", 2);
+    auto x = janus::sym_vec("x", 1);
     auto t = janus::sym("t");
     auto dt = janus::sym("dt");
 
-    // Use symbolic omega for proper tracing
-    auto omega_sq = MX(4.0);
+    // Exponential decay: dx/dt = -x
+    auto x_next = rk4.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
 
-    auto x_next = rk4.Step(
-        [&omega_sq](MX /*t*/, const JanusVector<MX> &x) {
-            JanusVector<MX> dx(2);
-            dx[0] = x[1];
-            dx[1] = -omega_sq * x[0];
-            return dx;
-        },
-        x, t, dt);
+    // Create Janus function for numerical evaluation
+    janus::Function step_fn("rk4_step", {janus::to_mx(x), t, dt}, {janus::to_mx(x_next)});
 
-    // Should produce valid symbolic result
-    EXPECT_EQ(x_next.size(), 2);
+    // Evaluate numerically: x(0)=1, t=0, dt=0.1
+    auto result = step_fn.eval(1.0, 0.0, 0.1);
+
+    // After one RK4 step with dt=0.1, x should decay from 1.0
+    // Analytical: x(0.1) = exp(-0.1) ≈ 0.9048
+    double x_result = result(0, 0);
+    EXPECT_NEAR(x_result, std::exp(-0.1), 1e-6);
 }
 
 TEST(IntegratorSymbolic, EulerCompiles) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     EulerIntegrator<MX> euler;
     auto x = janus::sym_vec("x", 1);
@@ -465,16 +472,15 @@ TEST(IntegratorSymbolic, EulerCompiles) {
 
     auto x_next = euler.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
 
-    casadi::Function step_fn("step", {janus::to_mx(x), t, dt}, {janus::to_mx(x_next)});
+    janus::Function step_fn("step", {janus::to_mx(x), t, dt}, {janus::to_mx(x_next)});
 
-    std::vector<casadi::DM> args = {casadi::DM(1.0), casadi::DM(0.0), casadi::DM(0.01)};
-    auto res = step_fn(args);
+    auto res = step_fn.eval(1.0, 0.0, 0.01);
 
-    EXPECT_EQ(res[0].size1(), 1);
+    EXPECT_EQ(res.rows(), 1);
 }
 
 TEST(IntegratorSymbolic, SimulatorWithMX) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     Simulator<MX> sim;
     sim.AddComponent(std::make_unique<StatefulComponent<MX>>("TestComponent"));
@@ -485,4 +491,46 @@ TEST(IntegratorSymbolic, SimulatorWithMX) {
 
     // Should compile and run symbolic step
     EXPECT_NO_THROW(sim.Step(MX{0.01}));
+}
+
+TEST(IntegratorSymbolic, RK2Compiles) {
+    using MX = janus::SymbolicScalar;
+
+    RK2Integrator<MX> rk2;
+    auto x = janus::sym_vec("x", 1);
+    auto t = janus::sym("t");
+    auto dt = janus::sym("dt");
+
+    auto x_next = rk2.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+
+    EXPECT_EQ(x_next.size(), 1);
+}
+
+TEST(IntegratorSymbolic, RK45Compiles) {
+    using MX = janus::SymbolicScalar;
+
+    RK45Integrator<MX> rk45;
+    auto x = janus::sym_vec("x", 1);
+    auto t = janus::sym("t");
+    auto dt = janus::sym("dt");
+
+    // RK45 Step (fixed step mode)
+    auto x_next = rk45.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+
+    EXPECT_EQ(x_next.size(), 1);
+}
+
+TEST(IntegratorSymbolic, FactoryCreatesMX) {
+    using MX = janus::SymbolicScalar;
+
+    // Test factory creates integrators for MX type
+    auto euler = IntegratorFactory<MX>::Create("euler");
+    EXPECT_EQ(euler->Name(), "Euler");
+
+    auto rk4 = IntegratorFactory<MX>::CreateDefault();
+    EXPECT_EQ(rk4->Name(), "RK4");
+
+    auto rk45 = IntegratorFactory<MX>::Create(IntegratorConfig<MX>::RK45Adaptive());
+    EXPECT_EQ(rk45->Name(), "RK45");
+    EXPECT_TRUE(rk45->IsAdaptive());
 }

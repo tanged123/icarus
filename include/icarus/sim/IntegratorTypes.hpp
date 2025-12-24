@@ -7,6 +7,8 @@
  * Part of Phase 2.2: Integrator Interface
  */
 
+#include <algorithm>
+#include <cctype>
 #include <icarus/core/Types.hpp>
 #include <stdexcept>
 #include <string>
@@ -47,18 +49,22 @@ enum class IntegratorType {
 }
 
 /**
- * @brief Parse integrator type from string
+ * @brief Parse integrator type from string (case-insensitive)
  *
  * @throws std::invalid_argument if type name is not recognized
  */
 [[nodiscard]] inline IntegratorType parse_integrator_type(const std::string &name) {
-    if (name == "Euler" || name == "euler")
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (lower == "euler")
         return IntegratorType::Euler;
-    if (name == "RK2" || name == "rk2")
+    if (lower == "rk2")
         return IntegratorType::RK2;
-    if (name == "RK4" || name == "rk4")
+    if (lower == "rk4")
         return IntegratorType::RK4;
-    if (name == "RK45" || name == "rk45")
+    if (lower == "rk45")
         return IntegratorType::RK45;
     throw std::invalid_argument("Unknown integrator type: " + name);
 }

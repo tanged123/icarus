@@ -372,10 +372,18 @@ template <typename Scalar> class Simulator {
 
     /**
      * @brief Set integrator directly
+     *
+     * If the integrator is adaptive, syncs tolerance config from the integrator.
      */
     void SetIntegrator(std::unique_ptr<Integrator<Scalar>> integrator) {
         integrator_ = std::move(integrator);
         integrator_config_.type = integrator_->Type();
+
+        // Sync adaptive integrator config if applicable
+        if (auto *adaptive = dynamic_cast<AdaptiveIntegrator<Scalar> *>(integrator_.get())) {
+            integrator_config_.abs_tol = adaptive->GetAbsTol();
+            integrator_config_.rel_tol = adaptive->GetRelTol();
+        }
     }
 
     /**

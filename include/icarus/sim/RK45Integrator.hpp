@@ -58,28 +58,59 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
     }
 
     /**
-     * @brief Adaptive step with error control
+     * @brief Adaptive step with automatic error control
      *
-     * May sub-step to meet tolerance requirements.
+     * Performs RK45 steps with automatic step size reduction when error
+     * exceeds tolerance. Retries with progressively smaller dt until
+     * the step is accepted or dt falls below min_dt.
+     *
+     * @param f Derivative function
+     * @param x Current state
+     * @param t Current time
+     * @param dt Requested step size (may be reduced internally)
+     * @return Result with final state, actual dt used, error, and acceptance flag
+     * @throws StepSizeTooSmallError if dt reduces below min_dt without success
      */
     AdaptiveStepResult<Scalar> AdaptiveStep(const DerivativeFunc &f, const JanusVector<Scalar> &x,
                                             Scalar t, Scalar dt) override {
-        // Compute RK45 step
-        auto result = janus::rk45_step(f, x, t, dt);
+        Scalar current_dt = dt;
 
-        // Compute error tolerance
-        Scalar tol = ComputeTolerance(x, result.y5);
+        // Retry loop with step size reduction
+        constexpr int max_attempts = 20; // Prevent infinite loops
+        for (int attempt = 0; attempt < max_attempts; ++attempt) {
+            // Compute RK45 step
+            auto result = janus::rk45_step(f, x, t, current_dt);
 
-        // Check if step is accepted
-        bool accepted = LessThanOrEqual(result.error, tol);
+            // Compute error tolerance
+            Scalar tol = ComputeTolerance(x, result.y5);
 
-        if (accepted) {
-            stats_.accepted_steps++;
-        } else {
+            // Check if step is accepted
+            bool accepted = LessThanOrEqual(result.error, tol);
+
+            if (accepted) {
+                stats_.accepted_steps++;
+                return AdaptiveStepResult<Scalar>{result.y5, current_dt, result.error, true};
+            }
+
+            // Step rejected - reduce dt and retry
             stats_.rejected_steps++;
+
+            // Compute new step size
+            Scalar dt_new = SuggestDt(current_dt, result.error, tol);
+
+            // Check for minimum step size (only in numeric mode)
+            if constexpr (std::is_same_v<Scalar, double>) {
+                if (dt_new <= min_dt_) {
+                    throw StepSizeTooSmallError(static_cast<double>(min_dt_));
+                }
+            }
+
+            current_dt = dt_new;
         }
 
-        return AdaptiveStepResult<Scalar>{result.y5, dt, result.error, accepted};
+        // Max attempts reached - return last result as rejected
+        auto result = janus::rk45_step(f, x, t, current_dt);
+        return AdaptiveStepResult<Scalar>{result.y5, current_dt, result.error, false};
     }
 
     // Tolerance setters/getters
