@@ -4,6 +4,23 @@ project(
   VERSION 0.2.2
   LANGUAGES CXX)
 
+# --- Build Type Configuration ---
+# Default to RelWithDebInfo if not specified (good balance for development)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE
+      "RelWithDebInfo"
+      CACHE STRING "Build type" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
+                                               "RelWithDebInfo" "MinSizeRel")
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# Define ICARUS_DEBUG for Debug builds (enables runtime assertions)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_compile_definitions(ICARUS_DEBUG=1)
+  message(STATUS "Debug mode enabled - ICARUS_DEBUG=1")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

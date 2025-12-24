@@ -16,16 +16,22 @@ mkdir -p "$PROJECT_ROOT/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$PROJECT_ROOT/logs/verify_${TIMESTAMP}.log"
 
-echo "Starting full verification..." | tee "$LOG_FILE"
+echo "Starting full verification (Debug + Release)..." | tee "$LOG_FILE"
 
-# Run build, test, and examples
 cd "$PROJECT_ROOT"
 (
-    echo '=== Building ===' && \
-    ./scripts/build.sh && \
-    echo '=== Running Tests ===' && \
-    ./scripts/test.sh && \
-    echo '=== Running Examples ===' && \
+    echo '=== Debug Build ===' && \
+    ./scripts/build.sh --clean --debug && \
+    echo '=== Debug Tests ===' && \
+    ./scripts/test.sh --debug && \
+    echo '=== Debug Examples ===' && \
+    ./scripts/run_examples.sh && \
+    echo '' && \
+    echo '=== Release Build ===' && \
+    ./scripts/build.sh --clean --release && \
+    echo '=== Release Tests ===' && \
+    ./scripts/test.sh --release && \
+    echo '=== Release Examples ===' && \
     ./scripts/run_examples.sh
 ) 2>&1 | tee -a "$LOG_FILE"
 

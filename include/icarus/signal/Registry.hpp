@@ -9,6 +9,7 @@
  */
 
 #include <deque>
+#include <icarus/core/Config.hpp>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
