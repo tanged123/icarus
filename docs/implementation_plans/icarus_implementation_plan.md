@@ -51,10 +51,10 @@ Phase 4–7 (horizontal expansion)
   - [x] Abstract `Component<Scalar>` with `Provision()`, `Stage()`, `Step()`
   - [x] Optional hooks (`PreStep`, `PostStep`, `OnPhaseEnter`, etc.)
 
-- [ ] **1.5 Simulator Shell**
-  - [ ] Top-level `Simulator<Scalar>` class
-  - [ ] Owns component list and backplane
-  - [ ] Calls lifecycle methods in sequence
+- [x] **1.5 Simulator Shell**
+  - [x] Top-level `Simulator<Scalar>` class
+  - [x] Owns component list and backplane
+  - [x] Calls lifecycle methods in sequence
 
 ### Architecture References
 
@@ -67,10 +67,10 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Can instantiate `Simulator<double>`, add a dummy component
-- [ ] Call Provision/Stage/Step without crashes
-- [ ] Read/write signals via Backplane
-- [ ] All Phase 1 tests pass
+- [x] Can instantiate `Simulator<double>`, add a dummy component
+- [x] Call Provision/Stage/Step without crashes
+- [x] Read/write signals via Backplane
+- [x] All Phase 1 tests pass
 
 ---
 
