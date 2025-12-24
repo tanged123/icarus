@@ -281,6 +281,9 @@ template <typename Scalar> class SignalRegistry {
      */
     [[nodiscard]] const Scalar &GetByName(const std::string &name) const {
         const SignalDescriptor &desc = signals_[Resolve(name)];
+        if (desc.data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
         return *static_cast<const Scalar *>(desc.data_ptr);
     }
 
@@ -289,6 +292,9 @@ template <typename Scalar> class SignalRegistry {
      */
     void SetByName(const std::string &name, const Scalar &value) {
         const SignalDescriptor &desc = signals_[Resolve(name)];
+        if (desc.data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
         *static_cast<Scalar *>(desc.data_ptr) = value;
     }
 
@@ -343,6 +349,10 @@ template <typename Scalar> class SignalRegistry {
     template <typename T>
     void register_signal_impl(const std::string &name, T *data_ptr, const std::string &unit,
                               const std::string &description, SignalLifecycle lifecycle) {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
+
         if (name_to_index_.contains(name)) {
             const auto &existing = signals_[name_to_index_[name]];
             throw DuplicateSignalError(name, existing.owner_component,
