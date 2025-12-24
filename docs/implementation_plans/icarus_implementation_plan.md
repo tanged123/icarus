@@ -85,14 +85,15 @@ Phase 4–7 (horizontal expansion)
   - [x] State registration and ownership
   - [x] Scatter/gather via pointer binding to components
 
-- [ ] **2.2 Integrator Interface**
-  - [ ] Abstract `Integrator<Scalar>` interface
-  - [ ] RK4 implementation
-  - [ ] Adaptive RK45 implementation
+- [x] **2.2 Integrator Interface**
+  - [x] Abstract `Integrator<Scalar>` interface
+  - [x] RK4 implementation
+  - [x] Adaptive RK45 implementation
 
 - [ ] **2.3 First Real Component**
-  - [ ] `PointMass3DOF` with position/velocity state
-  - [ ] Gravity input, integrated dynamics
+  - [ ] `PointMass3DOF` with position/velocity state, using Vulcan coordinate systems
+  - [ ] `PointMassGravity` with using Vulcan simple round Earth gravity model
+  - [ ] Demonstation of connecting components and running a simulation all the way through.
 
 ### Architecture References
 
