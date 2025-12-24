@@ -1,5 +1,7 @@
 # Icarus
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://tanged123.github.io/icarus/) [![icarus CI](https://github.com/tanged123/icarus/actions/workflows/ci.yml/badge.svg)](https://github.com/tanged123/icarus/actions/workflows/ci.yml) [![Clang-Format Check](https://github.com/tanged123/icarus/actions/workflows/format.yml/badge.svg)](https://github.com/tanged123/icarus/actions/workflows/format.yml) [![codecov](https://codecov.io/github/tanged123/icarus/graph/badge.svg?token=67F2PGBQAU)](https://codecov.io/github/tanged123/icarus)
+
 **6DOF Simulation Engine for Aerospace Applications**
 
 Icarus is a data-oriented simulation framework that utilizes both **Janus** (math library) and **Vulcan** (engineering utilities) as dependencies. It provides a component-based architecture for building complex flight simulations with support for both real-time numeric execution and symbolic optimization.
