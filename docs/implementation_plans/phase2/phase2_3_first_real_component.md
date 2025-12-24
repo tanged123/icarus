@@ -13,14 +13,14 @@ Phase 2.3 delivers the **first real simulation** — a point mass falling under 
 2. **State management** — Pointer-based scatter/gather
 3. **Signal backplane** — Component I/O wiring
 4. **Integrator** — RK4 advancing state over time
-5. **Vulcan integration** — Using physics utilities for gravity
+5. **Vulcan integration** — Using physics utilities for gravity and dynamics
 
 Two components demonstrate the architecture:
 
-| Component | Role | State | Inputs | Outputs |
-|:----------|:-----|:------|:-------|:--------|
-| **PointMass3DOF** | Dynamics | 6 (pos + vel) | `acceleration` | `position`, `velocity` |
-| **PointMassGravity** | Environment | 0 | `position` | `acceleration` |
+| Component | Role | State | Inputs | Outputs | Vulcan Functions |
+|:----------|:-----|:------|:-------|:--------|:-----------------|
+| **PointMass3DOF** | Dynamics | 6 (pos + vel) | `force` | `position`, `velocity` | `point_mass_acceleration()` (ECI) or `point_mass_acceleration_ecef()` |
+| **PointMassGravity** | Environment | 0 | `position`, `mass` | `force` | `gravity::point_mass::acceleration()` (ECEF-compatible) |
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -30,10 +30,11 @@ Two components demonstrate the architecture:
 │   PointMassGravity (Stateless)                                  │
 │   ┌─────────────────────────────┐                               │
 │   │ position ─────────────────┐ │                               │
-│   │                           │ │                               │
-│   │   g = -μ/|r|² * r̂        │ │                               │
-│   │                           ▼ │                               │
-│   │                    acceleration ──────────────┐             │
+│   │ mass ────────────────────┐│ │                               │
+│   │                          ││ │                               │
+│   │  Vulcan: gravity::point_mass::acceleration(r)               │
+│   │  force = mass * g        ▼▼ │                               │
+│   │                      force ───────────────────┐             │
 │   └─────────────────────────────┘                 │             │
 │                                                   │             │
 │   PointMass3DOF (Stateful)                        │             │
@@ -42,8 +43,9 @@ Two components demonstrate the architecture:
 │   │ │ State: r, v (6 vars)    │ │◄────────────────┘             │
 │   │ └─────────────────────────┘ │                               │
 │   │                             │                               │
-│   │   ṙ = v                     │                               │
-│   │   v̇ = acceleration         │                               │
+│   │  Vulcan: point_mass_acceleration(force, mass)               │
+│   │  ṙ = v                      │                               │
+│   │  v̇ = a = F/m               │                               │
 │   │                             │                               │
 │   │   Outputs: position, velocity                               │
 │   └─────────────────────────────┘                               │
@@ -91,12 +93,151 @@ X_global_ (6 elements)
 
 Per [08_vulcan_integration.md](../../architecture/08_vulcan_integration.md):
 
-```cpp
-// Gravity computation (Vulcan provides, Icarus uses)
-Vec3<Scalar> g = vulcan::gravity::point_mass(r_ecef, mu);
+Vulcan provides stateless physics functions that components wrap:
 
-// Vulcan is stateless — pure functions only
+**Gravity Model** (`vulcan/gravity/PointMass.hpp`):
+
+```cpp
+namespace vulcan::gravity::point_mass {
+    // Gravitational acceleration: g = -μ/r³ · r
+    template <typename Scalar>
+    Vec3<Scalar> acceleration(const Vec3<Scalar>& r_ecef,
+                             double mu = constants::earth::mu);
+
+    // Gravitational potential: U = -μ/r
+    template <typename Scalar>
+    Scalar potential(const Vec3<Scalar>& r_ecef,
+                    double mu = constants::earth::mu);
+}
 ```
+
+**Point Mass Dynamics** (`vulcan/dynamics/PointMass.hpp`):
+
+```cpp
+namespace vulcan::dynamics {
+    // Inertial frame acceleration: a = F/m
+    template <typename Scalar>
+    Vec3<Scalar> point_mass_acceleration(const Vec3<Scalar>& force,
+                                        const Scalar& mass);
+
+    // ECEF frame with Coriolis & centrifugal terms
+    template <typename Scalar>
+    Vec3<Scalar> point_mass_acceleration_ecef(const Vec3<Scalar>& position,
+                                             const Vec3<Scalar>& velocity,
+                                             const Vec3<Scalar>& force,
+                                             const Scalar& mass,
+                                             const Vec3<Scalar>& omega_earth);
+
+    // Kinetic/potential energy
+    template <typename Scalar>
+    Scalar specific_energy(const Vec3<Scalar>& position,
+                          const Vec3<Scalar>& velocity,
+                          const Scalar& mu);
+}
+```
+
+**Coordinate Frames** (`vulcan/coordinates/`):
+
+```cpp
+// LLA ↔ ECEF conversions
+template <typename Scalar>
+LLA<Scalar> ecef_to_lla(const Vec3<Scalar>& r, const EarthModel& m);
+
+template <typename Scalar>
+Vec3<Scalar> lla_to_ecef(const LLA<Scalar>& lla, const EarthModel& m);
+
+// Local frames (NED, ENU)
+template <typename Scalar>
+CoordinateFrame<Scalar> local_ned_at(const Vec3<Scalar>& r_ecef);
+```
+
+**Constants** (`vulcan/core/Constants.hpp`):
+
+```cpp
+namespace vulcan::constants::earth {
+    inline constexpr double mu = 3.986004418e14;    // GM [m³/s²]
+    inline constexpr double R_eq = 6378137.0;       // Equatorial radius [m]
+    inline constexpr double omega = 7.2921159e-5;   // Rotation rate [rad/s]
+    inline constexpr double g0 = 9.80665;           // Standard gravity [m/s²]
+}
+```
+
+---
+
+## Coordinate Frame Strategy
+
+> [!IMPORTANT]
+> Coordinate frame consistency is critical. All components must agree on which frame state is propagated in.
+
+### Frame Options
+
+| Frame | Description | Dynamics Function | When to Use |
+|:------|:------------|:------------------|:------------|
+| **ECI** | Earth-Centered Inertial | `point_mass_acceleration(F, m)` | Orbital, no Earth rotation effects |
+| **ECEF** | Earth-Centered Earth-Fixed | `point_mass_acceleration_ecef(r, v, F, m, ω)` | Ground-referenced, includes Coriolis |
+| **Local/NED** | Local vertical frame | Custom formulation | Atmospheric flight, short duration |
+
+### Phase 2.3 Approach: Dual-Mode Support
+
+To maximize validation coverage and educational value:
+
+1. **Validation Mode (Constant Gravity)**: Uses a simplified **local vertical frame** where:
+   - Position is in a local Cartesian frame (X-East, Y-North, Z-Up or similar)
+   - Gravity is constant: `g = [0, 0, -g0]`
+   - No frame rotation effects
+   - Validates against analytical solution: `z(t) = z₀ + v₀t - ½gt²`
+
+2. **Orbital Mode (Point-Mass Gravity)**: Uses **ECI frame** where:
+   - Position/velocity are inertial (non-rotating)
+   - Gravity: `g = -μ/r³ · r` (central force, same formula in any frame)
+   - Uses `point_mass_acceleration(F, m)` without fictitious forces
+   - Validates via energy conservation
+
+> [!NOTE]
+> Future phases will add ECEF propagation with `point_mass_acceleration_ecef()` for
+> Earth-relative trajectory analysis (e.g., launch trajectories, reentry).
+
+### Frame Consistency Rules
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FRAME CONSISTENCY FLOW                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   PointMassGravity.Step()                                          │
+│   ├─ Reads: position (frame F)                                     │
+│   ├─ Computes: g = vulcan::gravity::...(r)      // Output in F     │
+│   └─ Outputs: force = m * g                     // Force in F      │
+│                        │                                           │
+│                        ▼                                           │
+│   PointMass3DOF.Step()                                             │
+│   ├─ Reads: force (frame F)                                        │
+│   ├─ Computes: a = F/m (ECI) or with ω×v, ω×ω×r (ECEF)            │
+│   └─ Writes: dr/dt = v, dv/dt = a               // Derivs in F    │
+│                                                                     │
+│   Integration                                                       │
+│   └─ Updates: r, v via RK4                      // State in F     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Not ECEF for Phase 2.3?
+
+ECEF propagation requires:
+
+- Coriolis term: `-2ω × v`
+- Centrifugal term: `-ω × (ω × r)`
+- Earth rotation vector: `ω = [0, 0, 7.2921159e-5]` rad/s
+
+This adds complexity without improving the core validation goals of Phase 2.3.
+ECI is simpler and sufficient for demonstrating:
+
+- Component lifecycle
+- State management
+- Signal wiring
+- Integrator correctness
+
+ECEF support will be added in a later phase focused on coordinate frame infrastructure.
 
 ---
 
@@ -112,7 +253,11 @@ Vec3<Scalar> g = vulcan::gravity::point_mass(r_ecef, mu);
 
 ### 1. PointMass3DOF Component
 
-The core dynamics component with 6 state variables (position + velocity).
+The core dynamics component with 6 state variables (position + velocity). Uses Vulcan's `point_mass_acceleration()` for physics in **inertial frames** (ECI or local).
+
+> [!NOTE]
+> This component uses inertial-frame dynamics (no Coriolis/centrifugal terms).
+> For ECEF propagation, a future variant will use `point_mass_acceleration_ecef()`.
 
 #### File: `components/dynamics/PointMass3DOF.hpp`
 
@@ -121,7 +266,13 @@ The core dynamics component with 6 state variables (position + velocity).
 
 /**
  * @file PointMass3DOF.hpp
- * @brief 3-DOF point mass dynamics component
+ * @brief 3-DOF point mass dynamics component (inertial frame)
+ *
+ * Wraps Vulcan's point_mass_acceleration() for translational dynamics.
+ * Suitable for ECI orbital dynamics or local-frame validation.
+ *
+ * Frame: Inertial (ECI) or local Cartesian (for validation)
+ * NOT suitable for ECEF without adding Coriolis/centrifugal terms.
  *
  * Part of Phase 2.3: First Real Component
  */
@@ -129,19 +280,27 @@ The core dynamics component with 6 state variables (position + velocity).
 #include <icarus/core/Component.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/core/Types.hpp>
-#include <janus/types.hpp>
+#include <vulcan/dynamics/PointMass.hpp>
+#include <vulcan/core/VulcanTypes.hpp>
 
 namespace icarus {
 namespace components {
 
 /**
- * @brief 3-DOF point mass translational dynamics
+ * @brief 3-DOF point mass translational dynamics (inertial frame)
  *
  * State vector: [rx, ry, rz, vx, vy, vz] (6 variables)
  *
+ * Frame Assumption: This component assumes an INERTIAL reference frame.
+ * - For orbital dynamics: use ECI coordinates
+ * - For validation tests: use local Cartesian (Z-up)
+ *
+ * Uses Vulcan for physics:
+ *   - vulcan::dynamics::point_mass_acceleration(force, mass) → a = F/m
+ *
  * Equations of motion:
  *   dr/dt = v           (kinematics)
- *   dv/dt = a           (Newton's 2nd law, F/m = a)
+ *   dv/dt = a = F/m     (Newton's 2nd law via Vulcan)
  *
  * @tparam Scalar Numeric type (double or casadi::MX)
  */
@@ -153,11 +312,12 @@ public:
     static constexpr std::size_t kVelOffset = 3;
 
     /**
-     * @brief Construct with optional name and entity
+     * @brief Construct with mass and optional name/entity
      */
-    explicit PointMass3DOF(std::string name = "PointMass3DOF",
+    explicit PointMass3DOF(Scalar mass = Scalar{1.0},
+                          std::string name = "PointMass3DOF",
                           std::string entity = "")
-        : name_(std::move(name)), entity_(std::move(entity)) {}
+        : mass_(mass), name_(std::move(name)), entity_(std::move(entity)) {}
 
     // =========================================================================
     // Component Identity
@@ -174,39 +334,35 @@ public:
     // =========================================================================
 
     /**
-     * @brief Register outputs: position, velocity
+     * @brief Register outputs: position, velocity, mass
      */
     void Provision(Backplane<Scalar>& bp, const ComponentConfig&) override {
-        // Position (ECEF or inertial frame)
-        bp.register_output("position.x", &position_x_, "m", "Position X component");
-        bp.register_output("position.y", &position_y_, "m", "Position Y component");
-        bp.register_output("position.z", &position_z_, "m", "Position Z component");
+        // Position (in inertial frame: ECI for orbital, local for validation)
+        bp.register_output("position.x", &position_.x(), "m", "Position X");
+        bp.register_output("position.y", &position_.y(), "m", "Position Y");
+        bp.register_output("position.z", &position_.z(), "m", "Position Z");
 
-        // Velocity (ECEF or inertial frame)
-        bp.register_output("velocity.x", &velocity_x_, "m/s", "Velocity X component");
-        bp.register_output("velocity.y", &velocity_y_, "m/s", "Velocity Y component");
-        bp.register_output("velocity.z", &velocity_z_, "m/s", "Velocity Z component");
+        // Velocity (in same inertial frame as position)
+        bp.register_output("velocity.x", &velocity_.x(), "m/s", "Velocity X");
+        bp.register_output("velocity.y", &velocity_.y(), "m/s", "Velocity Y");
+        bp.register_output("velocity.z", &velocity_.z(), "m/s", "Velocity Z");
+
+        // Mass (for gravity component to compute force)
+        bp.register_output("mass", &mass_, "kg", "Point mass");
     }
 
     /**
-     * @brief Wire inputs and apply initial conditions
+     * @brief Wire force input and apply initial conditions
      */
     void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // Resolve acceleration input (from gravity or other force sources)
-        accel_x_ = bp.template resolve<Scalar>("Gravity.acceleration.x");
-        accel_y_ = bp.template resolve<Scalar>("Gravity.acceleration.y");
-        accel_z_ = bp.template resolve<Scalar>("Gravity.acceleration.z");
+        // Resolve force input (from gravity and other force sources)
+        force_x_ = bp.template resolve<Scalar>("Gravity.force.x");
+        force_y_ = bp.template resolve<Scalar>("Gravity.force.y");
+        force_z_ = bp.template resolve<Scalar>("Gravity.force.z");
 
-        // Apply initial conditions from config (or defaults)
-        if (cfg.has("initial_position.x")) {
-            ic_pos_x_ = cfg.get<Scalar>("initial_position.x");
-            ic_pos_y_ = cfg.get<Scalar>("initial_position.y");
-            ic_pos_z_ = cfg.get<Scalar>("initial_position.z");
-        }
-        if (cfg.has("initial_velocity.x")) {
-            ic_vel_x_ = cfg.get<Scalar>("initial_velocity.x");
-            ic_vel_y_ = cfg.get<Scalar>("initial_velocity.y");
-            ic_vel_z_ = cfg.get<Scalar>("initial_velocity.z");
+        // Apply initial conditions from config (or use programmatic values)
+        if (cfg.has("mass")) {
+            mass_ = cfg.template get<Scalar>("mass");
         }
     }
 
@@ -218,121 +374,102 @@ public:
             throw StateSizeMismatchError(kStateSize, size);
         }
 
-        // Position pointers
+        // Store pointers to state slices
         state_pos_ = state + kPosOffset;
         state_dot_pos_ = state_dot + kPosOffset;
-
-        // Velocity pointers
         state_vel_ = state + kVelOffset;
         state_dot_vel_ = state_dot + kVelOffset;
 
         // Apply initial conditions to state
-        state_pos_[0] = ic_pos_x_;
-        state_pos_[1] = ic_pos_y_;
-        state_pos_[2] = ic_pos_z_;
-        state_vel_[0] = ic_vel_x_;
-        state_vel_[1] = ic_vel_y_;
-        state_vel_[2] = ic_vel_z_;
+        state_pos_[0] = ic_position_.x();
+        state_pos_[1] = ic_position_.y();
+        state_pos_[2] = ic_position_.z();
+        state_vel_[0] = ic_velocity_.x();
+        state_vel_[1] = ic_velocity_.y();
+        state_vel_[2] = ic_velocity_.z();
     }
 
     /**
-     * @brief Compute derivatives (kinematics and dynamics)
-     *
-     * Called every integration substep. Reads from state pointers,
-     * writes derivatives to state_dot pointers.
+     * @brief Compute derivatives using Vulcan dynamics
      */
     void Step(Scalar t, Scalar dt) override {
-        (void)t;  // Time not needed for simple dynamics
-        (void)dt; // dt not needed (integrator handles step)
+        (void)t;
+        (void)dt;
 
-        // Read current state (via pointers to X_global_)
-        Scalar rx = state_pos_[0];
-        Scalar ry = state_pos_[1];
-        Scalar rz = state_pos_[2];
-        Scalar vx = state_vel_[0];
-        Scalar vy = state_vel_[1];
-        Scalar vz = state_vel_[2];
+        // Read current state into Vec3 (for Vulcan API)
+        vulcan::Vec3<Scalar> pos{state_pos_[0], state_pos_[1], state_pos_[2]};
+        vulcan::Vec3<Scalar> vel{state_vel_[0], state_vel_[1], state_vel_[2]};
 
-        // Read acceleration input (from gravity component)
-        Scalar ax = *accel_x_;
-        Scalar ay = *accel_y_;
-        Scalar az = *accel_z_;
+        // Read force input
+        vulcan::Vec3<Scalar> force{*force_x_, *force_y_, *force_z_};
+
+        // Compute acceleration using Vulcan
+        vulcan::Vec3<Scalar> accel = vulcan::dynamics::point_mass_acceleration(
+            force, mass_);
 
         // Write derivatives
         // dr/dt = v (kinematics)
-        state_dot_pos_[0] = vx;
-        state_dot_pos_[1] = vy;
-        state_dot_pos_[2] = vz;
+        state_dot_pos_[0] = vel.x();
+        state_dot_pos_[1] = vel.y();
+        state_dot_pos_[2] = vel.z();
 
-        // dv/dt = a (Newton's 2nd law)
-        state_dot_vel_[0] = ax;
-        state_dot_vel_[1] = ay;
-        state_dot_vel_[2] = az;
+        // dv/dt = a = F/m (Vulcan computes this)
+        state_dot_vel_[0] = accel.x();
+        state_dot_vel_[1] = accel.y();
+        state_dot_vel_[2] = accel.z();
 
-        // Update outputs (for other components and logging)
-        position_x_ = rx;
-        position_y_ = ry;
-        position_z_ = rz;
-        velocity_x_ = vx;
-        velocity_y_ = vy;
-        velocity_z_ = vz;
+        // Update outputs for other components
+        position_ = pos;
+        velocity_ = vel;
     }
 
     // =========================================================================
-    // Accessors (for testing)
+    // Configuration
     // =========================================================================
 
-    [[nodiscard]] Scalar GetPositionX() const { return position_x_; }
-    [[nodiscard]] Scalar GetPositionY() const { return position_y_; }
-    [[nodiscard]] Scalar GetPositionZ() const { return position_z_; }
-    [[nodiscard]] Scalar GetVelocityX() const { return velocity_x_; }
-    [[nodiscard]] Scalar GetVelocityY() const { return velocity_y_; }
-    [[nodiscard]] Scalar GetVelocityZ() const { return velocity_z_; }
+    void SetMass(Scalar mass) { mass_ = mass; }
+    [[nodiscard]] Scalar GetMass() const { return mass_; }
 
-    // Set initial conditions programmatically
+    void SetInitialPosition(const vulcan::Vec3<Scalar>& pos) { ic_position_ = pos; }
     void SetInitialPosition(Scalar x, Scalar y, Scalar z) {
-        ic_pos_x_ = x;
-        ic_pos_y_ = y;
-        ic_pos_z_ = z;
+        ic_position_ = vulcan::Vec3<Scalar>{x, y, z};
     }
 
+    void SetInitialVelocity(const vulcan::Vec3<Scalar>& vel) { ic_velocity_ = vel; }
     void SetInitialVelocity(Scalar vx, Scalar vy, Scalar vz) {
-        ic_vel_x_ = vx;
-        ic_vel_y_ = vy;
-        ic_vel_z_ = vz;
+        ic_velocity_ = vulcan::Vec3<Scalar>{vx, vy, vz};
     }
+
+    // Accessors
+    [[nodiscard]] vulcan::Vec3<Scalar> GetPosition() const { return position_; }
+    [[nodiscard]] vulcan::Vec3<Scalar> GetVelocity() const { return velocity_; }
 
 private:
     // Identity
     std::string name_;
     std::string entity_;
 
-    // Initial conditions (applied in BindState)
-    Scalar ic_pos_x_{0};
-    Scalar ic_pos_y_{0};
-    Scalar ic_pos_z_{0};
-    Scalar ic_vel_x_{0};
-    Scalar ic_vel_y_{0};
-    Scalar ic_vel_z_{0};
+    // Mass property
+    Scalar mass_{1.0};
 
-    // State pointers (bound in BindState, point into X_global_)
+    // Initial conditions
+    vulcan::Vec3<Scalar> ic_position_{Scalar{0}, Scalar{0}, Scalar{0}};
+    vulcan::Vec3<Scalar> ic_velocity_{Scalar{0}, Scalar{0}, Scalar{0}};
+
+    // State pointers (bound in BindState)
     Scalar* state_pos_ = nullptr;
     Scalar* state_vel_ = nullptr;
     Scalar* state_dot_pos_ = nullptr;
     Scalar* state_dot_vel_ = nullptr;
 
     // Input handles (resolved in Stage)
-    const Scalar* accel_x_ = nullptr;
-    const Scalar* accel_y_ = nullptr;
-    const Scalar* accel_z_ = nullptr;
+    const Scalar* force_x_ = nullptr;
+    const Scalar* force_y_ = nullptr;
+    const Scalar* force_z_ = nullptr;
 
-    // Output values (published via register_output)
-    Scalar position_x_{0};
-    Scalar position_y_{0};
-    Scalar position_z_{0};
-    Scalar velocity_x_{0};
-    Scalar velocity_y_{0};
-    Scalar velocity_z_{0};
+    // Output values
+    vulcan::Vec3<Scalar> position_{Scalar{0}, Scalar{0}, Scalar{0}};
+    vulcan::Vec3<Scalar> velocity_{Scalar{0}, Scalar{0}, Scalar{0}};
 };
 
 } // namespace components
@@ -343,7 +480,13 @@ private:
 
 ### 2. PointMassGravity Component
 
-Stateless component that computes gravitational acceleration.
+Stateless component that computes gravitational force using Vulcan's `gravity::point_mass::acceleration()`.
+
+> [!NOTE]
+> Frame considerations by gravity model:
+>
+> - **Constant**: Assumes local vertical frame (Z-up), returns `[0, 0, -g0]`
+> - **PointMass/J2**: Expects position from Earth center, returns acceleration toward center (works in ECI or ECEF)
 
 #### File: `components/environment/PointMassGravity.hpp`
 
@@ -352,7 +495,14 @@ Stateless component that computes gravitational acceleration.
 
 /**
  * @file PointMassGravity.hpp
- * @brief Simple point-mass gravity model component
+ * @brief Gravity model component using Vulcan's point-mass gravity
+ *
+ * Wraps vulcan::gravity::point_mass::acceleration() for gravity computation.
+ *
+ * Frame Considerations:
+ * - Constant model: Assumes local vertical frame (Z-up)
+ * - PointMass/J2 models: Input/output vectors relative to Earth center
+ *   (valid in both ECI and ECEF since gravity is a central force)
  *
  * Part of Phase 2.3: First Real Component
  */
@@ -361,23 +511,24 @@ Stateless component that computes gravitational acceleration.
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/core/Types.hpp>
 #include <vulcan/gravity/PointMass.hpp>
-#include <vulcan/constants/Earth.hpp>
-#include <janus/math/Functions.hpp>
+#include <vulcan/gravity/J2.hpp>
+#include <vulcan/core/Constants.hpp>
+#include <vulcan/core/VulcanTypes.hpp>
 
 namespace icarus {
 namespace components {
 
 /**
- * @brief Simple round Earth gravity model
+ * @brief Gravity model component using Vulcan physics
  *
- * Computes gravitational acceleration using point-mass approximation:
- *   g = -μ/|r|² * r̂
+ * Uses Vulcan's gravity models:
+ *   - vulcan::gravity::point_mass::acceleration(r) → g = -μ/r³ · r
+ *   - vulcan::gravity::j2::acceleration(r) → includes J2 oblateness (optional)
  *
- * where μ = GM (gravitational parameter) and r is position vector from
- * Earth's center.
+ * Outputs gravitational **force** (not acceleration) so it can be summed
+ * with other forces before passing to the dynamics component.
  *
- * For Phase 2.3 validation, can also use simplified constant gravity:
- *   g = [0, 0, -9.81] m/s² (in local vertical frame)
+ * For Phase 2.3 validation, also supports simplified constant gravity.
  *
  * @tparam Scalar Numeric type (double or casadi::MX)
  */
@@ -385,20 +536,21 @@ template <typename Scalar>
 class PointMassGravity : public Component<Scalar> {
 public:
     /**
-     * @brief Gravity model mode
+     * @brief Gravity model fidelity
      */
-    enum class Mode {
-        ConstantDownward,  ///< g = [0, 0, -9.81] (for validation)
-        PointMass,         ///< g = -μ/|r|² * r̂ (realistic)
+    enum class Model {
+        Constant,   ///< g = [0, 0, -g0] (for analytical validation)
+        PointMass,  ///< vulcan::gravity::point_mass::acceleration()
+        J2,         ///< vulcan::gravity::j2::acceleration()
     };
 
     /**
-     * @brief Construct with optional name and mode
+     * @brief Construct with optional name and model
      */
     explicit PointMassGravity(std::string name = "Gravity",
                              std::string entity = "",
-                             Mode mode = Mode::ConstantDownward)
-        : name_(std::move(name)), entity_(std::move(entity)), mode_(mode) {}
+                             Model model = Model::Constant)
+        : name_(std::move(name)), entity_(std::move(entity)), model_(model) {}
 
     // =========================================================================
     // Component Identity
@@ -415,85 +567,106 @@ public:
     // =========================================================================
 
     /**
-     * @brief Register output: acceleration
+     * @brief Register outputs: force (N)
      */
     void Provision(Backplane<Scalar>& bp, const ComponentConfig&) override {
-        bp.register_output("acceleration.x", &accel_x_, "m/s²", "Gravity X");
-        bp.register_output("acceleration.y", &accel_y_, "m/s²", "Gravity Y");
-        bp.register_output("acceleration.z", &accel_z_, "m/s²", "Gravity Z");
+        // Output force (not acceleration) - allows summing multiple force sources
+        bp.register_output("force.x", &force_.x(), "N", "Gravity force X");
+        bp.register_output("force.y", &force_.y(), "N", "Gravity force Y");
+        bp.register_output("force.z", &force_.z(), "N", "Gravity force Z");
+
+        // Also output acceleration for convenience/logging
+        bp.register_output("acceleration.x", &accel_.x(), "m/s²", "Gravity accel X");
+        bp.register_output("acceleration.y", &accel_.y(), "m/s²", "Gravity accel Y");
+        bp.register_output("acceleration.z", &accel_.z(), "m/s²", "Gravity accel Z");
     }
 
     /**
-     * @brief Wire input: position from dynamics component
+     * @brief Wire inputs: position and mass from dynamics component
      */
     void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // Resolve position input
+        // Resolve position input (from dynamics component)
         pos_x_ = bp.template resolve<Scalar>("PointMass3DOF.position.x");
         pos_y_ = bp.template resolve<Scalar>("PointMass3DOF.position.y");
         pos_z_ = bp.template resolve<Scalar>("PointMass3DOF.position.z");
 
-        // Override mode from config if specified
-        if (cfg.has("mode")) {
-            std::string mode_str = cfg.get<std::string>("mode");
-            if (mode_str == "constant" || mode_str == "ConstantDownward") {
-                mode_ = Mode::ConstantDownward;
-            } else if (mode_str == "point_mass" || mode_str == "PointMass") {
-                mode_ = Mode::PointMass;
+        // Resolve mass input (for force = mass * acceleration)
+        mass_ = bp.template resolve<Scalar>("PointMass3DOF.mass");
+
+        // Override model from config if specified
+        if (cfg.has("model")) {
+            std::string model_str = cfg.template get<std::string>("model");
+            if (model_str == "constant") {
+                model_ = Model::Constant;
+            } else if (model_str == "point_mass") {
+                model_ = Model::PointMass;
+            } else if (model_str == "j2") {
+                model_ = Model::J2;
             }
         }
 
         // Override gravitational parameter if specified
         if (cfg.has("mu")) {
-            mu_ = cfg.get<Scalar>("mu");
-        }
-
-        // Override constant gravity magnitude if specified
-        if (cfg.has("g")) {
-            g_constant_ = cfg.get<Scalar>("g");
+            mu_ = cfg.template get<double>("mu");
         }
     }
 
     /**
-     * @brief Compute gravitational acceleration
+     * @brief Compute gravitational force using Vulcan
      */
     void Step(Scalar t, Scalar dt) override {
         (void)t;
         (void)dt;
 
-        if (mode_ == Mode::ConstantDownward) {
-            // Simple constant gravity (Z-down convention)
-            // Useful for validating against analytical solution
-            accel_x_ = Scalar{0};
-            accel_y_ = Scalar{0};
-            accel_z_ = -g_constant_;  // Negative = downward
-        } else {
-            // Point-mass gravity model
-            Scalar rx = *pos_x_;
-            Scalar ry = *pos_y_;
-            Scalar rz = *pos_z_;
+        // Read position into Vec3
+        vulcan::Vec3<Scalar> pos{*pos_x_, *pos_y_, *pos_z_};
+        Scalar m = *mass_;
 
-            // |r| = sqrt(rx² + ry² + rz²)
-            Scalar r_mag_sq = rx * rx + ry * ry + rz * rz;
-            Scalar r_mag = janus::sqrt(r_mag_sq);
+        // Compute acceleration based on model
+        switch (model_) {
+            case Model::Constant:
+                // Local vertical frame: Z-up, constant gravity downward
+                // Used for analytical validation: z(t) = z0 - ½gt²
+                // NOTE: Only valid with local-frame dynamics, NOT for orbital sims
+                accel_ = vulcan::Vec3<Scalar>{
+                    Scalar{0},
+                    Scalar{0},
+                    -Scalar{vulcan::constants::earth::g0}
+                };
+                break;
 
-            // g = -μ/|r|³ * r  (note: |r|³ not |r|² because we multiply by r not r̂)
-            Scalar factor = -mu_ / (r_mag * r_mag_sq);
+            case Model::PointMass:
+                // Central gravity toward Earth center: g = -μ/r³ · r
+                // Works in ECI or ECEF (central force, same formula)
+                // Position must be from Earth center [m]
+                accel_ = vulcan::gravity::point_mass::acceleration(pos, mu_);
+                break;
 
-            accel_x_ = factor * rx;
-            accel_y_ = factor * ry;
-            accel_z_ = factor * rz;
+            case Model::J2:
+                // J2 gravity model (includes Earth oblateness)
+                // Adds latitude-dependent perturbation on top of point-mass
+                // Position must be from Earth center [m]
+                accel_ = vulcan::gravity::j2::acceleration(pos, mu_);
+                break;
         }
+
+        // Compute force: F = m * a
+        force_ = m * accel_;
     }
 
     // =========================================================================
     // Configuration
     // =========================================================================
 
-    void SetMode(Mode mode) { mode_ = mode; }
-    [[nodiscard]] Mode GetMode() const { return mode_; }
+    void SetModel(Model model) { model_ = model; }
+    [[nodiscard]] Model GetModel() const { return model_; }
 
-    void SetGravitationalParameter(Scalar mu) { mu_ = mu; }
-    void SetConstantGravity(Scalar g) { g_constant_ = g; }
+    void SetGravitationalParameter(double mu) { mu_ = mu; }
+    [[nodiscard]] double GetGravitationalParameter() const { return mu_; }
+
+    // Accessors
+    [[nodiscard]] vulcan::Vec3<Scalar> GetAcceleration() const { return accel_; }
+    [[nodiscard]] vulcan::Vec3<Scalar> GetForce() const { return force_; }
 
 private:
     // Identity
@@ -501,19 +674,18 @@ private:
     std::string entity_;
 
     // Configuration
-    Mode mode_ = Mode::ConstantDownward;
-    Scalar mu_ = Scalar{3.986004418e14};  // Earth GM [m³/s²]
-    Scalar g_constant_ = Scalar{9.80665}; // Standard gravity [m/s²]
+    Model model_ = Model::Constant;
+    double mu_ = vulcan::constants::earth::mu;
 
     // Input handles (resolved in Stage)
     const Scalar* pos_x_ = nullptr;
     const Scalar* pos_y_ = nullptr;
     const Scalar* pos_z_ = nullptr;
+    const Scalar* mass_ = nullptr;
 
     // Output values
-    Scalar accel_x_{0};
-    Scalar accel_y_{0};
-    Scalar accel_z_{0};
+    vulcan::Vec3<Scalar> accel_{Scalar{0}, Scalar{0}, Scalar{0}};
+    vulcan::Vec3<Scalar> force_{Scalar{0}, Scalar{0}, Scalar{0}};
 };
 
 } // namespace components
@@ -531,17 +703,22 @@ private:
  * @file main.cpp
  * @brief Phase 2.3 validation: Falling mass under constant gravity
  *
+ * FRAME: Local vertical (Z-up, constant gravity)
+ * This is NOT orbital dynamics - it's a simplified validation case.
+ *
  * Validates:
  * - Component lifecycle (Provision → Stage → Step)
  * - State management (pointer-based scatter/gather)
  * - Signal wiring (gravity → dynamics)
+ * - Vulcan physics integration
  * - Integrator (RK4)
- * - Analytical verification: y(t) = y₀ + v₀t - ½gt²
+ * - Analytical verification: z(t) = z₀ + v₀t - ½gt²
  */
 
 #include <icarus/icarus.hpp>
 #include <icarus/components/PointMass3DOF.hpp>
 #include <icarus/components/PointMassGravity.hpp>
+#include <vulcan/core/Constants.hpp>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -553,28 +730,29 @@ int main() {
     std::cout << "=== Phase 2.3 Validation: Falling Mass ===\n\n";
 
     // =========================================================================
-    // Simulation Setup
+    // Simulation Setup (Local Vertical Frame)
     // =========================================================================
+    // Frame: Local Cartesian with Z pointing UP (not ECEF/ECI)
+    // Gravity: Constant -g0 in Z direction
+    // Valid for: Short-duration, ground-relative motion
 
-    // Create simulator
     Simulator<double> sim;
 
-    // Create components
-    auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
-    auto point_mass = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
+    // Create dynamics component with mass
+    double mass = 1.0;  // kg
+    auto point_mass = std::make_unique<PointMass3DOF<double>>(mass, "PointMass3DOF");
 
-    // Configure gravity for constant downward (Z-down frame)
-    gravity->SetMode(PointMassGravity<double>::Mode::ConstantDownward);
-
-    // Set initial conditions
-    // Start at z = 100m, falling from rest
-    double y0 = 100.0;  // Initial height [m]
+    // Set initial conditions: start at z = 100m, falling from rest
+    double z0 = 100.0;  // Initial height [m]
     double v0 = 0.0;    // Initial velocity [m/s]
-    point_mass->SetInitialPosition(0.0, 0.0, y0);
+    point_mass->SetInitialPosition(0.0, 0.0, z0);
     point_mass->SetInitialVelocity(0.0, 0.0, v0);
 
-    // Add components (order matters for signal resolution)
-    // PointMass3DOF must provision first so Gravity can resolve its position
+    // Create gravity component using Vulcan's constant model
+    auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
+    gravity->SetModel(PointMassGravity<double>::Model::Constant);
+
+    // Add components (order matters: dynamics first so gravity can resolve position)
     sim.AddComponent(std::move(point_mass));
     sim.AddComponent(std::move(gravity));
 
@@ -591,24 +769,22 @@ int main() {
 
     double dt = 0.01;      // 10ms timestep
     double t_end = 4.0;    // Run for 4 seconds
-    double g = 9.80665;    // Gravity [m/s²]
+    double g = vulcan::constants::earth::g0;  // Use Vulcan's constant
 
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "  Time [s]     z [m]      v_z [m/s]   z_exact    error [m]\n";
     std::cout << "  --------------------------------------------------------\n";
 
-    // Sample output at intervals
     int output_interval = 50;  // Every 0.5s
     int step = 0;
 
     while (sim.Time() < t_end) {
-        // Get current state
         double t = sim.Time();
         double z = sim.GetSignal("PointMass3DOF.position.z");
         double vz = sim.GetSignal("PointMass3DOF.velocity.z");
 
         // Analytical solution: z(t) = z₀ + v₀t - ½gt²
-        double z_exact = y0 + v0 * t - 0.5 * g * t * t;
+        double z_exact = z0 + v0 * t - 0.5 * g * t * t;
         double error = std::abs(z - z_exact);
 
         if (step % output_interval == 0) {
@@ -620,7 +796,6 @@ int main() {
                       << "\n";
         }
 
-        // Step simulation
         sim.Step(dt);
         ++step;
     }
@@ -633,7 +808,7 @@ int main() {
     double z_final = sim.GetSignal("PointMass3DOF.position.z");
     double vz_final = sim.GetSignal("PointMass3DOF.velocity.z");
 
-    double z_exact_final = y0 + v0 * t_final - 0.5 * g * t_final * t_final;
+    double z_exact_final = z0 + v0 * t_final - 0.5 * g * t_final * t_final;
     double v_exact_final = v0 - g * t_final;
 
     double z_error = std::abs(z_final - z_exact_final);
@@ -645,9 +820,129 @@ int main() {
     std::cout << "  Position error: " << z_error << " m\n";
     std::cout << "  Velocity error: " << v_error << " m/s\n";
 
-    // Verify accuracy
     bool passed = (z_error < 1e-4) && (v_error < 1e-4);
     std::cout << "\n=== Validation: " << (passed ? "PASSED" : "FAILED") << " ===\n";
+
+    return passed ? 0 : 1;
+}
+```
+
+---
+
+## Orbital Simulation Example
+
+For demonstrating Vulcan's point-mass gravity model with realistic orbital dynamics **in ECI frame**.
+
+### File: `examples/orbital_decay/main.cpp`
+
+```cpp
+/**
+ * @file main.cpp
+ * @brief Orbital dynamics using Vulcan's point-mass gravity
+ *
+ * FRAME: Earth-Centered Inertial (ECI)
+ * Position/velocity are in non-rotating inertial coordinates.
+ * Central gravity: g = -μ/r³ · r (same formula works in ECI and ECEF)
+ *
+ * Demonstrates:
+ * - Vulcan's gravity::point_mass::acceleration() for orbital dynamics
+ * - ECI frame propagation (no Coriolis/centrifugal needed)
+ * - Energy conservation verification
+ */
+
+#include <icarus/icarus.hpp>
+#include <icarus/components/PointMass3DOF.hpp>
+#include <icarus/components/PointMassGravity.hpp>
+#include <vulcan/core/Constants.hpp>
+#include <vulcan/dynamics/PointMass.hpp>
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+
+using namespace icarus;
+using namespace icarus::components;
+
+int main() {
+    std::cout << "=== Orbital Dynamics with Vulcan Point-Mass Gravity ===\n\n";
+
+    // =========================================================================
+    // Simulation Setup (ECI Frame)
+    // =========================================================================
+    // Frame: Earth-Centered Inertial (non-rotating)
+    // Gravity: Central force toward Earth center
+    // Dynamics: point_mass_acceleration() (inertial, no fictitious forces)
+
+    Simulator<double> sim;
+
+    // Circular orbit at 400 km altitude (ISS-like)
+    // Position is from Earth center in ECI coordinates
+    double altitude = 400e3;  // m
+    double r0 = vulcan::constants::earth::R_eq + altitude;
+    double mu = vulcan::constants::earth::mu;
+
+    // Circular orbit velocity: v = sqrt(μ/r)
+    double v_circular = std::sqrt(mu / r0);
+
+    // Create components
+    double mass = 1000.0;  // kg
+    auto sat = std::make_unique<PointMass3DOF<double>>(mass, "Satellite");
+    sat->SetInitialPosition(r0, 0.0, 0.0);      // Start on +X axis
+    sat->SetInitialVelocity(0.0, v_circular, 0.0);  // Velocity in +Y direction
+
+    auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
+    gravity->SetModel(PointMassGravity<double>::Model::PointMass);
+
+    sim.AddComponent(std::move(sat));
+    sim.AddComponent(std::move(gravity));
+
+    sim.Provision();
+    sim.Stage();
+
+    // Orbital period: T = 2π√(r³/μ)
+    double T_orbit = 2.0 * M_PI * std::sqrt(r0 * r0 * r0 / mu);
+    std::cout << "Orbital period: " << T_orbit / 60.0 << " minutes\n";
+    std::cout << "Circular velocity: " << v_circular << " m/s\n\n";
+
+    // Compute initial specific energy
+    double x0 = sim.GetSignal("Satellite.position.x");
+    double y0 = sim.GetSignal("Satellite.position.y");
+    double z0 = sim.GetSignal("Satellite.position.z");
+    double vx0 = sim.GetSignal("Satellite.velocity.x");
+    double vy0 = sim.GetSignal("Satellite.velocity.y");
+    double vz0 = sim.GetSignal("Satellite.velocity.z");
+
+    vulcan::Vec3<double> r_init{x0, y0, z0};
+    vulcan::Vec3<double> v_init{vx0, vy0, vz0};
+    double E0 = vulcan::dynamics::specific_energy(r_init, v_init, mu);
+    std::cout << "Initial specific energy: " << E0 << " J/kg\n\n";
+
+    // Simulate one orbit
+    double dt = 10.0;  // 10 second timesteps
+    int steps = static_cast<int>(T_orbit / dt);
+
+    for (int i = 0; i < steps; ++i) {
+        sim.Step(dt);
+    }
+
+    // Verify energy conservation
+    double x = sim.GetSignal("Satellite.position.x");
+    double y = sim.GetSignal("Satellite.position.y");
+    double z = sim.GetSignal("Satellite.position.z");
+    double vx = sim.GetSignal("Satellite.velocity.x");
+    double vy = sim.GetSignal("Satellite.velocity.y");
+    double vz = sim.GetSignal("Satellite.velocity.z");
+
+    vulcan::Vec3<double> r_final{x, y, z};
+    vulcan::Vec3<double> v_final{vx, vy, vz};
+    double E_final = vulcan::dynamics::specific_energy(r_final, v_final, mu);
+
+    double E_error = std::abs(E_final - E0) / std::abs(E0);
+
+    std::cout << "Final specific energy: " << E_final << " J/kg\n";
+    std::cout << "Energy error (relative): " << E_error * 100 << " %\n";
+
+    bool passed = E_error < 1e-6;  // Less than 0.0001% error
+    std::cout << "\n=== Energy Conservation: " << (passed ? "PASSED" : "FAILED") << " ===\n";
 
     return passed ? 0 : 1;
 }
@@ -664,6 +959,8 @@ int main() {
 #include <icarus/icarus.hpp>
 #include <icarus/components/PointMass3DOF.hpp>
 #include <icarus/components/PointMassGravity.hpp>
+#include <vulcan/core/Constants.hpp>
+#include <vulcan/dynamics/PointMass.hpp>
 #include <cmath>
 
 using namespace icarus;
@@ -674,20 +971,28 @@ using namespace icarus::components;
 // ---------------------------------------------------------------------------
 
 TEST(PointMass3DOF, StateSize) {
-    PointMass3DOF<double> pm;
+    PointMass3DOF<double> pm(1.0);
     EXPECT_EQ(pm.StateSize(), 6);
     EXPECT_TRUE(pm.HasState());
 }
 
 TEST(PointMass3DOF, Identity) {
-    PointMass3DOF<double> pm("TestMass", "Vehicle");
+    PointMass3DOF<double> pm(1.0, "TestMass", "Vehicle");
     EXPECT_EQ(pm.Name(), "TestMass");
     EXPECT_EQ(pm.Entity(), "Vehicle");
     EXPECT_EQ(pm.TypeName(), "PointMass3DOF");
 }
 
+TEST(PointMass3DOF, MassProperty) {
+    PointMass3DOF<double> pm(42.0);
+    EXPECT_DOUBLE_EQ(pm.GetMass(), 42.0);
+
+    pm.SetMass(100.0);
+    EXPECT_DOUBLE_EQ(pm.GetMass(), 100.0);
+}
+
 TEST(PointMass3DOF, InitialConditions) {
-    PointMass3DOF<double> pm;
+    PointMass3DOF<double> pm(1.0);
     pm.SetInitialPosition(1.0, 2.0, 3.0);
     pm.SetInitialVelocity(4.0, 5.0, 6.0);
 
@@ -704,8 +1009,21 @@ TEST(PointMass3DOF, InitialConditions) {
     EXPECT_DOUBLE_EQ(state[5], 6.0);
 }
 
+TEST(PointMass3DOF, InitialConditionsVec3) {
+    PointMass3DOF<double> pm(1.0);
+    pm.SetInitialPosition(vulcan::Vec3<double>{1.0, 2.0, 3.0});
+    pm.SetInitialVelocity(vulcan::Vec3<double>{4.0, 5.0, 6.0});
+
+    double state[6];
+    double state_dot[6];
+    pm.BindState(state, state_dot, 6);
+
+    EXPECT_DOUBLE_EQ(state[0], 1.0);
+    EXPECT_DOUBLE_EQ(state[3], 4.0);
+}
+
 TEST(PointMass3DOF, StateSizeMismatchThrows) {
-    PointMass3DOF<double> pm;
+    PointMass3DOF<double> pm(1.0);
     double state[4];
     double state_dot[4];
 
@@ -729,31 +1047,47 @@ TEST(PointMassGravity, Identity) {
     EXPECT_EQ(grav.TypeName(), "PointMassGravity");
 }
 
-TEST(PointMassGravity, ModeSwitch) {
+TEST(PointMassGravity, ModelSwitch) {
     PointMassGravity<double> grav;
 
-    grav.SetMode(PointMassGravity<double>::Mode::ConstantDownward);
-    EXPECT_EQ(grav.GetMode(), PointMassGravity<double>::Mode::ConstantDownward);
+    grav.SetModel(PointMassGravity<double>::Model::Constant);
+    EXPECT_EQ(grav.GetModel(), PointMassGravity<double>::Model::Constant);
 
-    grav.SetMode(PointMassGravity<double>::Mode::PointMass);
-    EXPECT_EQ(grav.GetMode(), PointMassGravity<double>::Mode::PointMass);
+    grav.SetModel(PointMassGravity<double>::Model::PointMass);
+    EXPECT_EQ(grav.GetModel(), PointMassGravity<double>::Model::PointMass);
+
+    grav.SetModel(PointMassGravity<double>::Model::J2);
+    EXPECT_EQ(grav.GetModel(), PointMassGravity<double>::Model::J2);
+}
+
+TEST(PointMassGravity, GravitationalParameter) {
+    PointMassGravity<double> grav;
+
+    // Default is Earth's mu
+    EXPECT_DOUBLE_EQ(grav.GetGravitationalParameter(), vulcan::constants::earth::mu);
+
+    // Can override for other bodies
+    double moon_mu = 4.9028e12;
+    grav.SetGravitationalParameter(moon_mu);
+    EXPECT_DOUBLE_EQ(grav.GetGravitationalParameter(), moon_mu);
 }
 
 // ---------------------------------------------------------------------------
-// Integration Tests
+// Integration Tests (Using Vulcan Physics)
 // ---------------------------------------------------------------------------
 
 TEST(PointMass3DOFIntegration, FreeFallValidation) {
     Simulator<double> sim;
 
+    double mass = 1.0;
+    auto point_mass = std::make_unique<PointMass3DOF<double>>(mass, "PointMass3DOF");
     auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
-    auto point_mass = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
 
-    gravity->SetMode(PointMassGravity<double>::Mode::ConstantDownward);
+    gravity->SetModel(PointMassGravity<double>::Model::Constant);
 
-    double y0 = 100.0;
+    double z0 = 100.0;
     double v0 = 0.0;
-    point_mass->SetInitialPosition(0.0, 0.0, y0);
+    point_mass->SetInitialPosition(0.0, 0.0, z0);
     point_mass->SetInitialVelocity(0.0, 0.0, v0);
 
     sim.AddComponent(std::move(point_mass));
@@ -762,7 +1096,7 @@ TEST(PointMass3DOFIntegration, FreeFallValidation) {
     sim.Stage();
 
     double dt = 0.01;
-    double g = 9.80665;
+    double g = vulcan::constants::earth::g0;
 
     // Run for 2 seconds
     for (int i = 0; i < 200; ++i) {
@@ -774,7 +1108,7 @@ TEST(PointMass3DOFIntegration, FreeFallValidation) {
     double vz = sim.GetSignal("PointMass3DOF.velocity.z");
 
     // Analytical: z(t) = z₀ + v₀t - ½gt²
-    double z_exact = y0 + v0 * t - 0.5 * g * t * t;
+    double z_exact = z0 + v0 * t - 0.5 * g * t * t;
     double v_exact = v0 - g * t;
 
     EXPECT_NEAR(z, z_exact, 1e-4);
@@ -784,10 +1118,11 @@ TEST(PointMass3DOFIntegration, FreeFallValidation) {
 TEST(PointMass3DOFIntegration, ProjectileMotion) {
     Simulator<double> sim;
 
+    double mass = 1.0;
+    auto point_mass = std::make_unique<PointMass3DOF<double>>(mass, "PointMass3DOF");
     auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
-    auto point_mass = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
 
-    gravity->SetMode(PointMassGravity<double>::Mode::ConstantDownward);
+    gravity->SetModel(PointMassGravity<double>::Model::Constant);
 
     // Launch at 45 degrees with v = 10 m/s
     double v_initial = 10.0;
@@ -804,7 +1139,7 @@ TEST(PointMass3DOFIntegration, ProjectileMotion) {
     sim.Stage();
 
     double dt = 0.001;  // Small timestep for accuracy
-    double g = 9.80665;
+    double g = vulcan::constants::earth::g0;
 
     // Time of flight: t = 2 * vz0 / g
     double t_flight = 2.0 * vz0 / g;
@@ -822,42 +1157,86 @@ TEST(PointMass3DOFIntegration, ProjectileMotion) {
     EXPECT_NEAR(x_final, range_exact, range_exact * 0.01);
 }
 
-TEST(PointMass3DOFIntegration, EnergyConservation) {
-    // In free fall with no friction, mechanical energy should be conserved
+TEST(PointMass3DOFIntegration, OrbitalEnergyConservation) {
+    // Test energy conservation with Vulcan's point-mass gravity
     Simulator<double> sim;
 
+    double mu = vulcan::constants::earth::mu;
+    double r0 = vulcan::constants::earth::R_eq + 400e3;  // 400 km altitude
+    double v_circular = std::sqrt(mu / r0);
+
+    double mass = 1000.0;
+    auto sat = std::make_unique<PointMass3DOF<double>>(mass, "Sat");
+    sat->SetInitialPosition(r0, 0.0, 0.0);
+    sat->SetInitialVelocity(0.0, v_circular, 0.0);
+
     auto gravity = std::make_unique<PointMassGravity<double>>("Gravity");
-    auto point_mass = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
+    gravity->SetModel(PointMassGravity<double>::Model::PointMass);
 
-    gravity->SetMode(PointMassGravity<double>::Mode::ConstantDownward);
-
-    double z0 = 100.0;
-    double v0 = 10.0;  // Initial downward velocity
-    point_mass->SetInitialPosition(0.0, 0.0, z0);
-    point_mass->SetInitialVelocity(0.0, 0.0, v0);
-
-    sim.AddComponent(std::move(point_mass));
+    sim.AddComponent(std::move(sat));
     sim.AddComponent(std::move(gravity));
     sim.Provision();
     sim.Stage();
 
-    double g = 9.80665;
+    // Initial specific energy
+    vulcan::Vec3<double> r_init{r0, 0.0, 0.0};
+    vulcan::Vec3<double> v_init{0.0, v_circular, 0.0};
+    double E0 = vulcan::dynamics::specific_energy(r_init, v_init, mu);
 
-    // Initial energy: E = ½v² + gh (per unit mass)
-    double E_initial = 0.5 * v0 * v0 + g * z0;
+    // Simulate 1/4 orbit
+    double T_orbit = 2.0 * M_PI * std::sqrt(r0 * r0 * r0 / mu);
+    double dt = 10.0;
+    int steps = static_cast<int>(T_orbit / 4.0 / dt);
 
-    double dt = 0.01;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < steps; ++i) {
         sim.Step(dt);
-
-        double z = sim.GetSignal("PointMass3DOF.position.z");
-        double vz = sim.GetSignal("PointMass3DOF.velocity.z");
-
-        double E_current = 0.5 * vz * vz + g * z;
-
-        // Energy should be conserved (within numerical tolerance)
-        EXPECT_NEAR(E_current, E_initial, 1e-3);
     }
+
+    // Final energy
+    double x = sim.GetSignal("Sat.position.x");
+    double y = sim.GetSignal("Sat.position.y");
+    double z = sim.GetSignal("Sat.position.z");
+    double vx = sim.GetSignal("Sat.velocity.x");
+    double vy = sim.GetSignal("Sat.velocity.y");
+    double vz = sim.GetSignal("Sat.velocity.z");
+
+    vulcan::Vec3<double> r_final{x, y, z};
+    vulcan::Vec3<double> v_final{vx, vy, vz};
+    double E_final = vulcan::dynamics::specific_energy(r_final, v_final, mu);
+
+    // Energy should be conserved (within 0.01%)
+    double E_error = std::abs(E_final - E0) / std::abs(E0);
+    EXPECT_LT(E_error, 1e-4);
+}
+
+TEST(PointMass3DOFIntegration, VulcanAccelerationUsed) {
+    // Verify that Vulcan's point_mass_acceleration is actually being used
+    Simulator<double> sim;
+
+    double mass = 2.0;  // Non-unit mass
+    auto pm = std::make_unique<PointMass3DOF<double>>(mass, "PointMass3DOF");
+    auto grav = std::make_unique<PointMassGravity<double>>("Gravity");
+
+    grav->SetModel(PointMassGravity<double>::Model::Constant);
+
+    pm->SetInitialPosition(0.0, 0.0, 100.0);
+    pm->SetInitialVelocity(0.0, 0.0, 0.0);
+
+    sim.AddComponent(std::move(pm));
+    sim.AddComponent(std::move(grav));
+    sim.Provision();
+    sim.Stage();
+
+    // Take one step
+    sim.Step(0.01);
+
+    // Check that acceleration is g (not g*mass or g/mass)
+    // After dt, v = v0 + a*dt = 0 + (-g)*0.01
+    double vz = sim.GetSignal("PointMass3DOF.velocity.z");
+    double expected_vz = -vulcan::constants::earth::g0 * 0.01;
+
+    // Vulcan's point_mass_acceleration divides by mass, so acceleration is g
+    EXPECT_NEAR(vz, expected_vz, 1e-6);
 }
 
 // ---------------------------------------------------------------------------
@@ -870,7 +1249,7 @@ TEST(PointMass3DOFSymbolic, CompilationTest) {
     Simulator<MX> sim;
 
     auto gravity = std::make_unique<PointMassGravity<MX>>("Gravity");
-    auto point_mass = std::make_unique<PointMass3DOF<MX>>("PointMass3DOF");
+    auto point_mass = std::make_unique<PointMass3DOF<MX>>(MX{1.0}, "PointMass3DOF");
 
     sim.AddComponent(std::move(point_mass));
     sim.AddComponent(std::move(gravity));
@@ -878,6 +1257,23 @@ TEST(PointMass3DOFSymbolic, CompilationTest) {
     EXPECT_NO_THROW(sim.Provision());
     EXPECT_NO_THROW(sim.Stage());
     EXPECT_NO_THROW(sim.Step(MX{0.01}));
+}
+
+TEST(PointMass3DOFSymbolic, VulcanFunctionsCompile) {
+    using MX = casadi::MX;
+
+    // Verify Vulcan functions work with symbolic types
+    vulcan::Vec3<MX> r{MX::sym("rx"), MX::sym("ry"), MX::sym("rz")};
+    vulcan::Vec3<MX> force{MX::sym("fx"), MX::sym("fy"), MX::sym("fz")};
+    MX mass = MX::sym("m");
+
+    // Point mass acceleration
+    auto accel = vulcan::dynamics::point_mass_acceleration(force, mass);
+    EXPECT_EQ(accel.size(), 3);
+
+    // Gravity acceleration
+    auto grav = vulcan::gravity::point_mass::acceleration(r);
+    EXPECT_EQ(grav.size(), 3);
 }
 ```
 
@@ -889,54 +1285,70 @@ TEST(PointMass3DOFSymbolic, CompilationTest) {
 
 - [ ] Create `components/dynamics/` directory
 - [ ] Create `PointMass3DOF.hpp` header
+- [ ] Include Vulcan headers: `vulcan/dynamics/PointMass.hpp`, `vulcan/core/VulcanTypes.hpp`
 - [ ] Implement `StateSize()` returning 6
-- [ ] Implement `Provision()` registering position/velocity outputs
-- [ ] Implement `Stage()` resolving acceleration input
+- [ ] Implement `Provision()` registering position/velocity/mass outputs
+- [ ] Implement `Stage()` resolving force input
 - [ ] Implement `BindState()` with IC application
-- [ ] Implement `Step()` computing kinematics/dynamics
-- [ ] Add IC setters (`SetInitialPosition`, `SetInitialVelocity`)
+- [ ] Implement `Step()` using `vulcan::dynamics::point_mass_acceleration()`
+- [ ] Use `vulcan::Vec3<Scalar>` for position/velocity types
+- [ ] Add mass property with setter/getter
+- [ ] Add IC setters for `vulcan::Vec3<Scalar>` overloads
 - [ ] Add state accessors for testing
 
 ### Task 2.3b: PointMassGravity Component
 
 - [ ] Create `components/environment/` directory
 - [ ] Create `PointMassGravity.hpp` header
+- [ ] Include Vulcan headers: `vulcan/gravity/PointMass.hpp`, `vulcan/gravity/J2.hpp`, `vulcan/core/Constants.hpp`
 - [ ] Implement `StateSize()` returning 0 (stateless)
-- [ ] Implement `Provision()` registering acceleration output
-- [ ] Implement `Stage()` resolving position input
-- [ ] Implement `Step()` with constant gravity mode
-- [ ] Implement `Step()` with point-mass gravity mode
-- [ ] Add mode switching API
+- [ ] Implement `Provision()` registering force and acceleration outputs
+- [ ] Implement `Stage()` resolving position and mass inputs
+- [ ] Implement Model enum: `Constant`, `PointMass`, `J2`
+- [ ] Implement `Step()` with Constant mode using `vulcan::constants::earth::g0`
+- [ ] Implement `Step()` with PointMass mode using `vulcan::gravity::point_mass::acceleration()`
+- [ ] Implement `Step()` with J2 mode using `vulcan::gravity::j2::acceleration()`
+- [ ] Compute force from acceleration: `F = m * a`
+- [ ] Add gravitational parameter setter for other celestial bodies
 
-### Task 2.3c: Example Application
+### Task 2.3c: Example Applications
 
 - [ ] Create `examples/falling_mass/` directory
-- [ ] Create `main.cpp` with simulation setup
+- [ ] Create `main.cpp` with constant gravity validation
+- [ ] Use `vulcan::constants::earth::g0` for analytical verification
 - [ ] Add CMakeLists.txt for example
-- [ ] Implement analytical verification output
+- [ ] Create `examples/orbital_decay/` directory (optional)
+- [ ] Create `main.cpp` with orbital energy conservation demo
+- [ ] Use `vulcan::dynamics::specific_energy()` for verification
 - [ ] Add to top-level examples build
 
 ### Task 2.3d: Unit Tests
 
 - [ ] Create `tests/components/test_point_mass_3dof.cpp`
+- [ ] Include Vulcan test utilities: `vulcan/core/Constants.hpp`, `vulcan/dynamics/PointMass.hpp`
 - [ ] Add PointMass3DOF identity/state size tests
-- [ ] Add PointMass3DOF initial condition tests
-- [ ] Add PointMassGravity identity/mode tests
-- [ ] Add free fall analytical validation test
+- [ ] Add PointMass3DOF mass property tests
+- [ ] Add PointMass3DOF initial condition tests (scalar and Vec3)
+- [ ] Add PointMassGravity identity/model tests
+- [ ] Add PointMassGravity gravitational parameter tests
+- [ ] Add free fall analytical validation test (using `vulcan::constants::earth::g0`)
 - [ ] Add projectile motion test
-- [ ] Add energy conservation test
+- [ ] Add orbital energy conservation test (using `vulcan::dynamics::specific_energy()`)
+- [ ] Add Vulcan acceleration verification test
 - [ ] Add symbolic mode compilation test
+- [ ] Add Vulcan symbolic compatibility test
 - [ ] Update `tests/CMakeLists.txt`
 
 ### Task 2.3e: Build Integration
 
 - [ ] Update `components/CMakeLists.txt` with new components
+- [ ] Ensure Vulcan include paths are available
 - [ ] Update `include/icarus/icarus.hpp` with component headers
 - [ ] Add `include/icarus/components/PointMass3DOF.hpp` (forwarding header)
 - [ ] Add `include/icarus/components/PointMassGravity.hpp` (forwarding header)
 - [ ] Verify `./scripts/build.sh` succeeds
 - [ ] Verify `./scripts/test.sh` all pass
-- [ ] Verify `./scripts/run_examples.sh` includes falling_mass
+- [ ] Verify `./scripts/run_examples.sh` includes examples
 
 ### Task 2.3f: Documentation
 
@@ -947,65 +1359,141 @@ TEST(PointMass3DOFSymbolic, CompilationTest) {
 
 ## Design Decisions
 
-### 1. Component Ordering
+### 1. Wrap Vulcan Functions, Don't Reimplement
 
-**Decision:** PointMass3DOF provisions before PointMassGravity so gravity can resolve position.
+**Decision:** Components wrap Vulcan's physics functions rather than reimplementing physics.
 
 **Rationale:**
+
+- Vulcan already provides tested, symbolic-compatible implementations
+- `vulcan::dynamics::point_mass_acceleration()` handles F/m correctly
+- `vulcan::gravity::point_mass::acceleration()` uses proper formula
+- `vulcan::constants::earth::*` provides authoritative constants
+- Reduces code duplication and ensures consistency
+
+**Implementation:**
+
+```cpp
+// In PointMass3DOF::Step()
+vulcan::Vec3<Scalar> accel = vulcan::dynamics::point_mass_acceleration(force, mass_);
+
+// In PointMassGravity::Step()
+accel_ = vulcan::gravity::point_mass::acceleration(pos, mu_);
+```
+
+### 2. Force-Based Interface (Not Acceleration)
+
+**Decision:** Gravity component outputs **force** (N), not acceleration (m/s²).
+
+**Rationale:**
+
+- Force is extensive (scales with mass), acceleration is intensive
+- Multiple force sources can be summed directly
+- Dynamics component uses `vulcan::dynamics::point_mass_acceleration(force, mass)`
+- Matches aerospace convention where forces are aggregated
+
+**Flow:**
+
+```
+Gravity.force = mass * gravity::point_mass::acceleration(pos)
+Dynamics: accel = point_mass_acceleration(force, mass)  // = force/mass
+```
+
+### 3. Three Gravity Models
+
+**Decision:** Support `Constant`, `PointMass`, and `J2` models via enum.
+
+**Rationale:**
+
+- `Constant` mode for analytical validation (closed-form solution)
+- `PointMass` mode for orbital dynamics
+- `J2` mode for higher fidelity (Earth oblateness)
+- All use Vulcan's templated implementations
+- Easy to extend to J2J4, spherical harmonics later
+
+### 4. Use Vulcan Types Throughout
+
+**Decision:** Use `vulcan::Vec3<Scalar>` for position/velocity internally.
+
+**Rationale:**
+
+- Vulcan functions expect `Vec3<Scalar>` parameters
+- Avoids repeated construction/destruction
+- Cleaner code than manual x/y/z handling
+- Still expose individual scalars for signal backplane
+
+### 5. Component Ordering
+
+**Decision:** PointMass3DOF provisions before PointMassGravity.
+
+**Rationale:**
+
 - Signal resolution requires outputs to exist
-- In Provision, PointMass3DOF creates `position.{x,y,z}` signals
-- In Stage, PointMassGravity resolves those signals
+- PointMass3DOF creates `position.{x,y,z}` and `mass` signals
+- PointMassGravity resolves those signals in Stage
 - Component add order determines provision/stage order
 
-**Alternative:** Use explicit dependency declaration (future enhancement).
+### 6. Initial Conditions in BindState
 
-### 2. Constant Gravity Mode
-
-**Decision:** Include `ConstantDownward` mode for analytical validation.
+**Decision:** Apply initial conditions when state is bound.
 
 **Rationale:**
-- Free-fall analytical solution assumes constant `g`
-- Easier to validate RK4 accuracy
-- Point-mass gravity has different solution (not closed-form)
-- Switch to point-mass for realistic simulations
 
-### 3. Separate Position and Velocity Outputs
-
-**Decision:** Register individual scalar outputs (`position.x`, etc.) rather than Vec3.
-
-**Rationale:**
-- Simpler signal resolution for Phase 2.3
-- Vec3 signal support (`register_vec3`) is a Phase 5+ enhancement
-- Individual scalars work with current Backplane API
-
-**Future:** Add `bp.register_vec3("position", &position_vec_)` convenience.
-
-### 4. Initial Conditions in BindState
-
-**Decision:** Apply initial conditions when state is bound, not in Stage.
-
-**Rationale:**
 - State pointers aren't available until `BindState()` is called
 - IC values set via setters or config before Stage
 - BindState is the first moment we have write access to X_global_
 
-### 5. Z-Down Coordinate Frame
+### 7. Mass as Output Signal
 
-**Decision:** Use Z-positive-up, gravity is negative-Z.
+**Decision:** PointMass3DOF outputs mass as a signal for gravity to read.
 
 **Rationale:**
-- Matches common aerospace conventions (NED: Z-down is alternative)
-- Analytical solution `z = z₀ - ½gt²` is intuitive
-- Can switch to ECEF for orbital simulations
+
+- Decouples components (gravity doesn't need to know about dynamics internals)
+- Mass could change during simulation (future: propellant consumption)
+- Follows Icarus pattern: all inter-component data flows through signals
+
+### 8. Frame Selection Strategy (ECI for Phase 2.3)
+
+**Decision:** Use inertial frames (ECI or local) for Phase 2.3; defer ECEF to later phase.
+
+**Rationale:**
+
+- ECI avoids Coriolis/centrifugal complexity (`point_mass_acceleration()` is simpler)
+- Central gravity formula `g = -μ/r³ · r` is identical in ECI and ECEF
+- Validation tests use local vertical frame (constant gravity, Z-up)
+- Orbital tests use ECI (energy conservation is frame-invariant)
+- ECEF requires `point_mass_acceleration_ecef()` with ω vector — added complexity
+
+**Frame Compatibility Matrix:**
+
+| Gravity Model | Dynamics Function | Frame | Use Case |
+|:--------------|:------------------|:------|:---------|
+| Constant | `point_mass_acceleration()` | Local (Z-up) | Validation |
+| PointMass | `point_mass_acceleration()` | ECI | Orbital dynamics |
+| J2 | `point_mass_acceleration()` | ECI | Orbital (high-fidelity) |
+| *Future* | `point_mass_acceleration_ecef()` | ECEF | Launch, reentry |
+
+**Future Work:**
+
+- Add `PointMass3DOF_ECEF` variant or frame-selection option
+- Integrate with Vulcan's `CoordinateFrame` for transformations
+- Consider automatic frame tagging on signals
 
 ---
 
 ## Janus Compatibility Checklist
 
 - [ ] All component code templated on `Scalar`
-- [ ] Use `janus::sqrt()` instead of `std::sqrt()` in gravity computation
+- [ ] Use `vulcan::Vec3<Scalar>` (not `std::vector<double>`)
+- [ ] Use Vulcan physics functions (already Janus-compatible)
+- [ ] No `std::` math in component code (Vulcan handles this internally)
 - [ ] No `if/else` branching on `Scalar` values in traced code
-- [ ] Mode switching uses structural branching (not Scalar-dependent)
+- [ ] Mode switching uses structural branching (enum, not Scalar-dependent)
+- [ ] Verify Vulcan functions compile with `casadi::MX`:
+  - [ ] `vulcan::dynamics::point_mass_acceleration<MX>()`
+  - [ ] `vulcan::gravity::point_mass::acceleration<MX>()`
+  - [ ] `vulcan::gravity::j2::acceleration<MX>()`
 - [ ] Verify `Simulator<casadi::MX>` compiles and runs
 - [ ] Verify symbolic step produces valid MX expressions
 
@@ -1024,12 +1512,14 @@ TEST(PointMass3DOFSymbolic, CompilationTest) {
 ### 2. Verify against analytical solution
 
 **Analytical Solution:**
+
 ```
 z(t) = z₀ + v₀t - ½gt²
 v(t) = v₀ - gt
 ```
 
 **Verification:**
+
 ```cpp
 double z_exact = y0 + v0 * t - 0.5 * g * t * t;
 double v_exact = v0 - g * t;
@@ -1040,6 +1530,7 @@ EXPECT_NEAR(vz, v_exact, 1e-4);
 ### 3. State scattered/gathered correctly
 
 **Verification:**
+
 - `PointMass3DOF::BindState()` receives pointers into X_global_
 - `Step()` reads from state pointers, writes derivatives
 - Integrator calls `ComputeDerivatives()`, state updates correctly
