@@ -8,6 +8,7 @@
  * Provides signal registration, resolution, and access patterns.
  */
 
+#include <deque>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
@@ -112,6 +113,9 @@ template <typename Scalar> class SignalRegistry {
     template <typename S>
     void register_vec3(const std::string &name, Vec3<S> *data_ptr, const std::string &unit = "",
                        const std::string &description = "") {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for Vec3 signal '" + name + "'");
+        }
         // Register three scalar signals pointing to Vec3 elements
         register_signal_impl<S>(name + ".x", &((*data_ptr)(0)), unit, description + " (x)",
                                 SignalLifecycle::Dynamic);
@@ -129,6 +133,9 @@ template <typename Scalar> class SignalRegistry {
     template <typename S>
     void register_quat(const std::string &name, Vec4<S> *data_ptr, const std::string &unit = "",
                        const std::string &description = "") {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for Quat signal '" + name + "'");
+        }
         register_signal_impl<S>(name + ".w", &((*data_ptr)(0)), unit, description + " (w)",
                                 SignalLifecycle::Dynamic);
         register_signal_impl<S>(name + ".x", &((*data_ptr)(1)), unit, description + " (x)",
@@ -280,13 +287,23 @@ template <typename Scalar> class SignalRegistry {
      * @brief Get signal value by name (slow path, for debugging)
      */
     [[nodiscard]] const Scalar &GetByName(const std::string &name) const {
-        return values_[Resolve(name)];
+        const SignalDescriptor &desc = signals_[Resolve(name)];
+        if (desc.data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
+        return *static_cast<const Scalar *>(desc.data_ptr);
     }
 
     /**
      * @brief Set signal value by name (slow path, for initialization)
      */
-    void SetByName(const std::string &name, const Scalar &value) { values_[Resolve(name)] = value; }
+    void SetByName(const std::string &name, const Scalar &value) {
+        const SignalDescriptor &desc = signals_[Resolve(name)];
+        if (desc.data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
+        *static_cast<Scalar *>(desc.data_ptr) = value;
+    }
 
     // =========================================================================
     // Query / Introspection (Cold Path)
@@ -295,7 +312,7 @@ template <typename Scalar> class SignalRegistry {
     /**
      * @brief Get all signal descriptors
      */
-    [[nodiscard]] const std::vector<SignalDescriptor> &GetDescriptors() const { return signals_; }
+    [[nodiscard]] const std::deque<SignalDescriptor> &GetDescriptors() const { return signals_; }
 
     /**
      * @brief Get number of registered signals
@@ -339,6 +356,10 @@ template <typename Scalar> class SignalRegistry {
     template <typename T>
     void register_signal_impl(const std::string &name, T *data_ptr, const std::string &unit,
                               const std::string &description, SignalLifecycle lifecycle) {
+        if (data_ptr == nullptr) {
+            throw SignalError("Null data_ptr for signal '" + name + "'");
+        }
+
         if (name_to_index_.contains(name)) {
             const auto &existing = signals_[name_to_index_[name]];
             throw DuplicateSignalError(name, existing.owner_component,
@@ -377,8 +398,8 @@ template <typename Scalar> class SignalRegistry {
     // Data Members
     // =========================================================================
 
-    std::vector<SignalDescriptor> signals_;
-    std::vector<Scalar> values_; // Internal storage for legacy API
+    std::deque<SignalDescriptor> signals_; // Deque for stable descriptor refs
+    std::deque<Scalar> values_;            // Deque for stable value refs (legacy API)
     std::unordered_map<std::string, SignalIndex> name_to_index_;
     std::string current_component_;
 };

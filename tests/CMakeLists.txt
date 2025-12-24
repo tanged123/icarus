@@ -34,3 +34,10 @@ icarus_add_test(test_integrator
     sim/test_integrator.cpp
 )
 target_include_directories(test_integrator PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Point mass component tests (Phase 2.3)
+icarus_add_test(test_point_mass
+    components/test_point_mass.cpp
+)
+target_include_directories(test_point_mass PRIVATE ${PROJECT_SOURCE_DIR}/components)
+

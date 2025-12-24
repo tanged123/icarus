@@ -30,3 +30,7 @@ endfunction()
 # =============================================================================
 add_executable(hello_world intro/hello_world.cpp)
 target_link_libraries(hello_world PRIVATE icarus)
+
+add_executable(orbital_demo intro/orbital_demo.cpp)
+target_link_libraries(orbital_demo PRIVATE icarus)
+target_include_directories(orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
