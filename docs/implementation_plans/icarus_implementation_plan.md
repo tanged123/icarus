@@ -80,10 +80,10 @@ Phase 4–7 (horizontal expansion)
 
 ### Tasks
 
-- [ ] **2.1 State Management**
-  - [ ] Global `X_global_`, `X_dot_global_` vectors
-  - [ ] State registration and ownership
-  - [ ] Scatter/gather via pointer binding to components
+- [x] **2.1 State Management**
+  - [x] Global `X_global_`, `X_dot_global_` vectors
+  - [x] State registration and ownership
+  - [x] Scatter/gather via pointer binding to components
 
 - [ ] **2.2 Integrator Interface**
   - [ ] Abstract `Integrator<Scalar>` interface

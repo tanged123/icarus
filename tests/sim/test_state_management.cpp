@@ -357,7 +357,7 @@ TEST(Component, HasStateTrueForStateful) {
 // =============================================================================
 
 TEST(StateManagementSymbolic, AllocationCompiles) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     Simulator<MX> sim;
     sim.AddComponent(std::make_unique<StatefulComponent<MX>>("A", 4));
@@ -369,7 +369,7 @@ TEST(StateManagementSymbolic, AllocationCompiles) {
 }
 
 TEST(StateManagementSymbolic, DerivativeComputation) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     Simulator<MX> sim;
     sim.AddComponent(std::make_unique<StatefulComponent<MX>>("A", 2));
@@ -378,8 +378,8 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 
     // Create symbolic state vector
     JanusVector<MX> X(2);
-    X[0] = MX::sym("x0");
-    X[1] = MX::sym("x1");
+    X[0] = janus::sym("x0");
+    X[1] = janus::sym("x1");
     sim.SetState(X);
 
     // Compute derivatives (symbolic)
@@ -390,7 +390,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 }
 
 TEST(StateManagementSymbolic, LayoutMetadata) {
-    using MX = casadi::MX;
+    using MX = janus::SymbolicScalar;
 
     Simulator<MX> sim;
     sim.AddComponent(std::make_unique<StatefulComponent<MX>>("A", 3));

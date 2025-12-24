@@ -351,7 +351,7 @@ TEST(SignalRegistry, LegacyWithOwnerTracking) {
 }
 
 // =============================================================================
-// Symbolic Backend Tests (SymbolicScalar = casadi::MX)
+// Symbolic Backend Tests (SymbolicScalar)
 // =============================================================================
 
 TEST(SignalRegistrySymbolic, LegacyAPI) {

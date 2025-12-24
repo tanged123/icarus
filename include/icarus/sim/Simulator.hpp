@@ -5,6 +5,7 @@
  * @brief Top-level simulation coordinator
  *
  * Part of Phase 1.4: Component Base.
+ * Extended in Phase 2.2 with integrator support.
  * Owns components and orchestrates the Provision/Stage/Step lifecycle.
  */
 
@@ -12,6 +13,10 @@
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
+#include <icarus/sim/IntegratorFactory.hpp>
+#include <icarus/sim/IntegratorTypes.hpp>
+#include <icarus/sim/RK45Integrator.hpp>
+#include <icarus/sim/RK4Integrator.hpp>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -145,21 +150,44 @@ template <typename Scalar> class Simulator {
     }
 
     /**
-     * @brief Execute one time step
+     * @brief Execute one time step using configured integrator
      *
-     * Calls Step() on each component in order.
+     * Uses the integrator to advance state, which internally calls
+     * ComputeDerivatives() at multiple points (for multi-stage methods).
      */
     void Step(Scalar dt) {
+        if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+            throw LifecycleError("Step() requires prior Stage()");
+        }
         phase_ = Phase::Running;
-        for (auto &comp : components_) {
-            comp->PreStep(time_, dt);
+
+        // If no stateful components, just call component Step() directly
+        if (GetTotalStateSize() == 0) {
+            for (auto &comp : components_) {
+                comp->PreStep(time_, dt);
+            }
+            for (auto &comp : components_) {
+                comp->Step(time_, dt);
+            }
+            for (auto &comp : components_) {
+                comp->PostStep(time_, dt);
+            }
+            time_ = time_ + dt;
+            return;
         }
-        for (auto &comp : components_) {
-            comp->Step(time_, dt);
-        }
-        for (auto &comp : components_) {
-            comp->PostStep(time_, dt);
-        }
+
+        // Create derivative function for integrator
+        auto deriv_func = [this](Scalar t, const JanusVector<Scalar> &x) -> JanusVector<Scalar> {
+            this->SetState(x);
+            return this->ComputeDerivatives(t);
+        };
+
+        // Get current state and integrate
+        JanusVector<Scalar> X = GetState();
+        JanusVector<Scalar> X_new = integrator_->Step(deriv_func, X, time_, dt);
+
+        // Update state and time
+        SetState(X_new);
         time_ = time_ + dt;
     }
 
@@ -316,6 +344,98 @@ template <typename Scalar> class Simulator {
      */
     [[nodiscard]] Scalar GetNominalDt() const { return dt_nominal_; }
 
+    // =========================================================================
+    // Integrator Interface (Phase 2.2)
+    // =========================================================================
+
+    /**
+     * @brief Set integrator using configuration
+     */
+    void SetIntegrator(const IntegratorConfig<Scalar> &config) {
+        integrator_ = IntegratorFactory<Scalar>::Create(config);
+        integrator_config_ = config;
+    }
+
+    /**
+     * @brief Set integrator by type enum
+     */
+    void SetIntegrator(IntegratorType type) {
+        SetIntegrator(IntegratorConfig<Scalar>::ForMethod(type));
+    }
+
+    /**
+     * @brief Set integrator by type name string
+     */
+    void SetIntegrator(const std::string &type_name) {
+        SetIntegrator(IntegratorConfig<Scalar>::ForMethod(parse_integrator_type(type_name)));
+    }
+
+    /**
+     * @brief Set integrator directly
+     *
+     * If the integrator is adaptive, syncs tolerance config from the integrator.
+     */
+    void SetIntegrator(std::unique_ptr<Integrator<Scalar>> integrator) {
+        integrator_ = std::move(integrator);
+        integrator_config_.type = integrator_->Type();
+
+        // Sync adaptive integrator config if applicable
+        if (auto *adaptive = dynamic_cast<AdaptiveIntegrator<Scalar> *>(integrator_.get())) {
+            integrator_config_.abs_tol = adaptive->GetAbsTol();
+            integrator_config_.rel_tol = adaptive->GetRelTol();
+        }
+    }
+
+    /**
+     * @brief Get current integrator
+     */
+    [[nodiscard]] Integrator<Scalar> *GetIntegrator() const { return integrator_.get(); }
+
+    /**
+     * @brief Get current integrator configuration
+     */
+    [[nodiscard]] const IntegratorConfig<Scalar> &GetIntegratorConfig() const {
+        return integrator_config_;
+    }
+
+    /**
+     * @brief Get current integrator type
+     */
+    [[nodiscard]] IntegratorType GetIntegratorType() const { return integrator_config_.type; }
+
+    /**
+     * @brief Execute adaptive step (for RK45)
+     *
+     * Returns actual step taken and error estimate.
+     * Requires adaptive integrator.
+     */
+    AdaptiveStepResult<Scalar> AdaptiveStep(Scalar dt_request) {
+        if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+            throw LifecycleError("AdaptiveStep() requires prior Stage()");
+        }
+        phase_ = Phase::Running;
+
+        auto *adaptive = dynamic_cast<AdaptiveIntegrator<Scalar> *>(integrator_.get());
+        if (!adaptive) {
+            throw IntegrationError("AdaptiveStep() requires an AdaptiveIntegrator");
+        }
+
+        auto deriv_func = [this](Scalar t, const JanusVector<Scalar> &x) -> JanusVector<Scalar> {
+            this->SetState(x);
+            return this->ComputeDerivatives(t);
+        };
+
+        JanusVector<Scalar> X = GetState();
+        auto result = adaptive->AdaptiveStep(deriv_func, X, time_, dt_request);
+
+        if (result.accepted) {
+            SetState(result.state);
+            time_ = time_ + result.dt_actual;
+        }
+
+        return result;
+    }
+
   private:
     std::vector<std::unique_ptr<Component<Scalar>>> components_;
     SignalRegistry<Scalar> registry_;
@@ -333,6 +453,10 @@ template <typename Scalar> class Simulator {
     JanusVector<Scalar> X_dot_global_;             ///< Global derivative vector
     std::vector<StateSlice<Scalar>> state_layout_; ///< Per-component metadata
     Scalar dt_nominal_{0.01};                      ///< Nominal timestep
+
+    // Integrator (Phase 2.2) - defaults to RK4
+    std::unique_ptr<Integrator<Scalar>> integrator_ = std::make_unique<RK4Integrator<Scalar>>();
+    IntegratorConfig<Scalar> integrator_config_ = IntegratorConfig<Scalar>::RK4Default();
 };
 
 } // namespace icarus

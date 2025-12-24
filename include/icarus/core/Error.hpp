@@ -163,6 +163,50 @@ class StateError : public Error {
 };
 
 /**
+ * @brief Base class for integrator errors
+ */
+class IntegratorError : public Error {
+  public:
+    explicit IntegratorError(const std::string &msg) : Error("Integrator: " + msg) {}
+};
+
+/**
+ * @brief Thrown when step size becomes too small
+ */
+class StepSizeTooSmallError : public IntegratorError {
+  public:
+    explicit StepSizeTooSmallError(double min_dt)
+        : IntegratorError("Step size below minimum: " + std::to_string(min_dt)), min_dt_(min_dt) {}
+
+    [[nodiscard]] double min_dt() const { return min_dt_; }
+
+  private:
+    double min_dt_;
+};
+
+/**
+ * @brief Thrown when integration fails
+ *
+ * Provides time, step size, and reason for the failure.
+ */
+template <typename Scalar> class IntegrationFailedError : public IntegratorError {
+  public:
+    IntegrationFailedError(Scalar t, Scalar dt, const std::string &reason)
+        : IntegratorError("Integration failed at t=" + std::to_string(static_cast<double>(t)) +
+                          ", dt=" + std::to_string(static_cast<double>(dt)) + ": " + reason),
+          t_(t), dt_(dt), reason_(reason) {}
+
+    [[nodiscard]] Scalar t() const { return t_; }
+    [[nodiscard]] Scalar dt() const { return dt_; }
+    [[nodiscard]] const std::string &reason() const { return reason_; }
+
+  private:
+    Scalar t_;
+    Scalar dt_;
+    std::string reason_;
+};
+
+/**
  * @brief State size mismatch error
  *
  * Thrown when a component's state size doesn't match the expected size

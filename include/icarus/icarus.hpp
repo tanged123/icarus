@@ -28,6 +28,10 @@
 
 // Simulation
 #include <icarus/sim/Integrator.hpp>
+#include <icarus/sim/IntegratorFactory.hpp>
+#include <icarus/sim/IntegratorTypes.hpp>
+#include <icarus/sim/RK45Integrator.hpp>
+#include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Scheduler.hpp>
 #include <icarus/sim/Simulator.hpp>
 

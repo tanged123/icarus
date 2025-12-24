@@ -681,66 +681,66 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 
 ### Task 2.1a: State Vectors in Simulator
 
-- [ ] Add `JanusVector<Scalar> X_global_` member
-- [ ] Add `JanusVector<Scalar> X_dot_global_` member
-- [ ] Add `std::vector<StateSlice<Scalar>> state_layout_` member
-- [ ] Add `Scalar dt_nominal_` member with default
-- [ ] Implement `GetTotalStateSize()` method
-- [ ] Implement `GetState()` method
-- [ ] Implement `SetState()` method with size validation
-- [ ] Implement `GetDerivatives()` method
-- [ ] Implement `GetStateLayout()` method
-- [ ] Implement `SetNominalDt()` and `GetNominalDt()` methods
+- [x] Add `JanusVector<Scalar> X_global_` member
+- [x] Add `JanusVector<Scalar> X_dot_global_` member
+- [x] Add `std::vector<StateSlice<Scalar>> state_layout_` member
+- [x] Add `Scalar dt_nominal_` member with default
+- [x] Implement `GetTotalStateSize()` method
+- [x] Implement `GetState()` method
+- [x] Implement `SetState()` method with size validation
+- [x] Implement `GetDerivatives()` method
+- [x] Implement `GetStateLayout()` method
+- [x] Implement `SetNominalDt()` and `GetNominalDt()` methods
 
 ### Task 2.1b: BindState() in Component
 
-- [ ] Add `BindState(Scalar*, Scalar*, size_t)` virtual method
-- [ ] Default implementation is no-op
-- [ ] Add `HasState()` convenience method
-- [ ] Document contract in Doxygen comments
+- [x] Add `BindState(Scalar*, Scalar*, size_t)` virtual method
+- [x] Default implementation is no-op
+- [x] Add `HasState()` convenience method
+- [x] Document contract in Doxygen comments
 
 ### Task 2.1c: State Binding in Stage()
 
-- [ ] Calculate total state size before allocation
-- [ ] Allocate `X_global_` and `X_dot_global_` vectors
-- [ ] Initialize vectors to zero
-- [ ] Iterate components, call `BindState()` with correct offsets
-- [ ] Build `state_layout_` metadata
-- [ ] Handle components with `StateSize() == 0` (skip binding)
+- [x] Calculate total state size before allocation
+- [x] Allocate `X_global_` and `X_dot_global_` vectors
+- [x] Initialize vectors to zero
+- [x] Iterate components, call `BindState()` with correct offsets
+- [x] Build `state_layout_` metadata
+- [x] Handle components with `StateSize() == 0` (skip binding)
 
 ### Task 2.1d: ComputeDerivatives()
 
-- [ ] Zero `X_dot_global_` at start
-- [ ] Call PreStep/Step/PostStep on all components
-- [ ] Return reference to `X_dot_global_`
-- [ ] Use `dt_nominal_` for hook parameters
+- [x] Zero `X_dot_global_` at start
+- [x] Call PreStep/Step/PostStep on all components
+- [x] Return reference to `X_dot_global_`
+- [x] Use `dt_nominal_` for hook parameters
 
 ### Task 2.1e: Error Types
 
-- [ ] Add `StateError` base exception
-- [ ] Add `StateSizeMismatchError` with expected/actual
-- [ ] Add `StateBindingError` for binding failures
+- [x] Add `StateError` base exception
+- [x] Add `StateSizeMismatchError` with expected/actual
+- [x] Add `StateBindingError` for binding failures
 
 ### Task 2.1f: Tests
 
-- [ ] Create `tests/sim/test_state_management.cpp`
-- [ ] Add `TotalStateSizeCalculation` test
-- [ ] Add `StateVectorAllocation` test
-- [ ] Add `StateBindingCorrectOffsets` test
-- [ ] Add `StatePointersSeparate` test
-- [ ] Add `SetAndGetState` test
-- [ ] Add `ComputeDerivatives` test
-- [ ] Add `ZeroStateComponent` test
-- [ ] Add `StateSizeMismatchThrows` test
-- [ ] Add symbolic mode compilation tests
-- [ ] Update `tests/CMakeLists.txt`
+- [x] Create `tests/sim/test_state_management.cpp`
+- [x] Add `TotalStateSizeCalculation` test
+- [x] Add `StateVectorAllocation` test
+- [x] Add `StateBindingCorrectOffsets` test
+- [x] Add `StatePointersSeparate` test
+- [x] Add `SetAndGetState` test
+- [x] Add `ComputeDerivatives` test
+- [x] Add `ZeroStateComponent` test
+- [x] Add `StateSizeMismatchThrows` test
+- [x] Add symbolic mode compilation tests
+- [x] Update `tests/CMakeLists.txt`
 
 ### Task 2.1g: Integration
 
-- [ ] Update `include/icarus/icarus.hpp` if needed
-- [ ] Verify `./scripts/build.sh` succeeds
-- [ ] Verify `./scripts/test.sh` all pass
-- [ ] Update main implementation plan checkboxes
+- [x] Update `include/icarus/icarus.hpp` if needed
+- [x] Verify `./scripts/build.sh` succeeds
+- [x] Verify `./scripts/test.sh` all pass
+- [x] Update main implementation plan checkboxes
 
 ---
 
@@ -751,6 +751,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 **Decision:** Components receive raw pointers into global vectors, not copies.
 
 **Rationale:**
+
 - Zero-copy access during hot-path Step()
 - Integrator sees contiguous vector (optimal for CVODES, scipy)
 - Single memcpy checkpoints entire simulation state
@@ -762,6 +763,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 **Decision:** Allocate state vectors in Stage(), not Provision().
 
 **Rationale:**
+
 - Total state size isn't known until all components added
 - Stage() can be called multiple times (re-run scenarios)
 - Matches architecture: Stage binds pointers, Provision allocates component memory
@@ -771,6 +773,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 **Decision:** Zero `X_dot_global_` at start of ComputeDerivatives().
 
 **Rationale:**
+
 - Components may accumulate into derivatives (e.g., multiple force sources)
 - Clean slate each evaluation prevents stale data
 - Matches typical integrator expectations
@@ -780,6 +783,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 **Decision:** Components without integrated state return `StateSize() == 0`.
 
 **Rationale:**
+
 - No special marker needed (zero is natural default)
 - BindState() simply not called for these components
 - Keeps interface simple
@@ -789,6 +793,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 **Decision:** Store nominal timestep in Simulator for ComputeDerivatives().
 
 **Rationale:**
+
 - Some components may need dt hint for filtering
 - Integrator chooses actual dt, but components need representative value
 - Can be changed via SetNominalDt() if needed
@@ -799,23 +804,23 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 
 All code in Phase 2.1 must be Janus-compatible:
 
-- [ ] All functions templated on `Scalar` (not `double`)
-- [ ] Use `JanusVector<Scalar>` (not `std::vector<double>`)
-- [ ] No `std::` math functions (use `janus::` namespace)
-- [ ] No `if/else` branching on `Scalar` values (use `janus::where()`)
-- [ ] Verify `Simulator<casadi::MX>` compiles and runs
+- [x] All functions templated on `Scalar` (not `double`)
+- [x] Use `JanusVector<Scalar>` (not `std::vector<double>`)
+- [x] No `std::` math functions (use `janus::` namespace)
+- [x] No `if/else` branching on `Scalar` values (use `janus::where()`)
+- [x] Verify `Simulator<casadi::MX>` compiles and runs
 
 ---
 
 ## Exit Criteria
 
-- [ ] Global `X_global_`, `X_dot_global_` vectors in Simulator
-- [ ] `Component::BindState()` method added and documented
-- [ ] `Simulator::Stage()` allocates vectors and binds state
-- [ ] `Simulator::ComputeDerivatives()` callable by integrators
-- [ ] State layout metadata accessible via `GetStateLayout()`
-- [ ] All Phase 2.1 tests pass for both `double` and `casadi::MX`
-- [ ] Existing Phase 1 tests continue to pass
+- [x] Global `X_global_`, `X_dot_global_` vectors in Simulator
+- [x] `Component::BindState()` method added and documented
+- [x] `Simulator::Stage()` allocates vectors and binds state
+- [x] `Simulator::ComputeDerivatives()` callable by integrators
+- [x] State layout metadata accessible via `GetStateLayout()`
+- [x] All Phase 2.1 tests pass for both `double` and `casadi::MX`
+- [x] Existing Phase 1 tests continue to pass
 
 ---
 
@@ -839,6 +844,7 @@ After Phase 2.1 completes, Phase 2.2 (Integrator Interface) will:
 4. Modify `Simulator::Step()` to use integrator
 
 The state infrastructure from 2.1 enables integrators to:
+
 ```cpp
 // Integrator uses Simulator's state interface
 auto X = sim.GetState();
