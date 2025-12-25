@@ -237,4 +237,40 @@ class LifecycleError : public Error {
     explicit LifecycleError(const std::string &msg) : Error("Lifecycle: " + msg) {}
 };
 
+/**
+ * @brief Unwired input error
+ *
+ * Thrown when accessing an input that has not been wired to a source.
+ */
+class UnwiredInputError : public SignalError {
+  public:
+    explicit UnwiredInputError(const std::string &input_name)
+        : SignalError("Input not wired: '" + input_name + "'"), input_name_(input_name) {}
+
+    [[nodiscard]] const std::string &input_name() const { return input_name_; }
+
+  private:
+    std::string input_name_;
+};
+
+/**
+ * @brief Wiring configuration error
+ *
+ * Thrown when wiring configuration is invalid or incomplete.
+ */
+class WiringError : public Error {
+  public:
+    explicit WiringError(const std::string &msg) : Error("Wiring: " + msg) {}
+};
+
+/**
+ * @brief Input/Output error
+ *
+ * Thrown when file operations fail.
+ */
+class IOError : public Error {
+  public:
+    explicit IOError(const std::string &msg) : Error("IO: " + msg) {}
+};
+
 } // namespace icarus

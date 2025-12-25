@@ -147,17 +147,57 @@ TEST(SignalRegistry, RegisterOutput) {
     EXPECT_DOUBLE_EQ(thrust, 3000.0);
 }
 
-TEST(SignalRegistry, RegisterStatic) {
+TEST(SignalRegistry, RegisterOutputInt32) {
     SignalRegistry<double> registry;
 
-    const double gravity = 9.81;
-    registry.register_static("gravity", &gravity, "m/s^2", "Standard gravity");
+    int32_t flight_phase = 2;
+    registry.set_current_component("GNC");
+    registry.register_output<int32_t>("phase", &flight_phase, "", "Flight phase");
 
-    EXPECT_TRUE(registry.HasSignal("gravity"));
+    EXPECT_TRUE(registry.HasSignal("phase"));
 
-    auto desc = registry.get_descriptor("gravity");
-    ASSERT_NE(desc, nullptr);
-    EXPECT_EQ(desc->lifecycle, SignalLifecycle::Static);
+    auto handle = registry.resolve<int32_t>("phase");
+    EXPECT_EQ(*handle, 2);
+
+    flight_phase = 3;
+    EXPECT_EQ(*handle, 3);
+}
+
+TEST(SignalRegistry, RegisterOutputInt64) {
+    SignalRegistry<double> registry;
+
+    int64_t timestamp = 1234567890123456789LL;
+    registry.set_current_component("Recorder");
+    registry.register_output<int64_t>("timestamp", &timestamp, "ns", "Epoch timestamp");
+
+    EXPECT_TRUE(registry.HasSignal("timestamp"));
+
+    auto handle = registry.resolve<int64_t>("timestamp");
+    EXPECT_EQ(*handle, 1234567890123456789LL);
+}
+
+TEST(SignalRegistry, IntegerInputWiring) {
+    SignalRegistry<double> registry;
+
+    // Producer component publishes flight phase
+    int32_t phase_output = 1;
+    registry.set_current_component("GNC");
+    registry.register_output<int32_t>("GNC.phase", &phase_output, "", "Flight phase");
+
+    // Consumer component has input for phase
+    InputHandle<int32_t> phase_input;
+    registry.set_current_component("Controller");
+    registry.register_input<int32_t>("Controller.mode_input", &phase_input, "", "Mode from GNC");
+
+    // Wire input to output
+    registry.wire_input<int32_t>("Controller.mode_input", "GNC.phase");
+
+    // Verify wiring works
+    EXPECT_EQ(phase_input.get(), 1);
+
+    // Update producer, consumer sees new value
+    phase_output = 2;
+    EXPECT_EQ(phase_input.get(), 2);
 }
 
 TEST(SignalRegistry, OwnerTracking) {
@@ -231,7 +271,7 @@ TEST(SignalRegistry, RegisterVec3) {
     SignalRegistry<double> registry;
 
     Vec3<double> position(1.0, 2.0, 3.0);
-    registry.register_vec3("position", &position, "m", "Position");
+    registry.register_output_vec3("position", &position, "m", "Position");
 
     EXPECT_TRUE(registry.HasSignal("position.x"));
     EXPECT_TRUE(registry.HasSignal("position.y"));
@@ -250,7 +290,7 @@ TEST(SignalRegistry, ResolveVec3) {
     SignalRegistry<double> registry;
 
     Vec3<double> velocity(10.0, 20.0, 30.0);
-    registry.register_vec3("velocity", &velocity, "m/s");
+    registry.register_output_vec3("velocity", &velocity, "m/s");
 
     auto handle = registry.resolve_vec3<double>("velocity");
     EXPECT_TRUE(handle.valid());
@@ -505,6 +545,286 @@ TEST(SignalRegistrySymbolic, GradientComputation) {
     // At param=5: gradient = 2*5 = 10
     auto res2 = grad_func(5.0);
     EXPECT_NEAR(res2[0](0, 0), 10.0, 1e-9);
+}
+
+// =============================================================================
+// Phase 2.4: InputHandle Tests
+// =============================================================================
+
+TEST(InputHandle, DefaultConstruction) {
+    InputHandle<double> handle;
+    EXPECT_FALSE(handle.is_wired());
+    EXPECT_TRUE(handle.name().empty());
+    EXPECT_TRUE(handle.wired_to().empty());
+}
+
+TEST(InputHandle, UnwiredAccessThrows) {
+    InputHandle<double> handle;
+    EXPECT_THROW((void)handle.get(), UnwiredInputError);
+}
+
+TEST(InputHandle, WiredAccess) {
+    // Simulate wiring through registry
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    // Register an output
+    double source_value = 42.0;
+    bp.set_context("", "Source");
+    bp.register_output("value", &source_value, "m", "Source value");
+
+    // Register an input
+    InputHandle<double> input;
+    bp.set_context("", "Consumer");
+    bp.register_input("input", &input, "m", "Input port");
+
+    // Wire the input
+    bp.wire_input<double>("Consumer.input", "Source.value");
+
+    // Access the wired value
+    EXPECT_TRUE(input.is_wired());
+    EXPECT_DOUBLE_EQ(input.get(), 42.0);
+    EXPECT_EQ(input.wired_to(), "Source.value");
+
+    // Source changes propagate
+    source_value = 100.0;
+    EXPECT_DOUBLE_EQ(input.get(), 100.0);
+}
+
+// =============================================================================
+// Phase 2.4: Parameter Registration Tests
+// =============================================================================
+
+TEST(SignalRegistry, RegisterParam) {
+    SignalRegistry<double> registry;
+
+    double mass = 0.0;
+    registry.set_current_component("Vehicle");
+    registry.register_param("mass", &mass, 1000.0, "kg", "Vehicle mass");
+
+    EXPECT_TRUE(registry.has_param("mass"));
+    EXPECT_DOUBLE_EQ(mass, 1000.0); // Initial value applied
+
+    auto params = registry.get_params();
+    EXPECT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].kind, SignalKind::Parameter);
+    EXPECT_TRUE(params[0].is_optimizable);
+}
+
+TEST(Backplane, RegisterParam) {
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    double thrust = 0.0;
+    bp.set_context("X15", "Engine");
+    bp.register_param("max_thrust", &thrust, 50000.0, "N", "Max thrust");
+
+    EXPECT_TRUE(registry.has_param("X15.Engine.max_thrust"));
+    EXPECT_DOUBLE_EQ(thrust, 50000.0);
+}
+
+// =============================================================================
+// Phase 2.4: Config Registration Tests
+// =============================================================================
+
+TEST(SignalRegistry, RegisterConfigInt) {
+    SignalRegistry<double> registry;
+
+    int mode = 0;
+    registry.set_current_component("Controller");
+    registry.register_config("mode", &mode, 3, "Control mode");
+
+    EXPECT_TRUE(registry.has_config("mode"));
+    EXPECT_EQ(mode, 3); // Initial value applied
+
+    auto config = registry.get_config();
+    EXPECT_EQ(config.size(), 1);
+    EXPECT_EQ(config[0].kind, SignalKind::Config);
+    EXPECT_FALSE(config[0].is_optimizable);
+}
+
+TEST(SignalRegistry, RegisterConfigBool) {
+    SignalRegistry<double> registry;
+
+    bool enabled = false;
+    registry.register_config("enabled", &enabled, true, "Enable flag");
+
+    EXPECT_TRUE(registry.has_config("enabled"));
+    EXPECT_TRUE(enabled);
+}
+
+TEST(Backplane, RegisterConfig) {
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    int num_engines = 0;
+    bp.set_context("Vehicle", "Propulsion");
+    bp.register_config("num_engines", &num_engines, 4, "Number of engines");
+
+    EXPECT_TRUE(registry.has_config("Vehicle.Propulsion.num_engines"));
+    EXPECT_EQ(num_engines, 4);
+}
+
+// =============================================================================
+// Phase 2.4: Wiring Validation Tests
+// =============================================================================
+
+TEST(SignalRegistry, GetUnwiredInputs) {
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    // Register source
+    double source = 0.0;
+    bp.set_context("", "Source");
+    bp.register_output("output", &source);
+
+    // Register two inputs
+    InputHandle<double> input1, input2;
+    bp.set_context("", "Consumer");
+    bp.register_input("in1", &input1, "m");
+    bp.register_input("in2", &input2, "m");
+
+    // Wire only one
+    bp.wire_input<double>("Consumer.in1", "Source.output");
+
+    auto unwired = registry.get_unwired_inputs();
+    EXPECT_EQ(unwired.size(), 1);
+    EXPECT_EQ(unwired[0], "Consumer.in2");
+}
+
+TEST(SignalRegistry, ValidateWiringThrows) {
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    double source = 0.0;
+    bp.set_context("", "Source");
+    bp.register_output("output", &source);
+
+    InputHandle<double> input;
+    bp.set_context("", "Consumer");
+    bp.register_input("input", &input);
+
+    // Should throw with unwired input
+    EXPECT_THROW(registry.validate_wiring(), WiringError);
+}
+
+TEST(SignalRegistry, ValidateWiringPasses) {
+    SignalRegistry<double> registry;
+    Backplane<double> bp(registry);
+
+    double source = 0.0;
+    bp.set_context("", "Source");
+    bp.register_output("output", &source);
+
+    InputHandle<double> input;
+    bp.set_context("", "Consumer");
+    bp.register_input("input", &input);
+    bp.wire_input<double>("Consumer.input", "Source.output");
+
+    // Should not throw
+    EXPECT_NO_THROW(registry.validate_wiring());
+}
+
+// =============================================================================
+// Phase 2.4: WiringConfig Tests
+// =============================================================================
+
+TEST(WiringConfig, AddAndGet) {
+    WiringConfig config;
+
+    config.AddWiring("Consumer.input", "Source.output");
+
+    EXPECT_TRUE(config.HasWiring("Consumer.input"));
+    EXPECT_EQ(config.GetSource("Consumer.input"), "Source.output");
+    EXPECT_FALSE(config.HasWiring("Other.input"));
+}
+
+TEST(WiringConfig, GetSourceThrows) {
+    WiringConfig config;
+
+    EXPECT_THROW((void)config.GetSource("nonexistent"), WiringError);
+}
+
+// =============================================================================
+// Phase 2.4: SignalKind Tests
+// =============================================================================
+
+TEST(SignalKind, ToString) {
+    EXPECT_STREQ(to_string(SignalKind::Output), "Output");
+    EXPECT_STREQ(to_string(SignalKind::Input), "Input");
+    EXPECT_STREQ(to_string(SignalKind::Parameter), "Parameter");
+    EXPECT_STREQ(to_string(SignalKind::Config), "Config");
+}
+
+// =============================================================================
+// Phase 2.4: DataDictionary Tests
+// =============================================================================
+
+TEST(DataDictionary, ComputeStats) {
+    DataDictionary dict;
+
+    DataDictionary::ComponentEntry comp;
+    comp.name = "Test";
+    comp.type = "TestType";
+
+    SignalDescriptor output1, output2, input1, param1, cfg1;
+    output1.kind = SignalKind::Output;
+    output1.is_state = true;
+    output2.kind = SignalKind::Output;
+    output2.is_state = false;
+    input1.kind = SignalKind::Input;
+    input1.wired_to = ""; // Unwired
+    param1.kind = SignalKind::Parameter;
+    cfg1.kind = SignalKind::Config;
+
+    comp.outputs = {output1, output2};
+    comp.inputs = {input1};
+    comp.parameters = {param1};
+    comp.config = {cfg1};
+
+    dict.components.push_back(comp);
+    dict.ComputeStats();
+
+    EXPECT_EQ(dict.total_outputs, 2);
+    EXPECT_EQ(dict.total_inputs, 1);
+    EXPECT_EQ(dict.total_parameters, 1);
+    EXPECT_EQ(dict.total_config, 1);
+    EXPECT_EQ(dict.integrable_states, 1);
+    EXPECT_EQ(dict.unwired_inputs, 1);
+}
+
+TEST(WiringConfig, FromYAMLFlat) {
+    // Test flat YAML format: "Component.input": "Source.output"
+    YAML::Node node;
+    node["wiring"]["PointMass.force"] = "Gravity.force";
+    node["wiring"]["PointMass.position"] = "GPS.position";
+
+    auto config = WiringConfig::FromYAML(node);
+
+    EXPECT_EQ(config.size(), 2);
+    EXPECT_TRUE(config.HasWiring("PointMass.force"));
+    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
+    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
+}
+
+TEST(WiringConfig, FromYAMLNested) {
+    // Test nested YAML format: Component: { input: "Source.output" }
+    YAML::Node node;
+    node["wiring"]["PointMass"]["force"] = "Gravity.force";
+    node["wiring"]["PointMass"]["position"] = "GPS.position";
+
+    auto config = WiringConfig::FromYAML(node);
+
+    EXPECT_EQ(config.size(), 2);
+    EXPECT_TRUE(config.HasWiring("PointMass.force"));
+    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
+    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
+}
+
+TEST(WiringConfig, FromYAMLEmpty) {
+    YAML::Node node;
+    auto config = WiringConfig::FromYAML(node);
+    EXPECT_TRUE(config.empty());
 }
 
 } // namespace

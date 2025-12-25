@@ -11,13 +11,22 @@ fi
 
 # Handle arguments
 CLEAN=false
+BUILD_TYPE="${BUILD_TYPE:-Debug}"  # Default to Debug for local development
 
 for arg in "$@"; do
     case $arg in
         --clean)
-        CLEAN=true
-        shift
-        ;;
+            CLEAN=true
+            ;;
+        --debug)
+            BUILD_TYPE="Debug"
+            ;;
+        --release)
+            BUILD_TYPE="Release"
+            ;;
+        --relwithdebinfo)
+            BUILD_TYPE="RelWithDebInfo"
+            ;;
     esac
 done
 
@@ -27,8 +36,10 @@ if [ "$CLEAN" = true ]; then
     "$SCRIPT_DIR/clean.sh"
 fi
 
+echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE"
+
 # Create build directory if it doesn't exist or reconfigure
-cmake -B build -G Ninja
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
 # Build the project
 ninja -C build

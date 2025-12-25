@@ -66,6 +66,38 @@ template <> struct TypeTraits<int64_t> {
     static constexpr const char *name = "Int64";
 };
 
+// =============================================================================
+// SignalKind - Interface classification (Phase 2.4)
+// =============================================================================
+
+/**
+ * @brief Classification of signal types in the component interface
+ */
+enum class SignalKind {
+    Output,    ///< Dynamic output signal (Scalar, Vec3, etc.)
+    Input,     ///< Input port (wired to an output)
+    Parameter, ///< Scalar-typed parameter (optimizable)
+    Config     ///< Discrete config (int/bool/enum, not optimizable)
+};
+
+/**
+ * @brief Convert SignalKind to string
+ */
+inline const char *to_string(SignalKind kind) {
+    switch (kind) {
+    case SignalKind::Output:
+        return "Output";
+    case SignalKind::Input:
+        return "Input";
+    case SignalKind::Parameter:
+        return "Parameter";
+    case SignalKind::Config:
+        return "Config";
+    default:
+        return "Unknown";
+    }
+}
+
 } // namespace icarus
 
 // Include Icarus types for SymbolicScalar specialization
@@ -97,6 +129,7 @@ template <> struct TypeTraits<SymbolicScalar> {
  * - `description`: Human-readable documentation
  * - `min_value/max_value`: Value bounds for validation
  * - `is_state`: Flag for signals requiring integration
+ * - `kind`: Interface classification (Output/Input/Parameter/Config)
  *
  * Compatible with Vulcan's telemetry system while adding simulation features.
  */
@@ -113,13 +146,17 @@ struct SignalDescriptor {
     std::string owner_component; ///< Component that registered this signal
     void *data_ptr = nullptr;    ///< Pointer to storage (for pointer-bind pattern)
 
+    // Phase 2.4: Interface classification
+    SignalKind kind = SignalKind::Output; ///< Signal classification
+    std::string wired_to;                 ///< For inputs: source signal name
+
     // Simulation metadata
     double min_value = -std::numeric_limits<double>::infinity();
     double max_value = std::numeric_limits<double>::infinity();
-    bool is_state = false; ///< Requires integration
+    bool is_state = false;      ///< Requires integration
+    bool is_optimizable = true; ///< False for Config kind
 
     /// Get padded size in bytes (always 8 for wire format alignment, matching Vulcan)
-    /// Note: Actual data size may be smaller (e.g., int32_t is 4 bytes)
     [[nodiscard]] constexpr size_t size_bytes() const { return 8; }
 };
 

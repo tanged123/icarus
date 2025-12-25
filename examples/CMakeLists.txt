@@ -34,3 +34,7 @@ target_link_libraries(hello_world PRIVATE icarus)
 add_executable(orbital_demo intro/orbital_demo.cpp)
 target_link_libraries(orbital_demo PRIVATE icarus)
 target_include_directories(orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+add_executable(formation_flight_demo intro/formation_flight_demo.cpp)
+target_link_libraries(formation_flight_demo PRIVATE icarus)
+target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)

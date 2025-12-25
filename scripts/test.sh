@@ -9,14 +9,14 @@ if [ -z "$IN_NIX_SHELL" ]; then
     exit $?
 fi
 
-# Ensure we have a build
+# Ensure we have a build (forward build type args to build.sh)
 if [ ! -d "build" ]; then
     echo "Build directory not found. Building..."
-    ./scripts/build.sh
+    ./scripts/build.sh "$@"
+else
+    # Rebuild to ensure latest changes (forward build type args)
+    ./scripts/build.sh "$@"
 fi
-
-# Rebuild to ensure latest changes
-ninja -C build
 
 # Run tests
 mkdir -p logs

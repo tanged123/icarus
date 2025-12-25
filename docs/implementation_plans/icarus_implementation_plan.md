@@ -95,18 +95,41 @@ Phase 4–7 (horizontal expansion)
   - [x] `PointMassGravity` with using Vulcan simple round Earth gravity model
   - [x] Demonstration of connecting components and running a simulation all the way through.
 
+- [x] **2.4 Component Interface System**
+  - [x] Explicit input port registration (`register_input()`)
+  - [x] Scalar-typed parameter registration (`register_param()`)
+  - [x] External wiring configuration (YAML or programmatic)
+  - [x] Unified signal access API (`Get<T>()`/`Set<T>()`)
+  - [x] Data Dictionary with outputs, inputs, and parameters
+  - [x] Pre-run wiring validation
+
+- [ ] **2.5 ASCII Logging and Data Dictionary Display**
+  - [ ] Console abstraction with ANSI color support
+  - [ ] ASCII box-drawing table formatter
+  - [ ] Flight Manifest (formatted Data Dictionary at Provision end)
+  - [ ] Mission Logger with lifecycle phase tracking
+  - [ ] Mission Debrief with profiling statistics
+  - [ ] Simulator integration for automatic logging
+
 ### Architecture References
 
 | Topic | Document |
 |:------|:---------|
 | Global state vector | [09_memory_state_ownership.md](../architecture/09_memory_state_ownership.md) |
 | State binding in Stage | [04_lifecycle.md](../architecture/04_lifecycle.md) |
+| Component interface model | [02_component_protocol.md](../architecture/02_component_protocol.md) |
+| Services configuration | [15_services.md](../architecture/15_services.md) |
 
 ### Exit Criteria
 
 - [ ] Simulate a falling object (point mass under gravity)
 - [ ] Verify against analytical solution: `y(t) = y₀ + v₀t - ½gt²`
 - [ ] State correctly scattered/gathered through integrator
+- [ ] Components use explicit input/parameter registration
+- [ ] Wiring is external to components
+- [ ] Any signal accessible via `sim.Get<T>()`/`sim.Set<T>()`
+- [ ] Flight Manifest displays at Provision end
+- [ ] Mission Debrief displays at Shutdown with timing stats
 
 ---
 

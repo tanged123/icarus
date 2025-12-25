@@ -41,3 +41,8 @@ icarus_add_test(test_point_mass
 )
 target_include_directories(test_point_mass PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+
+# IO tests
+icarus_add_test(test_data_dictionary
+    io/test_data_dictionary.cpp
+)

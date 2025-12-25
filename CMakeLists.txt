@@ -4,6 +4,38 @@ project(
   VERSION 0.2.2
   LANGUAGES CXX)
 
+# --- Build Type Configuration ---
+# Default to RelWithDebInfo if not specified (good balance for development)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE
+      "RelWithDebInfo"
+      CACHE STRING "Build type" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
+                                               "RelWithDebInfo" "MinSizeRel")
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# Define ICARUS_DEBUG for Debug builds (enables runtime assertions)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_compile_definitions(ICARUS_DEBUG=1)
+  message(STATUS "Debug mode enabled - ICARUS_DEBUG=1")
+endif()
+
+# Check for LTO support
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result OUTPUT output)
+
+if(result)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  message(STATUS "LTO enabled for Release builds")
+else()
+  message(WARNING "LTO not supported: ${output}")
+endif()
+
+# Explicitly ensure -O3 for Release builds
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_RELEASE "-O3 ${CMAKE_C_FLAGS_RELEASE}")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

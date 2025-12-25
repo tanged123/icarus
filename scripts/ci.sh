@@ -20,10 +20,10 @@ mkdir -p "$PROJECT_ROOT/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$PROJECT_ROOT/logs/ci_${TIMESTAMP}.log"
 
-# Run build and test scripts
-echo "Running CI..."
+# Run build and test scripts (CI uses Release by default for performance)
+echo "Running CI (Release build)..."
 cd "$PROJECT_ROOT"
-(./scripts/build.sh --clean && ./scripts/test.sh) 2>&1 | tee "$LOG_FILE"
+(./scripts/build.sh --clean --release && ./scripts/test.sh --release) 2>&1 | tee "$LOG_FILE"
 
 # Create symlink to latest
 ln -sf "ci_${TIMESTAMP}.log" "$PROJECT_ROOT/logs/ci.log"

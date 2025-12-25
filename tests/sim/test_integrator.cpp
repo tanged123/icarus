@@ -258,7 +258,7 @@ TEST(IntegratorConfig, ParseTypeFromString) {
     EXPECT_EQ(parse_integrator_type("RK4"), IntegratorType::RK4);
     EXPECT_EQ(parse_integrator_type("rk45"), IntegratorType::RK45);
 
-    EXPECT_THROW(parse_integrator_type("invalid"), std::invalid_argument);
+    EXPECT_THROW((void)parse_integrator_type("invalid"), std::invalid_argument);
 }
 
 TEST(IntegratorConfig, DefaultConfig) {

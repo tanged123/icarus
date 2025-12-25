@@ -12,11 +12,13 @@
  *   (valid in both ECI and ECEF since gravity is a central force)
  *
  * Part of Phase 2.3: First Real Component
+ * Updated for Phase 2.4: Uses register_input, register_param, register_config
  */
 
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Backplane.hpp>
+#include <icarus/signal/InputHandle.hpp>
 
 #include <vulcan/core/Constants.hpp>
 #include <vulcan/core/VulcanTypes.hpp>
@@ -43,9 +45,9 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     /**
      * @brief Gravity model fidelity
      */
-    enum class Model {
-        Constant,  ///< g = [0, 0, -g0] (for analytical validation)
-        PointMass, ///< vulcan::gravity::point_mass::acceleration()
+    enum class Model : int {
+        Constant = 0,  ///< g = [0, 0, -g0] (for analytical validation)
+        PointMass = 1, ///< vulcan::gravity::point_mass::acceleration()
     };
 
     /**
@@ -53,7 +55,7 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
      */
     explicit PointMassGravity(std::string name = "Gravity", std::string entity = "",
                               Model model = Model::Constant)
-        : name_(std::move(name)), entity_(std::move(entity)), model_(model) {}
+        : name_(std::move(name)), entity_(std::move(entity)), model_int_(static_cast<int>(model)) {}
 
     // =========================================================================
     // Component Identity
@@ -70,28 +72,42 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     // =========================================================================
 
     /**
-     * @brief Register outputs: force (N) and acceleration (m/s²)
+     * @brief Register outputs, inputs, and config
      */
     void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+        // === Outputs ===
         // Output force (not acceleration) - allows summing multiple force sources
-        bp.template register_vec3<Scalar>("force", &force_, "N", "Gravity force");
+        bp.template register_output_vec3<Scalar>("force", &force_, "N", "Gravity force");
 
         // Also output acceleration for convenience/logging
-        bp.template register_vec3<Scalar>("acceleration", &accel_, "m/s^2", "Gravity acceleration");
+        bp.template register_output_vec3<Scalar>("acceleration", &accel_, "m/s^2",
+                                                 "Gravity acceleration");
+
+        // === Inputs (Phase 2.4) ===
+        // Position input from dynamics component
+        bp.template register_input<Scalar>("position.x", &pos_x_, "m", "Position X");
+        bp.template register_input<Scalar>("position.y", &pos_y_, "m", "Position Y");
+        bp.template register_input<Scalar>("position.z", &pos_z_, "m", "Position Z");
+
+        // Mass input for force calculation
+        bp.template register_input<Scalar>("mass", &mass_input_, "kg", "Vehicle mass");
+
+        // === Config (Phase 2.4) ===
+        // Gravity model selection (0=Constant, 1=PointMass)
+        bp.register_config("model", &model_int_, model_int_,
+                           "Gravity model (0=Constant, 1=PointMass)");
     }
 
     /**
-     * @brief Wire inputs: position and mass from dynamics component
+     * @brief Stage phase - resolve dependencies
+     *
+     * Note: Wiring is defined externally (simulator config) and applied here.
      */
     void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Resolve position input (from dynamics component)
-        pos_handle_ = bp.template resolve_vec3<Scalar>("PointMass3DOF.position");
-
-        // Resolve mass input (for force = mass * acceleration)
-        mass_handle_ = bp.template resolve<Scalar>("PointMass3DOF.mass");
-
-        // Config handling to be added later
-        (void)cfg;
+        // Apply wiring from configuration
+        for (const auto &[input, source] : cfg.wiring) {
+            bp.template wire_input<Scalar>(input, source);
+        }
     }
 
     /**
@@ -101,12 +117,13 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
         (void)t;
         (void)dt;
 
-        // Read position and mass
-        Vec3<Scalar> pos = pos_handle_.get();
-        Scalar m = *mass_handle_;
+        // Read position and mass from registered inputs
+        Vec3<Scalar> pos{pos_x_.get(), pos_y_.get(), pos_z_.get()};
+        Scalar m = mass_input_.get();
 
-        // Compute acceleration based on model
-        switch (model_) {
+        // Compute acceleration based on model config
+        Model model = static_cast<Model>(model_int_);
+        switch (model) {
         case Model::Constant:
             // Local vertical frame: Z-up, constant gravity downward
             // Used for analytical validation: z(t) = z0 - ½gt²
@@ -130,8 +147,8 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     // Configuration
     // =========================================================================
 
-    void SetModel(Model model) { model_ = model; }
-    [[nodiscard]] Model GetModel() const { return model_; }
+    void SetModel(Model model) { model_int_ = static_cast<int>(model); }
+    [[nodiscard]] Model GetModel() const { return static_cast<Model>(model_int_); }
 
     void SetGravitationalParameter(double mu) { mu_ = mu; }
     [[nodiscard]] double GetGravitationalParameter() const { return mu_; }
@@ -146,12 +163,14 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     std::string entity_;
 
     // Configuration
-    Model model_ = Model::Constant;
+    int model_int_ = 0; ///< Model as int for register_config
     double mu_ = vulcan::constants::earth::mu;
 
-    // Input handles (resolved in Stage)
-    Vec3Handle<Scalar> pos_handle_;
-    SignalHandle<Scalar> mass_handle_;
+    // === Phase 2.4: Input Handles ===
+    InputHandle<Scalar> pos_x_;
+    InputHandle<Scalar> pos_y_;
+    InputHandle<Scalar> pos_z_;
+    InputHandle<Scalar> mass_input_;
 
     // Output values
     Vec3<Scalar> accel_ = Vec3<Scalar>::Zero();

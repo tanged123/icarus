@@ -12,21 +12,47 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+MODE="all"
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --debug) MODE="debug" ;;
+        --release) MODE="release" ;;
+        --all) MODE="all" ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 mkdir -p "$PROJECT_ROOT/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$PROJECT_ROOT/logs/verify_${TIMESTAMP}.log"
 
-echo "Starting full verification..." | tee "$LOG_FILE"
+echo "Starting verification (Mode: $MODE)..." | tee "$LOG_FILE"
 
-# Run build, test, and examples
 cd "$PROJECT_ROOT"
 (
-    echo '=== Building ===' && \
-    ./scripts/build.sh && \
-    echo '=== Running Tests ===' && \
-    ./scripts/test.sh && \
-    echo '=== Running Examples ===' && \
-    ./scripts/run_examples.sh
+    if [[ "$MODE" == "debug" || "$MODE" == "all" ]]; then
+        echo '=== Debug Build ==='
+        ./scripts/build.sh --clean --debug
+        echo '=== Debug Tests ==='
+        ./scripts/test.sh --debug
+        echo '=== Debug Examples ==='
+        ./scripts/run_examples.sh
+    fi
+
+    if [[ "$MODE" == "all" ]]; then
+        echo ''
+    fi
+
+    if [[ "$MODE" == "release" || "$MODE" == "all" ]]; then
+        echo '=== Release Build ==='
+        ./scripts/build.sh --clean --release
+        echo '=== Release Tests ==='
+        ./scripts/test.sh --release
+        echo '=== Release Examples ==='
+        ./scripts/run_examples.sh
+    fi
 ) 2>&1 | tee -a "$LOG_FILE"
 
 ln -sf "verify_${TIMESTAMP}.log" "$PROJECT_ROOT/logs/verify.log"

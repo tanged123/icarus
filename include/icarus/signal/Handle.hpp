@@ -10,6 +10,8 @@
 
 #include <icarus/signal/Signal.hpp>
 
+#include <icarus/core/Config.hpp>
+
 #include <cassert>
 #include <string>
 
@@ -57,14 +59,26 @@ template <typename T> class SignalHandle {
     /**
      * @brief Dereference to get/set the signal value
      */
-    T &operator*() { return *ptr_; }
-    const T &operator*() const { return *ptr_; }
+    T &operator*() {
+        ICARUS_ASSERT_PTR(ptr_, "SignalHandle::operator*");
+        return *ptr_;
+    }
+    const T &operator*() const {
+        ICARUS_ASSERT_PTR(ptr_, "SignalHandle::operator* const");
+        return *ptr_;
+    }
 
     /**
      * @brief Arrow operator for member access (if T is a class)
      */
-    T *operator->() { return ptr_; }
-    const T *operator->() const { return ptr_; }
+    T *operator->() {
+        ICARUS_ASSERT_PTR(ptr_, "SignalHandle::operator->");
+        return ptr_;
+    }
+    const T *operator->() const {
+        ICARUS_ASSERT_PTR(ptr_, "SignalHandle::operator-> const");
+        return ptr_;
+    }
 
     /**
      * @brief Get raw pointer for integration with Eigen loops

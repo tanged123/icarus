@@ -154,6 +154,16 @@ TEST(PointMassIntegration, FreeFallConstantGravity) {
 
     // Run lifecycle
     sim.Provision();
+
+    // Wire components together (after Provision, before Stage)
+    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
+                              {"position.y", "PointMass3DOF.position.y"},
+                              {"position.z", "PointMass3DOF.position.z"},
+                              {"mass", "PointMass3DOF.mass"}});
+    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
+                                    {"force.y", "Gravity.force.y"},
+                                    {"force.z", "Gravity.force.z"}});
+
     sim.Stage();
 
     // Simulate for 2 seconds
@@ -217,6 +227,16 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
 
     // Run lifecycle
     sim.Provision();
+
+    // Wire components together (after Provision, before Stage)
+    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
+                              {"position.y", "PointMass3DOF.position.y"},
+                              {"position.z", "PointMass3DOF.position.z"},
+                              {"mass", "PointMass3DOF.mass"}});
+    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
+                                    {"force.y", "Gravity.force.y"},
+                                    {"force.z", "Gravity.force.z"}});
+
     sim.Stage();
 
     // Compute initial mechanical energy

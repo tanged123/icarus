@@ -11,12 +11,15 @@
 
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Types.hpp>
+#include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/WiringConfig.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/sim/IntegratorFactory.hpp>
 #include <icarus/sim/IntegratorTypes.hpp>
 #include <icarus/sim/RK45Integrator.hpp>
 #include <icarus/sim/RK4Integrator.hpp>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -127,6 +130,21 @@ template <typename Scalar> class Simulator {
                                 state_size);
                 state_layout_.push_back({comp.get(), offset, state_size});
                 offset += state_size;
+            }
+        }
+
+        // Distribute wiring configuration to components
+        const auto &all_wiring = wiring_config_.GetAllWirings();
+        for (auto &comp : components_) {
+            std::string prefix = comp->FullName() + ".";
+            auto &comp_wiring = configs_[comp.get()].wiring;
+            comp_wiring.clear();
+
+            // Find all wirings for this component
+            for (const auto &[input, source] : all_wiring) {
+                if (input.find(prefix) == 0) {
+                    comp_wiring[input] = source;
+                }
             }
         }
 
@@ -250,6 +268,129 @@ template <typename Scalar> class Simulator {
         static const std::vector<std::string> empty;
         auto it = inputs_.find(comp);
         return (it != inputs_.end()) ? it->second : empty;
+    }
+
+    // =========================================================================
+    // Phase 2.4: Wiring API
+    // =========================================================================
+
+    /**
+     * @brief Configure wiring for a component or entity
+     *
+     * Helper to populate wiring config from code.
+     *
+     * @param prefix Component or Entity name prefix (e.g. "Gravity" or "Leader")
+     * @param wiring_map Map of local input name -> full source name
+     */
+    void SetWiring(const std::string &prefix,
+                   const std::map<std::string, std::string> &wiring_map) {
+        for (const auto &[local, source] : wiring_map) {
+            std::string full_input = prefix.empty() ? local : (prefix + "." + local);
+            wiring_config_.AddWiring(full_input, source);
+        }
+    }
+
+    /**
+     * @brief Wire an input to a source signal
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @tparam T The value type
+     * @param input_name Full name of the input port
+     * @param source_name Full name of the source signal
+     */
+    template <typename T> void Wire(const std::string &input_name, const std::string &source_name) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("Wire() requires prior Provision()");
+        }
+        registry_.template wire_input<T>(input_name, source_name);
+    }
+
+    /**
+     * @brief Validate all inputs are wired
+     *
+     * @throws WiringError if any inputs are unwired
+     */
+    void ValidateWiring() const { registry_.validate_wiring(); }
+
+    /**
+     * @brief Get list of unwired inputs
+     */
+    [[nodiscard]] std::vector<std::string> GetUnwiredInputs() const {
+        return registry_.get_unwired_inputs();
+    }
+
+    /**
+     * @brief Load wiring configuration from YAML file
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @param path Path to YAML wiring configuration file
+     */
+    void LoadWiring(const std::string &path) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("LoadWiring() requires prior Provision()");
+        }
+        wiring_config_ = WiringConfig::FromFile(path);
+    }
+
+    /**
+     * @brief Load wiring configuration from WiringConfig object
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @param config WiringConfig with input-to-source mappings
+     */
+    void LoadWiring(const WiringConfig &config) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("LoadWiring() requires prior Provision()");
+        }
+        wiring_config_ = config;
+    }
+
+    /**
+     * @brief Get the loaded wiring configuration
+     */
+    [[nodiscard]] const WiringConfig &GetWiringConfig() const { return wiring_config_; }
+
+    /**
+     * @brief Generate data dictionary to file
+     *
+     * @param path Output file path (.yaml or .json based on extension)
+     */
+    void GenerateDataDictionary(const std::string &path) const {
+        DataDictionary dict = GetDataDictionary();
+        if (path.ends_with(".json")) {
+            dict.ToJSON(path);
+        } else {
+            dict.ToYAML(path);
+        }
+    }
+
+    /**
+     * @brief Get data dictionary for the simulation
+     *
+     * @return DataDictionary with all component interfaces
+     */
+    [[nodiscard]] DataDictionary GetDataDictionary() const {
+        DataDictionary dict;
+
+        for (const auto &comp : components_) {
+            DataDictionary::ComponentEntry entry;
+            entry.name = comp->FullName();
+            entry.type = comp->TypeName();
+
+            // Query registry for this component's signals
+            entry.outputs = registry_.get_outputs_for_component(comp->FullName());
+            entry.inputs = registry_.get_inputs_for_component(comp->FullName());
+            entry.parameters = registry_.get_params_for_component(comp->FullName());
+            entry.config = registry_.get_config_for_component(comp->FullName());
+
+            dict.components.push_back(entry);
+        }
+
+        dict.ComputeStats();
+        return dict;
     }
 
     // =========================================================================
@@ -457,6 +598,9 @@ template <typename Scalar> class Simulator {
     // Integrator (Phase 2.2) - defaults to RK4
     std::unique_ptr<Integrator<Scalar>> integrator_ = std::make_unique<RK4Integrator<Scalar>>();
     IntegratorConfig<Scalar> integrator_config_ = IntegratorConfig<Scalar>::RK4Default();
+
+    // Wiring configuration (Phase 2.4)
+    WiringConfig wiring_config_;
 };
 
 } // namespace icarus

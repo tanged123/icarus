@@ -72,7 +72,7 @@ TEST(Backplane, RegisterVec3) {
 
     Vec3<double> position(1.0, 2.0, 3.0);
     bp.set_context("", "Nav");
-    bp.register_vec3("position", &position, "m", "Position");
+    bp.register_output_vec3("position", &position, "m", "Position");
 
     EXPECT_TRUE(registry.HasSignal("Nav.position.x"));
     EXPECT_TRUE(registry.HasSignal("Nav.position.y"));
