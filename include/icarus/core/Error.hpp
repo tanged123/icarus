@@ -263,4 +263,14 @@ class WiringError : public Error {
     explicit WiringError(const std::string &msg) : Error("Wiring: " + msg) {}
 };
 
+/**
+ * @brief Input/Output error
+ *
+ * Thrown when file operations fail.
+ */
+class IOError : public Error {
+  public:
+    explicit IOError(const std::string &msg) : Error("IO: " + msg) {}
+};
+
 } // namespace icarus

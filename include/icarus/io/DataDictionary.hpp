@@ -8,8 +8,11 @@
  * Provides structured documentation of all signals, inputs, parameters, and config.
  */
 
+#include <cerrno>
 #include <cstddef>
+#include <cstring>
 #include <fstream>
+#include <icarus/core/Error.hpp>
 #include <icarus/signal/Signal.hpp>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -137,7 +140,18 @@ struct DataDictionary {
         out << YAML::EndMap;
 
         std::ofstream file(path);
+        if (!file.is_open()) {
+            throw IOError("Failed to open file for writing: '" + path +
+                          "': " + std::strerror(errno));
+        }
+
         file << out.c_str();
+
+        if (file.fail()) {
+            throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
+        }
+
+        file.close();
     }
 
     /**
@@ -189,7 +203,18 @@ struct DataDictionary {
         }
 
         std::ofstream file(path);
+        if (!file.is_open()) {
+            throw IOError("Failed to open file for writing: '" + path +
+                          "': " + std::strerror(errno));
+        }
+
         file << j.dump(2);
+
+        if (file.fail()) {
+            throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
+        }
+
+        file.close();
     }
 };
 
