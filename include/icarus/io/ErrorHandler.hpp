@@ -149,13 +149,12 @@ class ErrorHandler {
 
     // === Integration with Simulator ===
 
-    /// Check buffered logs for errors, apply policies
-    /// Called by Simulator after Flush()
-    void ProcessBufferedErrors() {
+    /// Check buffered logs for errors, apply policies.
+    /// Called by Simulator after Flush().
+    /// @return true if simulation should abort (fatal error or max errors exceeded)
+    [[nodiscard]] bool ProcessBufferedErrors() {
         // Errors are already counted in Log(), so just check thresholds
-        if (ShouldAbort()) {
-            // Caller (Simulator) should handle this
-        }
+        return ShouldAbort();
     }
 
     /// Clear error counts (for new run)

@@ -39,7 +39,7 @@ class Banner {
     /// Get a section header
     [[nodiscard]] static std::string GetPhaseHeader(const std::string &phase_name) {
         std::string header = "─── [ PHASE: " + phase_name + " ] ";
-        std::size_t remaining = 80 - header.size();
+        std::size_t remaining = (header.size() < 80) ? (80 - header.size()) : 0;
         for (std::size_t i = 0; i < remaining; ++i) {
             header += "─";
         }
@@ -71,7 +71,7 @@ class Banner {
     /// Get section header (for data dictionary, etc.)
     [[nodiscard]] static std::string GetSectionHeader(const std::string &title) {
         std::string header = "─── [ " + title + " ] ";
-        std::size_t remaining = 80 - header.size();
+        std::size_t remaining = (header.size() < 80) ? (80 - header.size()) : 0;
         for (std::size_t i = 0; i < remaining; ++i) {
             header += "─";
         }

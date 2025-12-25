@@ -607,7 +607,7 @@ template <typename Scalar> class Simulator {
      *
      * When set, all logs are written to the specified file.
      */
-    void SetLogFile(const std::string &path) { logger_ = MissionLogger(path); }
+    void SetLogFile(const std::string &path) { logger_.SetLogFile(path); }
 
     /**
      * @brief Enable/disable profiling
@@ -618,13 +618,13 @@ template <typename Scalar> class Simulator {
      * @brief Apply logging configuration
      */
     void ApplyLogConfig(const LogConfig &config) {
+        if (config.file_enabled && !config.file_path.empty()) {
+            logger_.SetLogFile(config.file_path);
+            logger_.SetFileLevel(config.file_level);
+        }
         logger_.SetConsoleLevel(config.console_level);
         logger_.SetProgressEnabled(config.progress_enabled);
         logger_.SetProfilingEnabled(config.profiling_enabled);
-        if (config.file_enabled && !config.file_path.empty()) {
-            logger_ = MissionLogger(config.file_path);
-            logger_.SetFileLevel(config.file_level);
-        }
     }
 
   private:

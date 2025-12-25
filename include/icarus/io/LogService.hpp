@@ -106,16 +106,17 @@ class LogService {
             return;
         }
 
-        // Track error counts
+        auto entry = LogEntry::Create(level, sim_time, message, ctx);
+
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Track error counts (inside lock for thread safety)
         if (level == LogLevel::Error) {
             ++error_count_;
         } else if (level == LogLevel::Fatal) {
             ++fatal_count_;
         }
 
-        auto entry = LogEntry::Create(level, sim_time, message, ctx);
-
-        std::lock_guard<std::mutex> lock(mutex_);
         entries_.push_back(std::move(entry));
 
         if (immediate_mode_) {
@@ -178,18 +179,45 @@ class LogService {
 
     // === Query API ===
 
-    [[nodiscard]] std::size_t PendingCount() const { return entries_.size(); }
-    [[nodiscard]] bool HasPending() const { return !entries_.empty(); }
-    [[nodiscard]] const std::vector<LogEntry> &GetPending() const { return entries_; }
+    [[nodiscard]] std::size_t PendingCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return entries_.size();
+    }
+
+    [[nodiscard]] bool HasPending() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return !entries_.empty();
+    }
+
+    [[nodiscard]] std::vector<LogEntry> GetPending() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return entries_; // Return copy for thread safety
+    }
 
     /// Check if any errors were logged (in buffer or flushed)
-    [[nodiscard]] bool HasErrors() const { return error_count_ > 0; }
-    [[nodiscard]] bool HasFatalErrors() const { return fatal_count_ > 0; }
-    [[nodiscard]] std::size_t ErrorCount() const { return error_count_; }
-    [[nodiscard]] std::size_t FatalCount() const { return fatal_count_; }
+    [[nodiscard]] bool HasErrors() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return error_count_ > 0;
+    }
+
+    [[nodiscard]] bool HasFatalErrors() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return fatal_count_ > 0;
+    }
+
+    [[nodiscard]] std::size_t ErrorCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return error_count_;
+    }
+
+    [[nodiscard]] std::size_t FatalCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return fatal_count_;
+    }
 
     /// Reset error counts (call at start of new run)
     void ResetErrorCounts() {
+        std::lock_guard<std::mutex> lock(mutex_);
         error_count_ = 0;
         fatal_count_ = 0;
     }
@@ -197,6 +225,7 @@ class LogService {
     // === Filtering (for query, not output) ===
 
     [[nodiscard]] std::vector<LogEntry> GetEntriesAtLevel(LogLevel level) const {
+        std::lock_guard<std::mutex> lock(mutex_);
         std::vector<LogEntry> result;
         for (const auto &entry : entries_) {
             if (entry.level == level) {
@@ -207,6 +236,7 @@ class LogService {
     }
 
     [[nodiscard]] std::vector<LogEntry> GetEntriesForEntity(std::string_view entity) const {
+        std::lock_guard<std::mutex> lock(mutex_);
         std::vector<LogEntry> result;
         for (const auto &entry : entries_) {
             if (entry.context.entity == entity) {
@@ -217,6 +247,7 @@ class LogService {
     }
 
     [[nodiscard]] std::vector<LogEntry> GetEntriesForComponent(std::string_view path) const {
+        std::lock_guard<std::mutex> lock(mutex_);
         std::vector<LogEntry> result;
         for (const auto &entry : entries_) {
             if (entry.context.FullPath() == path) {

@@ -12,7 +12,9 @@
 #include <icarus/io/LogService.hpp>
 #include <icarus/io/LogSink.hpp>
 #include <icarus/io/MissionDebrief.hpp>
+#include <icarus/io/MissionLogger.hpp>
 
+#include <filesystem>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <thread>
@@ -525,4 +527,338 @@ TEST(ErrorHandler, MaxErrors) {
     EXPECT_TRUE(handler.ShouldAbort());
 
     service.Clear();
+}
+
+// =============================================================================
+// Additional Console Tests (for coverage)
+// =============================================================================
+
+TEST(Console, BoxHorizontalRule) {
+    Console console;
+    auto rule = console.BoxHorizontalRule(5);
+    // Box horizontal uses unicode, just verify length is reasonable
+    EXPECT_FALSE(rule.empty());
+}
+
+TEST(Console, FormatNumber) {
+    auto result = Console::FormatNumber(1234.5678, 2);
+    EXPECT_EQ(result, "1234.57");
+
+    result = Console::FormatNumber(0.0, 1);
+    EXPECT_EQ(result, "0.0");
+}
+
+TEST(Console, WriteAndWriteLine) {
+    Console console;
+    // Just execute to ensure no crash - output goes to stdout
+    console.Write("test");
+    console.WriteLine("test");
+    console.WriteLine();
+    console.Flush();
+}
+
+TEST(Console, LogMethods) {
+    Console console;
+    console.SetLogLevel(LogLevel::Trace); // Accept all levels
+
+    // These write to stdout, just verify no crash
+    console.Trace("trace msg");
+    console.Debug("debug msg");
+    console.Info("info msg");
+    console.Event("event msg");
+    console.Warning("warning msg");
+    console.Error("error msg");
+    console.Fatal("fatal msg");
+}
+
+TEST(Console, LogTimedMethod) {
+    Console console;
+    console.SetLogLevel(LogLevel::Info);
+    // Just verify it executes without error
+    console.LogTimed(LogLevel::Info, 1.234, "timed message");
+}
+
+// =============================================================================
+// Additional LogEntry Tests (for coverage)
+// =============================================================================
+
+TEST(LogEntry, AllLogLevels) {
+    LogContext ctx;
+    ctx.entity = "test";
+    ctx.component = "comp";
+
+    // Test all log level strings in Format
+    auto trace = LogEntry::Create(LogLevel::Trace, 0.0, "trace", ctx);
+    EXPECT_TRUE(trace.Format().find("[TRC]") != std::string::npos);
+
+    auto debug = LogEntry::Create(LogLevel::Debug, 0.0, "debug", ctx);
+    EXPECT_TRUE(debug.Format().find("[DBG]") != std::string::npos);
+
+    auto event = LogEntry::Create(LogLevel::Event, 0.0, "event", ctx);
+    EXPECT_TRUE(event.Format().find("[EVT]") != std::string::npos);
+
+    auto warning = LogEntry::Create(LogLevel::Warning, 0.0, "warning", ctx);
+    EXPECT_TRUE(warning.Format().find("[WRN]") != std::string::npos);
+
+    auto error = LogEntry::Create(LogLevel::Error, 0.0, "error", ctx);
+    EXPECT_TRUE(error.Format().find("[ERR]") != std::string::npos);
+
+    auto fatal = LogEntry::Create(LogLevel::Fatal, 0.0, "fatal", ctx);
+    EXPECT_TRUE(fatal.Format().find("[FTL]") != std::string::npos);
+}
+
+// =============================================================================
+// Additional LogService Tests (for coverage)
+// =============================================================================
+
+TEST(LogService, AllLogLevelMethods) {
+    LogService service;
+    service.SetImmediateMode(false);
+    service.ClearSinks();
+    service.SetMinLevel(LogLevel::Trace);
+
+    service.Trace(0.0, "trace");
+    service.Debug(1.0, "debug");
+    service.Event(2.0, "event");
+
+    EXPECT_EQ(service.PendingCount(), 3);
+    service.Clear();
+}
+
+TEST(LogService, SinkWithMinLevel) {
+    LogService service;
+    service.SetImmediateMode(false);
+    service.SetMinLevel(LogLevel::Trace);
+
+    std::vector<LogEntry> received;
+
+    // Sink that only accepts Warning and above
+    service.AddSink(
+        [&received](const std::vector<LogEntry> &entries) {
+            for (const auto &e : entries) {
+                received.push_back(e);
+            }
+        },
+        LogLevel::Warning);
+
+    service.Info(0.0, "info - should not reach sink");
+    service.Warning(0.0, "warning - should reach sink");
+    service.Flush();
+
+    // Only warning should have been received by this sink
+    EXPECT_EQ(received.size(), 1);
+    EXPECT_EQ(received[0].message, "warning - should reach sink");
+
+    service.Clear();
+}
+
+// =============================================================================
+// Additional MissionDebrief Tests (for coverage)
+// =============================================================================
+
+TEST(MissionDebrief, AllExitStatuses) {
+    Console console;
+    console.SetColorEnabled(false);
+
+    // Test EndConditionMet
+    {
+        MissionDebrief debrief(console);
+        debrief.SetExitStatus(ExitStatus::EndConditionMet);
+        debrief.SetTiming(10.0, 1.0);
+        std::string output = debrief.Generate();
+        EXPECT_TRUE(output.find("END CONDITION MET") != std::string::npos);
+    }
+
+    // Test UserAbort
+    {
+        MissionDebrief debrief(console);
+        debrief.SetExitStatus(ExitStatus::UserAbort);
+        debrief.SetTiming(10.0, 1.0);
+        std::string output = debrief.Generate();
+        EXPECT_TRUE(output.find("USER ABORT") != std::string::npos);
+    }
+
+    // Test Error status
+    {
+        MissionDebrief debrief(console);
+        debrief.SetExitStatus(ExitStatus::Error);
+        debrief.SetTiming(10.0, 1.0);
+        std::string output = debrief.Generate();
+        EXPECT_TRUE(output.find("ERROR") != std::string::npos);
+    }
+
+    // Test Divergence
+    {
+        MissionDebrief debrief(console);
+        debrief.SetExitStatus(ExitStatus::Divergence);
+        debrief.SetTiming(10.0, 1.0);
+        std::string output = debrief.Generate();
+        EXPECT_TRUE(output.find("DIVERGENCE") != std::string::npos);
+    }
+}
+
+TEST(MissionDebrief, SlowerThanRealTime) {
+    Console console;
+    console.SetColorEnabled(false);
+
+    MissionDebrief debrief(console);
+    debrief.SetExitStatus(ExitStatus::Success);
+    debrief.SetTiming(1.0, 10.0); // 1s sim in 10s wall = 0.1x
+
+    std::string output = debrief.Generate();
+    EXPECT_TRUE(output.find("Slower than real-time") != std::string::npos);
+}
+
+TEST(MissionDebrief, ExactRealTime) {
+    Console console;
+    console.SetColorEnabled(false);
+
+    MissionDebrief debrief(console);
+    debrief.SetExitStatus(ExitStatus::Success);
+    debrief.SetTiming(10.0, 10.0); // 1x real-time
+
+    std::string output = debrief.Generate();
+    // Could be exact real-time or close - just verify it generates
+    EXPECT_TRUE(output.find("Real-Time Factor") != std::string::npos);
+}
+
+TEST(MissionDebrief, ZeroWallTime) {
+    Console console;
+    console.SetColorEnabled(false);
+
+    MissionDebrief debrief(console);
+    debrief.SetExitStatus(ExitStatus::Success);
+    debrief.SetTiming(10.0, 0.0); // Zero wall time
+
+    std::string output = debrief.Generate();
+    // Should not crash, real-time factor line may be skipped
+    EXPECT_FALSE(output.empty());
+}
+
+TEST(MissionDebrief, PrintMethod) {
+    Console console;
+    console.SetColorEnabled(false);
+
+    MissionDebrief debrief(console);
+    debrief.SetExitStatus(ExitStatus::Success);
+    debrief.SetTiming(10.0, 1.0);
+
+    // Just verify Print doesn't crash
+    debrief.Print();
+}
+
+// =============================================================================
+// Additional ErrorHandler Tests (for coverage)
+// =============================================================================
+
+TEST(ErrorHandler, FatalPolicyCrash) {
+    LogService service;
+    service.SetImmediateMode(false);
+    service.ClearSinks();
+
+    ErrorHandler handler(service);
+
+    SimulationError fatal;
+    fatal.severity = Severity::FATAL;
+    fatal.message = "Fatal error";
+    fatal.component = "test";
+    fatal.time = 0.0;
+
+    auto policy = handler.Report(fatal);
+    EXPECT_EQ(policy, ErrorPolicy::Crash); // FATAL maps to Crash, not Abort
+
+    service.Clear();
+}
+
+TEST(ErrorHandler, CustomPolicy) {
+    LogService service;
+    service.SetImmediateMode(false);
+    service.ClearSinks();
+
+    ErrorHandler handler(service);
+    handler.SetPolicy(Severity::WARNING, ErrorPolicy::Abort);
+
+    SimulationError warning;
+    warning.severity = Severity::WARNING;
+    warning.message = "Test";
+    warning.component = "test";
+
+    auto policy = handler.Report(warning);
+    EXPECT_EQ(policy, ErrorPolicy::Abort);
+
+    service.Clear();
+}
+
+TEST(ErrorHandler, InfoSeverity) {
+    LogService service;
+    service.SetImmediateMode(false);
+    service.ClearSinks();
+
+    ErrorHandler handler(service);
+
+    SimulationError info;
+    info.severity = Severity::INFO;
+    info.message = "Info message";
+    info.component = "test";
+    info.time = 0.0;
+
+    auto policy = handler.Report(info);
+    EXPECT_EQ(policy, ErrorPolicy::Continue);
+
+    service.Clear();
+}
+
+// =============================================================================
+// Additional AsciiTable Tests (for coverage)
+// =============================================================================
+
+TEST(AsciiTable, HandlesLongText) {
+    AsciiTable table;
+    table.AddColumn("SHORT", 10);
+
+    table.AddRow({"This is a very long text that should be handled"});
+
+    std::string result = table.Render();
+    // Should still render without crash
+    EXPECT_FALSE(result.empty());
+}
+
+// =============================================================================
+// Banner Additional Tests
+// =============================================================================
+
+TEST(Banner, GetRule) {
+    std::string rule = Banner::GetRule(40);
+    EXPECT_EQ(rule.length(), 40); // Returns width '=' characters
+}
+
+TEST(Banner, GetSectionHeader) {
+    std::string header = Banner::GetSectionHeader("TEST");
+    EXPECT_TRUE(header.find("TEST") != std::string::npos);
+    EXPECT_TRUE(header.find("───") != std::string::npos);
+}
+
+// =============================================================================
+// MissionLogger Tests
+// =============================================================================
+
+TEST(MissionLogger, SetLogFilePreservesConfig) {
+    MissionLogger logger;
+    logger.SetConsoleLevel(LogLevel::Warning);
+    logger.SetProgressEnabled(false);
+    logger.SetProfilingEnabled(true);
+
+    // Change log file
+    logger.SetLogFile("test_preserve.log");
+
+    // Verify settings are preserved
+    EXPECT_EQ(logger.GetLogFileName(), "test_preserve.log");
+    EXPECT_EQ(logger.GetConsoleLevel(), LogLevel::Warning);
+    EXPECT_FALSE(logger.IsProgressEnabled());
+    EXPECT_TRUE(logger.IsProfilingEnabled());
+
+    // Clean up
+    if (std::filesystem::exists("test_preserve.log")) {
+        std::filesystem::remove("test_preserve.log");
+    }
 }

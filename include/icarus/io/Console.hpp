@@ -223,7 +223,7 @@ class Console {
         return std::string(left_pad, ' ') + std::string(text) + std::string(right_pad, ' ');
     }
 
-    /// Format number with comma separators
+    /// Format number with fixed precision
     [[nodiscard]] static std::string FormatNumber(double value, int precision = 2) {
         std::ostringstream oss;
         oss << std::fixed << std::setprecision(precision) << value;

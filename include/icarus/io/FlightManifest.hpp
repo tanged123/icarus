@@ -137,8 +137,23 @@ class FlightManifest {
     void PrintSummary(const DataDictionary &dict) const {
         std::string summary = GenerateSummary(dict);
         if (console_.IsColorEnabled()) {
-            // Colorize warnings
-            std::cout << summary;
+            // Colorize warnings (⚠ Unwired inputs) in yellow
+            const std::string warning_marker = "⚠ Unwired";
+            std::size_t pos = summary.find(warning_marker);
+            if (pos != std::string::npos) {
+                // Find the end of the warning section (next blank line or end)
+                std::size_t end_pos = summary.find("\n\nSee ", pos);
+                if (end_pos == std::string::npos) {
+                    end_pos = summary.length();
+                }
+                // Insert ANSI yellow before warning, reset after
+                std::string colored = summary.substr(0, pos);
+                colored += console_.Colorize(summary.substr(pos, end_pos - pos), AnsiColor::Yellow);
+                colored += summary.substr(end_pos);
+                std::cout << colored;
+            } else {
+                std::cout << summary;
+            }
         } else {
             std::cout << summary;
         }

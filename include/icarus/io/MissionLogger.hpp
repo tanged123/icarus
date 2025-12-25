@@ -67,6 +67,29 @@ class MissionLogger {
     /// Enable/disable profiling
     void SetProfilingEnabled(bool enabled) { profiling_enabled_ = enabled; }
 
+    /// Get current log file name
+    [[nodiscard]] std::string GetLogFileName() const { return log_file_name_; }
+
+    /// Get current console level
+    [[nodiscard]] LogLevel GetConsoleLevel() const { return console_.GetLogLevel(); }
+
+    /// Check if progress is enabled
+    [[nodiscard]] bool IsProgressEnabled() const { return progress_enabled_; }
+
+    /// Check if profiling is enabled
+    [[nodiscard]] bool IsProfilingEnabled() const { return profiling_enabled_; }
+
+    /// Set log file path (closes existing if open)
+    void SetLogFile(const std::string &path) {
+        if (log_file_.is_open()) {
+            log_file_.close();
+        }
+        log_file_name_ = path;
+        if (!path.empty()) {
+            log_file_.open(path);
+        }
+    }
+
     // === Lifecycle Logging ===
 
     /// Log simulation startup (splash screen)

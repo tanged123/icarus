@@ -19,7 +19,6 @@ namespace icarus {
 struct LogConfig {
     // Console output
     LogLevel console_level = LogLevel::Info;
-    bool color_enabled = true; ///< Auto-detect if terminal
     bool progress_enabled = true;
 
     // File output
@@ -31,12 +30,7 @@ struct LogConfig {
 
     // Features
     bool profiling_enabled = false;
-    bool quiet_mode = false;   ///< Suppress all but errors
-    bool show_manifest = true; ///< Show Flight Manifest at Provision
-
-    // Progress display
-    int progress_width = 50;
-    std::string progress_format = "[RUN] Time: {time} | {custom}";
+    bool quiet_mode = false; ///< Suppress all but errors
 
     /// Create default config
     [[nodiscard]] static LogConfig Default() {
@@ -50,7 +44,6 @@ struct LogConfig {
         config.console_level = LogLevel::Error;
         config.progress_enabled = false;
         config.quiet_mode = true;
-        config.show_manifest = false;
         return config;
     }
 

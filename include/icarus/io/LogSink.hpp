@@ -27,8 +27,9 @@ namespace icarus {
 class LogSinks {
   public:
     /// Console sink with colors (respects TTY detection)
-    static LogService::Sink Console(const class Console &console) {
-        return [&console](const std::vector<LogEntry> &entries) {
+    /// @note Console is captured by value to ensure lifetime safety
+    static LogService::Sink Console(class Console console) {
+        return [console = std::move(console)](const std::vector<LogEntry> &entries) {
             for (const auto &entry : entries) {
                 if (console.IsColorEnabled()) {
                     std::cout << entry.FormatColored(console) << "\n";
@@ -42,8 +43,9 @@ class LogSinks {
 
     /// Console sink with entity grouping
     /// Groups logs by entity, prints entity header before each group
-    static LogService::Sink ConsoleGrouped(const class Console &console) {
-        return [&console](const std::vector<LogEntry> &entries) {
+    /// @note Console is captured by value to ensure lifetime safety
+    static LogService::Sink ConsoleGrouped(class Console console) {
+        return [console = std::move(console)](const std::vector<LogEntry> &entries) {
             // Group by entity
             std::map<std::string, std::vector<const LogEntry *>> grouped;
             for (const auto &entry : entries) {
@@ -54,7 +56,8 @@ class LogSinks {
             for (const auto &[entity, group_entries] : grouped) {
                 // Entity header
                 std::string header = "─── " + (entity.empty() ? "(no entity)" : entity) + " ";
-                std::size_t remaining = 80 - header.size();
+                // Guard against underflow: clamp remaining to 0 if header is too long
+                std::size_t remaining = (header.size() >= 80) ? 0 : (80 - header.size());
                 for (std::size_t i = 0; i < remaining; ++i) {
                     header += "─";
                 }
