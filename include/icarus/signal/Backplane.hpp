@@ -8,7 +8,7 @@
  * Wraps SignalRegistry with component context awareness.
  */
 
-#include <cassert>
+#include <icarus/core/Config.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/VecHandle.hpp>
@@ -79,7 +79,7 @@ template <typename Scalar> class Backplane {
     template <typename T>
     void register_output(const std::string &local_name, T *data_ptr, const std::string &unit = "",
                          const std::string &description = "") {
-        assert(!component_.empty() && "Context must be set before registration");
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         registry_.template register_output<T>(full_name, data_ptr, unit, description);
         registered_outputs_.push_back(full_name);
@@ -184,7 +184,7 @@ template <typename Scalar> class Backplane {
     template <typename T>
     void register_input(const std::string &local_name, InputHandle<T> *handle,
                         const std::string &units = "", const std::string &description = "") {
-        assert(!component_.empty() && "Context must be set before registration");
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         handle->set_full_name(full_name);
         registry_.template register_input<T>(full_name, handle, units, description);
@@ -200,7 +200,7 @@ template <typename Scalar> class Backplane {
      */
     void register_param(const std::string &local_name, Scalar *storage, Scalar initial_value,
                         const std::string &units = "", const std::string &description = "") {
-        assert(!component_.empty() && "Context must be set before registration");
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         registry_.register_param(full_name, storage, initial_value, units, description);
         registered_params_.push_back(full_name);
@@ -215,6 +215,7 @@ template <typename Scalar> class Backplane {
      */
     void register_config(const std::string &local_name, int *storage, int initial_value,
                          const std::string &description = "") {
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         registry_.register_config(full_name, storage, initial_value, description);
         registered_config_.push_back(full_name);
@@ -225,6 +226,7 @@ template <typename Scalar> class Backplane {
      */
     void register_config(const std::string &local_name, bool *storage, bool initial_value,
                          const std::string &description = "") {
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
         registry_.register_config(full_name, storage, initial_value, description);
         registered_config_.push_back(full_name);

@@ -14,8 +14,9 @@
 
 namespace icarus {
 
-// Forward declaration
+// Forward declarations
 template <typename Scalar> class Backplane;
+template <typename Scalar> class SignalRegistry;
 
 /**
  * @brief Handle to an input signal port
