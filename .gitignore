@@ -61,6 +61,7 @@ cmake-build-*/
 *.png
 *.dot
 *.json
+*.dict
 *datadict*.yaml
 # Ignore 
 !docs/images/*.png
