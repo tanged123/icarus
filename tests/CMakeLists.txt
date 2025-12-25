@@ -56,3 +56,16 @@ icarus_add_test(test_simulation_builder
     sim/simulation_builder_test.cpp
 )
 target_include_directories(test_simulation_builder PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# SymbolicTracer tests (Phase 3.3)
+icarus_add_test(test_symbolic_tracer
+    symbolic/symbolic_tracer_test.cpp
+)
+target_include_directories(test_symbolic_tracer PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Numeric/Symbolic comparison tests (Phase 3.4)
+icarus_add_test(test_numeric_symbolic_comparison
+    symbolic/numeric_symbolic_comparison_test.cpp
+)
+target_include_directories(test_numeric_symbolic_comparison PRIVATE ${PROJECT_SOURCE_DIR}/components)
+

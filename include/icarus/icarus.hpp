@@ -46,6 +46,12 @@
 #include <icarus/io/Recorder.hpp>
 #include <icarus/io/WiringConfig.hpp>
 
+// Symbolic (Phase 3)
+#include <icarus/symbolic/SymbolicTracer.hpp>
+
+// Utilities
+#include <icarus/util/ScalarFormat.hpp>
+
 namespace icarus {
 // Version functions are defined in core/Types.hpp
 } // namespace icarus

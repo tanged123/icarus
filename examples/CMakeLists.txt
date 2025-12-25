@@ -38,3 +38,11 @@ target_include_directories(orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components
 add_executable(formation_flight_demo intro/formation_flight_demo.cpp)
 target_link_libraries(formation_flight_demo PRIVATE icarus)
 target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# =============================================================================
+# Symbolic Mode Example (Phase 3)
+# =============================================================================
+add_executable(symbolic_orbital_demo symbolic/symbolic_orbital_demo.cpp)
+target_link_libraries(symbolic_orbital_demo PRIVATE icarus)
+target_include_directories(symbolic_orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
