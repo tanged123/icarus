@@ -13,6 +13,7 @@
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
+#include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Signal.hpp>
 #include <icarus/signal/VecHandle.hpp>
 #include <regex>
@@ -403,6 +404,279 @@ template <typename Scalar> class SignalRegistry {
     std::deque<Scalar> values_;            // Deque for stable value refs (legacy API)
     std::unordered_map<std::string, SignalIndex> name_to_index_;
     std::string current_component_;
+
+    // =========================================================================
+    // Phase 2.4: Input, Parameter, Config Storage
+    // =========================================================================
+
+    /// Input port entry (stores handle pointer and metadata)
+    struct InputEntry {
+        void *handle_ptr = nullptr; // Type-erased InputHandle<T>*
+        SignalDescriptor info;
+    };
+
+    /// Parameter entry (Scalar-typed, optimizable)
+    struct ParamEntry {
+        Scalar *storage = nullptr;
+        Scalar initial_value{};
+        SignalDescriptor info;
+    };
+
+    /// Config entry (int/bool/enum, discrete, not optimizable)
+    struct ConfigEntry {
+        void *storage = nullptr; // Type-erased pointer
+        SignalDescriptor info;
+    };
+
+    std::unordered_map<std::string, InputEntry> inputs_;
+    std::unordered_map<std::string, ParamEntry> params_;
+    std::unordered_map<std::string, ConfigEntry> config_;
+
+  public:
+    // =========================================================================
+    // Phase 2.4: Input Registration
+    // =========================================================================
+
+    /**
+     * @brief Register an input port
+     *
+     * Inputs are declared at Provision and wired at Stage.
+     *
+     * @tparam T The value type (Scalar, Vec3<Scalar>, etc.)
+     * @param name Local signal name
+     * @param handle Pointer to component-owned InputHandle
+     * @param units Physical units
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void register_input(const std::string &name, InputHandle<T> *handle,
+                        const std::string &units = "", const std::string &description = "") {
+        if (handle == nullptr) {
+            throw SignalError("Null handle for input '" + name + "'");
+        }
+
+        if (inputs_.contains(name)) {
+            throw DuplicateSignalError(name, inputs_[name].info.name, current_component_);
+        }
+
+        // Set up handle metadata
+        handle->set_name(name);
+        handle->set_full_name(name); // Will be prefixed by Backplane
+        handle->set_units(units);
+        handle->set_description(description);
+
+        InputEntry entry;
+        entry.handle_ptr = handle;
+        entry.info.name = name;
+        entry.info.unit = units;
+        entry.info.description = description;
+        entry.info.kind = SignalKind::Input;
+        entry.info.semantic = typeid(T).name();
+
+        inputs_[name] = std::move(entry);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Parameter Registration (Scalar-typed, optimizable)
+    // =========================================================================
+
+    /**
+     * @brief Register a parameter
+     *
+     * Parameters are Scalar-typed and can be optimization variables.
+     *
+     * @param name Local parameter name
+     * @param storage Pointer to component-owned Scalar storage
+     * @param initial_value Initial value
+     * @param units Physical units
+     * @param description Human-readable description
+     */
+    void register_param(const std::string &name, Scalar *storage, Scalar initial_value,
+                        const std::string &units = "", const std::string &description = "") {
+        if (storage == nullptr) {
+            throw SignalError("Null storage for param '" + name + "'");
+        }
+
+        if (params_.contains(name)) {
+            throw DuplicateSignalError(name, params_[name].info.name, current_component_);
+        }
+
+        *storage = initial_value;
+
+        ParamEntry entry;
+        entry.storage = storage;
+        entry.initial_value = initial_value;
+        entry.info.name = name;
+        entry.info.unit = units;
+        entry.info.description = description;
+        entry.info.kind = SignalKind::Parameter;
+        entry.info.semantic = "Scalar";
+        entry.info.is_optimizable = true;
+
+        params_[name] = std::move(entry);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Config Registration (discrete, not optimizable)
+    // =========================================================================
+
+    /**
+     * @brief Register an int config value
+     */
+    void register_config(const std::string &name, int *storage, int initial_value,
+                         const std::string &description = "") {
+        register_config_impl(name, storage, initial_value, "int", description);
+    }
+
+    /**
+     * @brief Register a bool config value
+     */
+    void register_config(const std::string &name, bool *storage, bool initial_value,
+                         const std::string &description = "") {
+        register_config_impl(name, storage, initial_value, "bool", description);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Input Wiring
+    // =========================================================================
+
+    /**
+     * @brief Wire an input to a source signal
+     *
+     * @param input_name Full name of the input port
+     * @param source_name Full name of the source signal
+     * @throws SignalNotFoundError if source doesn't exist
+     * @throws WiringError if input not found
+     */
+    template <typename T>
+    void wire_input(const std::string &input_name, const std::string &source_name) {
+        auto it = inputs_.find(input_name);
+        if (it == inputs_.end()) {
+            throw WiringError("Input not found: '" + input_name + "'");
+        }
+
+        // Resolve the source signal
+        auto source_handle = resolve<T>(source_name);
+
+        // Wire the input
+        auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
+        handle->wire(source_handle.ptr(), source_name);
+        it->second.info.wired_to = source_name;
+    }
+
+    // =========================================================================
+    // Phase 2.4: Validation
+    // =========================================================================
+
+    /**
+     * @brief Get list of unwired input names
+     */
+    [[nodiscard]] std::vector<std::string> get_unwired_inputs() const {
+        std::vector<std::string> unwired;
+        for (const auto &[name, entry] : inputs_) {
+            if (entry.info.wired_to.empty()) {
+                unwired.push_back(entry.info.name);
+            }
+        }
+        return unwired;
+    }
+
+    /**
+     * @brief Validate all inputs are wired
+     * @throws WiringError with list of unwired inputs
+     */
+    void validate_wiring() const {
+        auto unwired = get_unwired_inputs();
+        if (!unwired.empty()) {
+            std::string msg = "Unwired inputs: ";
+            for (size_t i = 0; i < unwired.size(); ++i) {
+                if (i > 0)
+                    msg += ", ";
+                msg += unwired[i];
+            }
+            throw WiringError(msg);
+        }
+    }
+
+    // =========================================================================
+    // Phase 2.4: Introspection
+    // =========================================================================
+
+    /**
+     * @brief Get all input info
+     */
+    [[nodiscard]] std::vector<SignalDescriptor> get_inputs() const {
+        std::vector<SignalDescriptor> result;
+        result.reserve(inputs_.size());
+        for (const auto &[name, entry] : inputs_) {
+            result.push_back(entry.info);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get all parameter info
+     */
+    [[nodiscard]] std::vector<SignalDescriptor> get_params() const {
+        std::vector<SignalDescriptor> result;
+        result.reserve(params_.size());
+        for (const auto &[name, entry] : params_) {
+            result.push_back(entry.info);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get all config info
+     */
+    [[nodiscard]] std::vector<SignalDescriptor> get_config() const {
+        std::vector<SignalDescriptor> result;
+        result.reserve(config_.size());
+        for (const auto &[name, entry] : config_) {
+            result.push_back(entry.info);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Check if an input exists
+     */
+    [[nodiscard]] bool has_input(const std::string &name) const { return inputs_.contains(name); }
+
+    /**
+     * @brief Check if a parameter exists
+     */
+    [[nodiscard]] bool has_param(const std::string &name) const { return params_.contains(name); }
+
+    /**
+     * @brief Check if a config exists
+     */
+    [[nodiscard]] bool has_config(const std::string &name) const { return config_.contains(name); }
+
+  private:
+    template <typename T>
+    void register_config_impl(const std::string &name, T *storage, T initial_value,
+                              const std::string &type_name, const std::string &description) {
+        if (storage == nullptr) {
+            throw SignalError("Null storage for config '" + name + "'");
+        }
+
+        if (config_.contains(name)) {
+            throw DuplicateSignalError(name, config_[name].info.name, current_component_);
+        }
+
+        *storage = initial_value;
+
+        ConfigEntry entry;
+        entry.storage = storage;
+        entry.info.name = name;
+        entry.info.description = description;
+        entry.info.kind = SignalKind::Config;
+        entry.info.semantic = type_name;
+        entry.info.is_optimizable = false;
+
+        config_[name] = std::move(entry);
+    }
 };
 
 } // namespace icarus

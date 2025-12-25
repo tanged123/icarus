@@ -169,6 +169,80 @@ template <typename Scalar> class Backplane {
     }
 
     // =========================================================================
+    // Phase 2.4: Input Registration
+    // =========================================================================
+
+    /**
+     * @brief Register an input port
+     *
+     * @tparam T The value type
+     * @param local_name Local signal name
+     * @param handle Pointer to InputHandle owned by component
+     * @param units Physical units
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void register_input(const std::string &local_name, InputHandle<T> *handle,
+                        const std::string &units = "", const std::string &description = "") {
+        assert(!component_.empty() && "Context must be set before registration");
+        std::string full_name = make_full_name(local_name);
+        handle->set_full_name(full_name);
+        registry_.template register_input<T>(full_name, handle, units, description);
+        registered_inputs_.push_back(full_name);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Parameter Registration
+    // =========================================================================
+
+    /**
+     * @brief Register a Scalar parameter (optimizable)
+     */
+    void register_param(const std::string &local_name, Scalar *storage, Scalar initial_value,
+                        const std::string &units = "", const std::string &description = "") {
+        assert(!component_.empty() && "Context must be set before registration");
+        std::string full_name = make_full_name(local_name);
+        registry_.register_param(full_name, storage, initial_value, units, description);
+        registered_params_.push_back(full_name);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Config Registration
+    // =========================================================================
+
+    /**
+     * @brief Register an int config value
+     */
+    void register_config(const std::string &local_name, int *storage, int initial_value,
+                         const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.register_config(full_name, storage, initial_value, description);
+        registered_config_.push_back(full_name);
+    }
+
+    /**
+     * @brief Register a bool config value
+     */
+    void register_config(const std::string &local_name, bool *storage, bool initial_value,
+                         const std::string &description = "") {
+        std::string full_name = make_full_name(local_name);
+        registry_.register_config(full_name, storage, initial_value, description);
+        registered_config_.push_back(full_name);
+    }
+
+    // =========================================================================
+    // Phase 2.4: Wiring
+    // =========================================================================
+
+    /**
+     * @brief Wire an input to a source signal
+     */
+    template <typename T>
+    void wire_input(const std::string &input_name, const std::string &source_name) {
+        registry_.template wire_input<T>(input_name, source_name);
+    }
+
+    // =========================================================================
     // Dependency Tracking
     // =========================================================================
 
@@ -180,10 +254,31 @@ template <typename Scalar> class Backplane {
     }
 
     /**
-     * @brief Get inputs resolved by current component
+     * @brief Get inputs registered by current component (Phase 2.4)
+     */
+    [[nodiscard]] const std::vector<std::string> &registered_inputs() const {
+        return registered_inputs_;
+    }
+
+    /**
+     * @brief Get legacy resolved inputs by current component
      */
     [[nodiscard]] const std::vector<std::string> &resolved_inputs() const {
         return resolved_inputs_;
+    }
+
+    /**
+     * @brief Get parameters registered by current component (Phase 2.4)
+     */
+    [[nodiscard]] const std::vector<std::string> &registered_params() const {
+        return registered_params_;
+    }
+
+    /**
+     * @brief Get config registered by current component (Phase 2.4)
+     */
+    [[nodiscard]] const std::vector<std::string> &registered_config() const {
+        return registered_config_;
     }
 
     /**
@@ -191,7 +286,10 @@ template <typename Scalar> class Backplane {
      */
     void clear_tracking() {
         registered_outputs_.clear();
+        registered_inputs_.clear();
         resolved_inputs_.clear();
+        registered_params_.clear();
+        registered_config_.clear();
     }
 
     // =========================================================================
@@ -213,7 +311,10 @@ template <typename Scalar> class Backplane {
     std::string entity_;
     std::string component_;
     std::vector<std::string> registered_outputs_;
+    std::vector<std::string> registered_inputs_; // Phase 2.4
     std::vector<std::string> resolved_inputs_;
+    std::vector<std::string> registered_params_; // Phase 2.4
+    std::vector<std::string> registered_config_; // Phase 2.4
 };
 
 } // namespace icarus

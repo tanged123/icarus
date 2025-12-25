@@ -85,6 +85,7 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
      */
     void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
         // Resolve position input (from dynamics component)
+        // Uses Vec3Handle pattern for vector inputs
         pos_handle_ = bp.template resolve_vec3<Scalar>("PointMass3DOF.position");
 
         // Resolve mass input (for force = mass * acceleration)

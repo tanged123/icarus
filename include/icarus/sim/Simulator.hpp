@@ -253,6 +253,40 @@ template <typename Scalar> class Simulator {
     }
 
     // =========================================================================
+    // Phase 2.4: Wiring API
+    // =========================================================================
+
+    /**
+     * @brief Wire an input to a source signal
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @tparam T The value type
+     * @param input_name Full name of the input port
+     * @param source_name Full name of the source signal
+     */
+    template <typename T> void Wire(const std::string &input_name, const std::string &source_name) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("Wire() requires prior Provision()");
+        }
+        registry_.template wire_input<T>(input_name, source_name);
+    }
+
+    /**
+     * @brief Validate all inputs are wired
+     *
+     * @throws WiringError if any inputs are unwired
+     */
+    void ValidateWiring() const { registry_.validate_wiring(); }
+
+    /**
+     * @brief Get list of unwired inputs
+     */
+    [[nodiscard]] std::vector<std::string> GetUnwiredInputs() const {
+        return registry_.get_unwired_inputs();
+    }
+
+    // =========================================================================
     // State Management (Phase 2.1)
     // =========================================================================
 

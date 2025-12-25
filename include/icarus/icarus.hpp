@@ -22,6 +22,7 @@
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Descriptor.hpp>
 #include <icarus/signal/Handle.hpp>
+#include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/Signal.hpp>
 #include <icarus/signal/VecHandle.hpp>
@@ -37,8 +38,10 @@
 
 // I/O
 #include <icarus/io/Config.hpp>
+#include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/Playback.hpp>
 #include <icarus/io/Recorder.hpp>
+#include <icarus/io/WiringConfig.hpp>
 
 namespace icarus {
 // Version functions are defined in core/Types.hpp
