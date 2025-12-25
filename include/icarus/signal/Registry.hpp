@@ -704,6 +704,41 @@ template <typename Scalar> class SignalRegistry {
      */
     [[nodiscard]] bool has_config(const std::string &name) const { return config_.contains(name); }
 
+    // =========================================================================
+    // Phase 3: Signal Discovery (for external bindings)
+    // =========================================================================
+
+    /**
+     * @brief Get all signal names (outputs)
+     */
+    [[nodiscard]] std::vector<std::string> get_all_signal_names() const {
+        std::vector<std::string> names;
+        names.reserve(signals_.size());
+        for (const auto &desc : signals_) {
+            names.push_back(desc.name);
+        }
+        return names;
+    }
+
+    /**
+     * @brief Get all input signal names
+     */
+    [[nodiscard]] std::vector<std::string> get_all_input_names() const {
+        std::vector<std::string> names;
+        names.reserve(inputs_.size());
+        for (const auto &[name, entry] : inputs_) {
+            names.push_back(entry.info.name);
+        }
+        return names;
+    }
+
+    /**
+     * @brief Get all output signal names
+     */
+    [[nodiscard]] std::vector<std::string> get_all_output_names() const {
+        return get_all_signal_names(); // Outputs = signals
+    }
+
   private:
     template <typename T>
     void register_config_impl(const std::string &name, T *storage, T initial_value,

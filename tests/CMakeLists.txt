@@ -50,3 +50,9 @@ icarus_add_test(test_data_dictionary
 icarus_add_test(test_logging
     io/test_logging.cpp
 )
+
+# SimulationBuilder tests (Phase 3.1)
+icarus_add_test(test_simulation_builder
+    sim/simulation_builder_test.cpp
+)
+target_include_directories(test_simulation_builder PRIVATE ${PROJECT_SOURCE_DIR}/components)

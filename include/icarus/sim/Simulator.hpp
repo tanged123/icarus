@@ -247,6 +247,114 @@ template <typename Scalar> class Simulator {
         registry_.SetByName(name, value);
     }
 
+    // =========================================================================
+    // External Interface API (Phase 3)
+    // =========================================================================
+
+    /**
+     * @brief Read a signal value by name (typed)
+     * @tparam T Expected signal type
+     * @param name Full signal path: "Entity.Component.signal"
+     * @return Current signal value
+     */
+    template <typename T> [[nodiscard]] T Peek(const std::string &name) const {
+        return registry_.template GetByName<T>(name);
+    }
+
+    /**
+     * @brief Write a signal value by name (typed)
+     * @tparam T Signal type
+     * @param name Full signal path
+     * @param value New value to set
+     */
+    template <typename T> void Poke(const std::string &name, const T &value) {
+        registry_.template SetByName<T>(name, value);
+    }
+
+    /**
+     * @brief Read multiple signals at once (batch read)
+     * @param names Vector of signal names
+     * @return Map of name -> value
+     */
+    [[nodiscard]] std::map<std::string, Scalar>
+    PeekBatch(const std::vector<std::string> &names) const {
+        std::map<std::string, Scalar> result;
+        for (const auto &name : names) {
+            result[name] = GetSignal(name);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Write multiple signals at once (batch write)
+     */
+    void PokeBatch(const std::map<std::string, Scalar> &values) {
+        for (const auto &[name, value] : values) {
+            SetSignal(name, value);
+        }
+    }
+
+    /**
+     * @brief Initialize simulation (Provision + Stage)
+     * Convenience method combining both lifecycle phases.
+     */
+    void Initialize() {
+        if (phase_ == Phase::Uninitialized) {
+            Provision();
+        }
+        if (phase_ == Phase::Provisioned) {
+            Stage();
+        }
+    }
+
+    /**
+     * @brief Reset simulation to initial state
+     * Keeps components, resets time to 0, restores initial conditions.
+     */
+    void Reset() {
+        if (phase_ < Phase::Staged) {
+            throw LifecycleError("Reset() requires prior Stage()");
+        }
+        time_ = Scalar{0};
+        // Zero state vectors
+        for (std::size_t i = 0; i < X_global_.size(); ++i) {
+            X_global_[i] = Scalar{0};
+            X_dot_global_[i] = Scalar{0};
+        }
+        phase_ = Phase::Staged;
+    }
+
+    /**
+     * @brief Check if simulation is initialized (Staged or later)
+     */
+    [[nodiscard]] bool IsInitialized() const { return phase_ >= Phase::Staged; }
+
+    /**
+     * @brief Set simulation time (for warmstart/reset)
+     */
+    void SetTime(Scalar t) { time_ = t; }
+
+    /**
+     * @brief Get all signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetSignalNames() const {
+        return registry_.get_all_signal_names();
+    }
+
+    /**
+     * @brief Get all input signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetInputNames() const {
+        return registry_.get_all_input_names();
+    }
+
+    /**
+     * @brief Get all output signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetOutputNames() const {
+        return registry_.get_all_output_names();
+    }
+
     /**
      * @brief Get number of components
      */

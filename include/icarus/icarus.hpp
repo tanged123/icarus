@@ -34,6 +34,9 @@
 #include <icarus/sim/RK45Integrator.hpp>
 #include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Scheduler.hpp>
+#include <icarus/sim/SimulationBuilder.hpp>
+#include <icarus/sim/SimulationResults.hpp>
+#include <icarus/sim/SimulationRunner.hpp>
 #include <icarus/sim/Simulator.hpp>
 
 // I/O
