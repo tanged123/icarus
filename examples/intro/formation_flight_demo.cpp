@@ -92,15 +92,15 @@ int main() {
         std::string dyn = entity + ".Dynamics";
 
         // Gravity reads position and mass from Dynamics
-        sim.Wire<double>(grav + ".position.x", dyn + ".position.x");
-        sim.Wire<double>(grav + ".position.y", dyn + ".position.y");
-        sim.Wire<double>(grav + ".position.z", dyn + ".position.z");
-        sim.Wire<double>(grav + ".mass", dyn + ".mass");
+        sim.SetWiring(grav, {{"position.x", dyn + ".position.x"},
+                             {"position.y", dyn + ".position.y"},
+                             {"position.z", dyn + ".position.z"},
+                             {"mass", dyn + ".mass"}});
 
         // Dynamics reads force from Gravity
-        sim.Wire<double>(dyn + ".force.x", grav + ".force.x");
-        sim.Wire<double>(dyn + ".force.y", grav + ".force.y");
-        sim.Wire<double>(dyn + ".force.z", grav + ".force.z");
+        sim.SetWiring(dyn, {{"force.x", grav + ".force.x"},
+                            {"force.y", grav + ".force.y"},
+                            {"force.z", grav + ".force.z"}});
     };
 
     wire_entity("Leader");

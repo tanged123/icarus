@@ -19,6 +19,7 @@
 #include <icarus/sim/IntegratorTypes.hpp>
 #include <icarus/sim/RK45Integrator.hpp>
 #include <icarus/sim/RK4Integrator.hpp>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -129,6 +130,21 @@ template <typename Scalar> class Simulator {
                                 state_size);
                 state_layout_.push_back({comp.get(), offset, state_size});
                 offset += state_size;
+            }
+        }
+
+        // Distribute wiring configuration to components
+        const auto &all_wiring = wiring_config_.GetAllWirings();
+        for (auto &comp : components_) {
+            std::string prefix = comp->FullName() + ".";
+            auto &comp_wiring = configs_[comp.get()].wiring;
+            comp_wiring.clear();
+
+            // Find all wirings for this component
+            for (const auto &[input, source] : all_wiring) {
+                if (input.find(prefix) == 0) {
+                    comp_wiring[input] = source;
+                }
             }
         }
 
@@ -257,6 +273,22 @@ template <typename Scalar> class Simulator {
     // =========================================================================
     // Phase 2.4: Wiring API
     // =========================================================================
+
+    /**
+     * @brief Configure wiring for a component or entity
+     *
+     * Helper to populate wiring config from code.
+     *
+     * @param prefix Component or Entity name prefix (e.g. "Gravity" or "Leader")
+     * @param wiring_map Map of local input name -> full source name
+     */
+    void SetWiring(const std::string &prefix,
+                   const std::map<std::string, std::string> &wiring_map) {
+        for (const auto &[local, source] : wiring_map) {
+            std::string full_input = prefix.empty() ? local : (prefix + "." + local);
+            wiring_config_.AddWiring(full_input, source);
+        }
+    }
 
     /**
      * @brief Wire an input to a source signal

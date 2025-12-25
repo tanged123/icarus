@@ -101,11 +101,13 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     /**
      * @brief Stage phase - resolve dependencies
      *
-     * Note: Wiring is done externally by the Simulator or example setup.
-     * Components declare inputs in Provision(), wiring happens at sim level.
+     * Note: Wiring is defined externally (simulator config) and applied here.
      */
-    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
-        // No hardcoded wiring - wiring is done externally via sim.Wire()
+    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
+        // Apply wiring from configuration
+        for (const auto &[input, source] : cfg.wiring) {
+            bp.template wire_input<Scalar>(input, source);
+        }
     }
 
     /**

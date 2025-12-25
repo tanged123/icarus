@@ -156,13 +156,13 @@ TEST(PointMassIntegration, FreeFallConstantGravity) {
     sim.Provision();
 
     // Wire components together (after Provision, before Stage)
-    sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
-    sim.Wire<double>("Gravity.position.y", "PointMass3DOF.position.y");
-    sim.Wire<double>("Gravity.position.z", "PointMass3DOF.position.z");
-    sim.Wire<double>("Gravity.mass", "PointMass3DOF.mass");
-    sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
-    sim.Wire<double>("PointMass3DOF.force.y", "Gravity.force.y");
-    sim.Wire<double>("PointMass3DOF.force.z", "Gravity.force.z");
+    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
+                              {"position.y", "PointMass3DOF.position.y"},
+                              {"position.z", "PointMass3DOF.position.z"},
+                              {"mass", "PointMass3DOF.mass"}});
+    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
+                                    {"force.y", "Gravity.force.y"},
+                                    {"force.z", "Gravity.force.z"}});
 
     sim.Stage();
 
@@ -229,13 +229,13 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
     sim.Provision();
 
     // Wire components together (after Provision, before Stage)
-    sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
-    sim.Wire<double>("Gravity.position.y", "PointMass3DOF.position.y");
-    sim.Wire<double>("Gravity.position.z", "PointMass3DOF.position.z");
-    sim.Wire<double>("Gravity.mass", "PointMass3DOF.mass");
-    sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
-    sim.Wire<double>("PointMass3DOF.force.y", "Gravity.force.y");
-    sim.Wire<double>("PointMass3DOF.force.z", "Gravity.force.z");
+    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
+                              {"position.y", "PointMass3DOF.position.y"},
+                              {"position.z", "PointMass3DOF.position.z"},
+                              {"mass", "PointMass3DOF.mass"}});
+    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
+                                    {"force.y", "Gravity.force.y"},
+                                    {"force.z", "Gravity.force.z"}});
 
     sim.Stage();
 
