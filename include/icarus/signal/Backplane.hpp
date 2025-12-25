@@ -10,6 +10,7 @@
 
 #include <icarus/core/Config.hpp>
 #include <icarus/signal/Handle.hpp>
+#include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/VecHandle.hpp>
 #include <string>
@@ -175,6 +176,7 @@ template <typename Scalar> class Backplane {
                         const std::string &units = "", const std::string &description = "") {
         ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
         std::string full_name = make_full_name(local_name);
+        handle->set_name(local_name);
         handle->set_full_name(full_name);
         registry_.template register_input<T>(full_name, handle, units, description);
         registered_inputs_.push_back(full_name);

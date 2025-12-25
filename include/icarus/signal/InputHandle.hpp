@@ -34,7 +34,7 @@ template <typename T> class InputHandle {
      * @brief Get the current value from the wired source
      * @throws UnwiredInputError if not wired
      */
-    [[nodiscard]] T get() const {
+    [[nodiscard]] const T &get() const {
         if (!source_) {
             throw UnwiredInputError(name_);
         }
