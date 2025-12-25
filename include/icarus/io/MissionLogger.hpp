@@ -1,0 +1,450 @@
+#pragma once
+
+/**
+ * @file MissionLogger.hpp
+ * @brief Flight Recorder style logging service
+ *
+ * Part of Phase 2.5: ASCII-Rich Logging.
+ * Provides structured logging throughout the simulation lifecycle.
+ */
+
+#include <icarus/core/Types.hpp>
+#include <icarus/io/Banner.hpp>
+#include <icarus/io/Console.hpp>
+#include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/FlightManifest.hpp>
+#include <icarus/io/MissionDebrief.hpp>
+
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace icarus {
+
+/**
+ * @brief Simulation lifecycle phases for logging
+ */
+enum class SimPhase { Init, Provision, Stage, Run, Shutdown };
+
+/**
+ * @brief Mission Logger - Flight Recorder style logging
+ *
+ * Provides structured logging throughout the simulation lifecycle.
+ * Outputs to both terminal (with colors) and log file (plain ASCII).
+ */
+class MissionLogger {
+  public:
+    using Clock = std::chrono::high_resolution_clock;
+    using TimePoint = Clock::time_point;
+
+    MissionLogger() : startup_time_(Clock::now()) {}
+
+    explicit MissionLogger(const std::string &log_file_path)
+        : startup_time_(Clock::now()), log_file_(log_file_path) {}
+
+    // === Configuration ===
+
+    /// Set console log level (terminal output)
+    void SetConsoleLevel(LogLevel level) { console_.SetLogLevel(level); }
+
+    /// Set file log level (log file output)
+    void SetFileLevel(LogLevel level) { file_level_ = level; }
+
+    /// Set simulation version string
+    void SetVersion(const std::string &version) { version_ = version; }
+
+    /// Set build type (DEBUG/RELEASE) - auto-detected by default
+    void SetBuildType(const std::string &build_type) { build_type_ = build_type; }
+
+    /// Enable/disable progress display during Run
+    void SetProgressEnabled(bool enabled) { progress_enabled_ = enabled; }
+
+    /// Enable/disable profiling
+    void SetProfilingEnabled(bool enabled) { profiling_enabled_ = enabled; }
+
+    // === Lifecycle Logging ===
+
+    /// Log simulation startup (splash screen)
+    void LogStartup() {
+        std::string splash = Banner::GetSplashScreen(build_type_, version_);
+        console_.WriteLine(splash);
+        WriteToFile(splash);
+    }
+
+    /// Begin a lifecycle phase
+    void BeginPhase(SimPhase phase) {
+        current_phase_ = phase;
+        phase_start_time_ = Clock::now();
+
+        std::string header = Banner::GetPhaseHeader(PhaseToString(phase));
+        console_.WriteLine(header);
+        WriteToFile(header);
+    }
+
+    /// End current phase
+    void EndPhase() {
+        auto elapsed = std::chrono::duration<double>(Clock::now() - phase_start_time_).count();
+        std::ostringstream oss;
+        oss << FormatTime(GetWallClockSeconds()) << " "
+            << "[SYS] " << PhaseToString(current_phase_) << " phase complete ("
+            << FormatDuration(elapsed) << ")";
+        Log(LogLevel::Info, oss.str());
+    }
+
+    /// Log the Flight Manifest (Data Dictionary)
+    void LogManifest(const DataDictionary &dict) {
+        FlightManifest manifest(console_);
+        manifest.SetVersion(version_);
+        manifest.Generate(dict);
+    }
+
+    /// Log mission debrief (shutdown statistics)
+    void LogDebrief(double sim_time, double wall_time) {
+        MissionDebrief debrief(console_);
+        debrief.SetExitStatus(ExitStatus::EndConditionMet);
+        debrief.SetExitReason("End condition met (t >= t_max)");
+        debrief.SetTiming(sim_time, wall_time);
+
+        if (profiling_enabled_) {
+            debrief.SetProfilingData(GetProfilingStats());
+        }
+
+        std::string output = debrief.Generate();
+        console_.Write(output);
+        WriteToFile(output);
+    }
+
+    // === Provision Phase Logging ===
+
+    /// Log entity loading
+    void LogEntityLoad(const std::string &entity_name) {
+        LogTimed(LogLevel::Info, 0.0, "[LOD] Loading Entity: " + entity_name);
+    }
+
+    /// Log component addition (tree format)
+    void LogComponentAdd(const std::string &component_name, const std::string &type,
+                         const std::string &config_source = "defaults", bool is_last = false) {
+        std::string prefix = is_last ? "└─" : "├─";
+        std::ostringstream oss;
+        oss << "         " << prefix << " [CMP] " << component_name << " (" << type << ")";
+        if (config_source != "defaults") {
+            oss << " [" << config_source << "]";
+        }
+        console_.WriteLine(oss.str());
+        WriteToFile(oss.str());
+    }
+
+    /// Log static asset loading
+    void LogAssetLoad(const std::string &asset_name, const std::string &description) {
+        LogTimed(LogLevel::Debug, 0.0, "[AST] " + asset_name + ": " + description);
+    }
+
+    /// Log state vector allocation
+    void LogStateAllocation(std::size_t continuous, std::size_t discrete = 0) {
+        std::ostringstream oss;
+        oss << "[MEM] States: " << continuous << " continuous";
+        if (discrete > 0) {
+            oss << ", " << discrete << " discrete";
+        }
+        LogTimed(LogLevel::Info, 0.0, oss.str());
+    }
+
+    // === Stage Phase Logging ===
+
+    /// Log signal wiring
+    void LogWiring(const std::string &source, const std::string &target, bool is_warning = false) {
+        std::string prefix = is_warning ? "[!WIR]" : "[WIR]";
+        std::ostringstream oss;
+        oss << "         ├─ " << source << " >> " << target;
+        if (is_warning) {
+            console_.Warning(oss.str());
+        } else {
+            Log(LogLevel::Debug, oss.str());
+        }
+    }
+
+    /// Log wiring warning (multiple writers, etc.)
+    void LogWiringWarning(const std::string &message) {
+        LogTimed(LogLevel::Warning, 0.0, "[WIR] " + message);
+    }
+
+    /// Log topological sort order
+    void LogExecutionOrder(const std::vector<std::string> &component_order) {
+        Log(LogLevel::Debug, "[ORD] Execution Order:");
+        for (std::size_t i = 0; i < component_order.size(); ++i) {
+            std::ostringstream oss;
+            oss << "         " << (i + 1) << ". " << component_order[i];
+            Log(LogLevel::Debug, oss.str());
+        }
+    }
+
+    /// Log trim solver progress
+    void LogTrimStart(const std::string &mode,
+                      const std::vector<std::pair<std::string, double>> &targets) {
+        Log(LogLevel::Info, "[TRM] Trim Solver: " + mode);
+        for (const auto &[name, value] : targets) {
+            std::ostringstream oss;
+            oss << "         └─ Target: " << name << " = " << value;
+            Log(LogLevel::Debug, oss.str());
+        }
+    }
+
+    void LogTrimIteration(int iteration, double residual) {
+        std::ostringstream oss;
+        oss << "[TRM] Iteration " << iteration << ": residual = " << std::scientific << residual;
+        Log(LogLevel::Debug, oss.str());
+    }
+
+    void LogTrimConverged(int iterations) {
+        std::ostringstream oss;
+        oss << "[TRM] Converged in " << iterations << " iterations";
+        Log(LogLevel::Info, oss.str());
+    }
+
+    void LogTrimFailed(const std::string &reason) {
+        Log(LogLevel::Error, "[TRM] Trim failed: " + reason);
+    }
+
+    // === Run Phase Logging ===
+
+    /// Log phase transition event
+    void LogPhaseEvent(const std::string &from_phase, const std::string &to_phase,
+                       double sim_time) {
+        LogTimed(LogLevel::Event, sim_time,
+                 "[PHS] Phase transition: " + from_phase + " -> " + to_phase);
+    }
+
+    /// Log notable event (apogee, impact, etc.)
+    void LogEvent(const std::string &event_name, double sim_time, const std::string &details = "") {
+        std::string msg = "[EVT] " + event_name;
+        if (!details.empty()) {
+            msg += ": " + details;
+        }
+        LogTimed(LogLevel::Event, sim_time, msg);
+    }
+
+    /// Log warning during run
+    void LogRunWarning(const std::string &source, const std::string &message, double sim_time) {
+        LogTimed(LogLevel::Warning, sim_time, "[" + source + "] " + message);
+    }
+
+    /// Log error during run
+    void LogRunError(const std::string &source, const std::string &message, double sim_time) {
+        LogTimed(LogLevel::Error, sim_time, "[" + source + "] " + message);
+    }
+
+    /// Update progress display (single-line, \r overwrite)
+    void UpdateProgress(double sim_time, double t_max,
+                        const std::map<std::string, double> &key_values = {}) {
+        if (!progress_enabled_ || !console_.IsTerminal()) {
+            return;
+        }
+
+        double progress = (t_max > 0) ? (sim_time / t_max) : 0.0;
+        int filled = static_cast<int>(progress * static_cast<double>(progress_width_));
+
+        std::ostringstream oss;
+        oss << "\r[RUN] Time: " << std::fixed << std::setprecision(2) << sim_time << "s | [";
+
+        for (int i = 0; i < progress_width_; ++i) {
+            if (i < filled) {
+                oss << "█";
+            } else {
+                oss << "░";
+            }
+        }
+
+        oss << "] " << static_cast<int>(progress * 100) << "%";
+
+        for (const auto &[key, value] : key_values) {
+            oss << " | " << key << ": " << std::fixed << std::setprecision(1) << value;
+        }
+
+        std::cout << oss.str() << std::flush;
+    }
+
+    /// Clear progress line (call after Run completes)
+    void ClearProgress() {
+        if (progress_enabled_ && console_.IsTerminal()) {
+            std::cout << "\r" << std::string(120, ' ') << "\r" << std::flush;
+        }
+    }
+
+    // === Profiling ===
+
+    /// Begin timing a component
+    void BeginComponentTiming(const std::string &component_name) {
+        if (!profiling_enabled_) {
+            return;
+        }
+        current_timed_component_ = component_name;
+        component_start_time_ = Clock::now();
+    }
+
+    /// End timing for current component
+    void EndComponentTiming() {
+        if (!profiling_enabled_ || current_timed_component_.empty()) {
+            return;
+        }
+
+        auto elapsed =
+            std::chrono::duration<double, std::micro>(Clock::now() - component_start_time_).count();
+
+        auto &stats = component_stats_[current_timed_component_];
+        stats.name = current_timed_component_;
+        stats.call_count++;
+        stats.total_time_us += elapsed;
+        stats.max_time_us = std::max(stats.max_time_us, elapsed);
+        stats.avg_time_us = stats.total_time_us / static_cast<double>(stats.call_count);
+
+        current_timed_component_.clear();
+    }
+
+    /// Get profiling statistics
+    [[nodiscard]] std::vector<ComponentStats> GetProfilingStats() const {
+        std::vector<ComponentStats> result;
+        result.reserve(component_stats_.size());
+
+        // Calculate total time for percentage
+        double total_time = 0.0;
+        for (const auto &[name, stats] : component_stats_) {
+            total_time += stats.total_time_us;
+        }
+
+        for (auto [name, stats] : component_stats_) {
+            if (total_time > 0) {
+                stats.percent_load = (stats.total_time_us / total_time) * 100.0;
+            }
+            result.push_back(stats);
+        }
+
+        return result;
+    }
+
+    // === Low-Level Access ===
+
+    /// Get underlying console
+    [[nodiscard]] Console &GetConsole() { return console_; }
+    [[nodiscard]] const Console &GetConsole() const { return console_; }
+
+    /// Log raw message
+    void Log(LogLevel level, const std::string &message) {
+        console_.Log(level, message);
+        if (log_file_.is_open() && level >= file_level_) {
+            log_file_ << StripAnsi(message) << "\n";
+            log_file_.flush();
+        }
+    }
+
+    void LogTimed(LogLevel level, double sim_time, const std::string &message) {
+        std::string formatted = FormatTime(sim_time) + " " + message;
+        console_.Log(level, formatted);
+        if (log_file_.is_open() && level >= file_level_) {
+            log_file_ << StripAnsi(formatted) << "\n";
+            log_file_.flush();
+        }
+    }
+
+  private:
+    Console console_;
+    std::ofstream log_file_;
+    LogLevel file_level_ = LogLevel::Debug;
+
+    // Simulation metadata
+    std::string version_ = icarus::Version();
+#ifdef NDEBUG
+    std::string build_type_ = "RELEASE";
+#else
+    std::string build_type_ = "DEBUG";
+#endif
+
+    // Timing
+    TimePoint startup_time_;
+    TimePoint phase_start_time_;
+    SimPhase current_phase_ = SimPhase::Init;
+
+    // Progress display
+    bool progress_enabled_ = true;
+    int progress_width_ = 40;
+
+    // Profiling
+    bool profiling_enabled_ = false;
+    std::map<std::string, ComponentStats> component_stats_;
+    std::string current_timed_component_;
+    TimePoint component_start_time_;
+
+    // Helpers
+    [[nodiscard]] double GetWallClockSeconds() const {
+        return std::chrono::duration<double>(Clock::now() - startup_time_).count();
+    }
+
+    /// Format time as fixed-width string [XXX.XXX] - uses scientific for large values
+    [[nodiscard]] static std::string FormatTime(double t) {
+        std::ostringstream oss;
+        if (t >= 1000.0 || t <= -1000.0) {
+            oss << "[" << std::scientific << std::setprecision(2) << t << "]";
+        } else {
+            oss << "[" << std::fixed << std::setprecision(6) << t << "]";
+        }
+        return oss.str();
+    }
+
+    /// Format duration with appropriate unit
+    [[nodiscard]] static std::string FormatDuration(double seconds) {
+        std::ostringstream oss;
+        if (seconds < 0.001) {
+            oss << std::fixed << std::setprecision(1) << (seconds * 1e6) << "μs";
+        } else if (seconds < 1.0) {
+            oss << std::fixed << std::setprecision(2) << (seconds * 1000) << "ms";
+        } else {
+            oss << std::fixed << std::setprecision(2) << seconds << "s";
+        }
+        return oss.str();
+    }
+
+    [[nodiscard]] static std::string PhaseToString(SimPhase phase) {
+        switch (phase) {
+        case SimPhase::Init:
+            return "INIT";
+        case SimPhase::Provision:
+            return "PROVISION";
+        case SimPhase::Stage:
+            return "STAGE";
+        case SimPhase::Run:
+            return "RUN";
+        case SimPhase::Shutdown:
+            return "SHUTDOWN";
+        }
+        return "UNKNOWN";
+    }
+
+    void WriteToFile(const std::string &message) {
+        if (log_file_.is_open()) {
+            log_file_ << StripAnsi(message) << "\n";
+            log_file_.flush();
+        }
+    }
+
+    [[nodiscard]] static std::string StripAnsi(const std::string &s) {
+        std::string result;
+        result.reserve(s.size());
+        bool in_escape = false;
+        for (char c : s) {
+            if (c == '\033') {
+                in_escape = true;
+            } else if (in_escape && c == 'm') {
+                in_escape = false;
+            } else if (!in_escape) {
+                result += c;
+            }
+        }
+        return result;
+    }
+};
+
+} // namespace icarus

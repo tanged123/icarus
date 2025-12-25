@@ -12,6 +12,8 @@
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/LogConfig.hpp>
+#include <icarus/io/MissionLogger.hpp>
 #include <icarus/io/WiringConfig.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
@@ -577,6 +579,54 @@ template <typename Scalar> class Simulator {
         return result;
     }
 
+    // =========================================================================
+    // Logging Interface (Phase 2.5)
+    // =========================================================================
+
+    /**
+     * @brief Get the mission logger
+     */
+    [[nodiscard]] MissionLogger &GetLogger() { return logger_; }
+    [[nodiscard]] const MissionLogger &GetLogger() const { return logger_; }
+
+    /**
+     * @brief Enable/disable quiet mode (suppress all but errors)
+     */
+    void SetQuietMode(bool quiet) {
+        if (quiet) {
+            logger_.SetConsoleLevel(LogLevel::Error);
+            logger_.SetProgressEnabled(false);
+        } else {
+            logger_.SetConsoleLevel(LogLevel::Info);
+            logger_.SetProgressEnabled(true);
+        }
+    }
+
+    /**
+     * @brief Set log file path
+     *
+     * When set, all logs are written to the specified file.
+     */
+    void SetLogFile(const std::string &path) { logger_ = MissionLogger(path); }
+
+    /**
+     * @brief Enable/disable profiling
+     */
+    void SetProfilingEnabled(bool enabled) { logger_.SetProfilingEnabled(enabled); }
+
+    /**
+     * @brief Apply logging configuration
+     */
+    void ApplyLogConfig(const LogConfig &config) {
+        logger_.SetConsoleLevel(config.console_level);
+        logger_.SetProgressEnabled(config.progress_enabled);
+        logger_.SetProfilingEnabled(config.profiling_enabled);
+        if (config.file_enabled && !config.file_path.empty()) {
+            logger_ = MissionLogger(config.file_path);
+            logger_.SetFileLevel(config.file_level);
+        }
+    }
+
   private:
     std::vector<std::unique_ptr<Component<Scalar>>> components_;
     SignalRegistry<Scalar> registry_;
@@ -601,6 +651,9 @@ template <typename Scalar> class Simulator {
 
     // Wiring configuration (Phase 2.4)
     WiringConfig wiring_config_;
+
+    // Logging (Phase 2.5)
+    MissionLogger logger_;
 };
 
 } // namespace icarus
