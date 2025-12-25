@@ -95,18 +95,30 @@ Phase 4–7 (horizontal expansion)
   - [x] `PointMassGravity` with using Vulcan simple round Earth gravity model
   - [x] Demonstration of connecting components and running a simulation all the way through.
 
+- [ ] **2.4 Component Interface System**
+  - [ ] Explicit input port registration (`register_input()`)
+  - [ ] Scalar-typed parameter registration (`register_param()`)
+  - [ ] External wiring configuration (YAML or programmatic)
+  - [ ] Unified signal access API (`Get<T>()`/`Set<T>()`)
+  - [ ] Data Dictionary with outputs, inputs, and parameters
+  - [ ] Pre-run wiring validation
+
 ### Architecture References
 
 | Topic | Document |
 |:------|:---------|
 | Global state vector | [09_memory_state_ownership.md](../architecture/09_memory_state_ownership.md) |
 | State binding in Stage | [04_lifecycle.md](../architecture/04_lifecycle.md) |
+| Component interface model | [02_component_protocol.md](../architecture/02_component_protocol.md) |
 
 ### Exit Criteria
 
 - [ ] Simulate a falling object (point mass under gravity)
 - [ ] Verify against analytical solution: `y(t) = y₀ + v₀t - ½gt²`
 - [ ] State correctly scattered/gathered through integrator
+- [ ] Components use explicit input/parameter registration
+- [ ] Wiring is external to components
+- [ ] Any signal accessible via `sim.Get<T>()`/`sim.Set<T>()`
 
 ---
 
