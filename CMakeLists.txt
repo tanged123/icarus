@@ -21,6 +21,21 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "Debug mode enabled - ICARUS_DEBUG=1")
 endif()
 
+# Check for LTO support
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result OUTPUT output)
+
+if(result)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  message(STATUS "LTO enabled for Release builds")
+else()
+  message(WARNING "LTO not supported: ${output}")
+endif()
+
+# Explicitly ensure -O3 for Release builds
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_RELEASE "-O3 ${CMAKE_C_FLAGS_RELEASE}")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

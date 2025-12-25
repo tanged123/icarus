@@ -45,12 +45,7 @@ template <typename T> class InputHandle {
      * @brief Dereference operator for convenience
      * @throws UnwiredInputError if not wired
      */
-    [[nodiscard]] const T &operator*() const {
-        if (!source_) {
-            throw UnwiredInputError(name_);
-        }
-        return *source_;
-    }
+    [[nodiscard]] const T &operator*() const { return get(); }
 
     /**
      * @brief Check if this input has been wired
