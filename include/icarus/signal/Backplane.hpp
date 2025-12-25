@@ -86,37 +86,26 @@ template <typename Scalar> class Backplane {
     }
 
     /**
-     * @brief Register a static (immutable) signal
-     */
-    template <typename T>
-    void register_static(const std::string &local_name, const T *data_ptr,
-                         const std::string &unit = "", const std::string &description = "") {
-        std::string full_name = make_full_name(local_name);
-        registry_.template register_static<T>(full_name, data_ptr, unit, description);
-        registered_outputs_.push_back(full_name);
-    }
-
-    /**
-     * @brief Register a Vec3 signal (expands to .x/.y/.z)
+     * @brief Register a Vec3 output signal (expands to .x/.y/.z)
      */
     template <typename S>
-    void register_vec3(const std::string &local_name, Vec3<S> *data_ptr,
-                       const std::string &unit = "", const std::string &description = "") {
+    void register_output_vec3(const std::string &local_name, Vec3<S> *data_ptr,
+                              const std::string &unit = "", const std::string &description = "") {
         std::string full_name = make_full_name(local_name);
-        registry_.template register_vec3<S>(full_name, data_ptr, unit, description);
+        registry_.template register_output_vec3<S>(full_name, data_ptr, unit, description);
         registered_outputs_.push_back(full_name + ".x");
         registered_outputs_.push_back(full_name + ".y");
         registered_outputs_.push_back(full_name + ".z");
     }
 
     /**
-     * @brief Register a quaternion signal (expands to .w/.x/.y/.z)
+     * @brief Register a quaternion output signal (expands to .w/.x/.y/.z)
      */
     template <typename S>
-    void register_quat(const std::string &local_name, Vec4<S> *data_ptr,
-                       const std::string &unit = "", const std::string &description = "") {
+    void register_output_quat(const std::string &local_name, Vec4<S> *data_ptr,
+                              const std::string &unit = "", const std::string &description = "") {
         std::string full_name = make_full_name(local_name);
-        registry_.template register_quat<S>(full_name, data_ptr, unit, description);
+        registry_.template register_output_quat<S>(full_name, data_ptr, unit, description);
         registered_outputs_.push_back(full_name + ".w");
         registered_outputs_.push_back(full_name + ".x");
         registered_outputs_.push_back(full_name + ".y");

@@ -23,7 +23,7 @@ namespace icarus {
  * @code
  *   // Registration (in component Provision)
  *   Vec3<double> position_;
- *   registry.register_vec3("position", &position_, "m");
+ *   registry.register_output_vec3("position", &position_, "m");
  *
  *   // Resolution (in consumer Stage)
  *   Vec3Handle<double> pos = registry.resolve_vec3<double>("position");

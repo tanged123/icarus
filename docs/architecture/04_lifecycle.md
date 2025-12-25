@@ -92,12 +92,31 @@ Every component behaves identically to the `Simulator` host:
 **Frequency:** Called at the start of every new episode/run.
 
 The `Stage(RunConfig)` function acts as a solver pipeline:
+
 1. **Zeroing:** Wipe state derivatives ($\dot{x}$) and time ($t=0$).
 2. **Hard Constraints (Reset):** Apply fixed values from config (e.g., `Position = [0,0,1000]`).
 3. **Soft Constraints (Trim):** If `RunConfig.mode == EQUILIBRIUM`, we can leverage the **Dual-Headed** nature of Janus:
     * *Numeric Trim:* Simple Newton-Raphson on the C++ `double` step function for basic cases.
     * *Symbolic Trim:* Instantiate a temporary `Simulator<casadi::MX>`, trace the forces calculation graph $\sum F(x, u)$, and pass it to a robust nonlinear solver (IPOPT/Kinsol) to find the exact trim state. This is significantly more robust for complex, highly nonlinear vehicles.
 4. **Binding:** Resolve input pointers from the Backplane.
+
+### Wiring (External to Components)
+
+> [!IMPORTANT]
+> **Components do NOT hardcode wiring.** Wiring is done at the Simulator/application level between `Provision()` and `Stage()`, not inside component `Stage()` methods.
+
+```cpp
+sim.Provision();
+
+// Wiring is explicit and external to components
+sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
+sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
+// ... etc
+
+sim.Stage();
+```
+
+Components only **declare** their inputs in `Provision()`. The simulation configuration determines what outputs they connect to.
 
 ---
 

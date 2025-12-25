@@ -160,6 +160,28 @@ template <typename Scalar> class Component {
     [[nodiscard]] virtual std::vector<SignalDecl> DeclareOutputs() const { return {}; }
 
     /**
+     * @brief Get list of output signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetOutputNames() const {
+        std::vector<std::string> names;
+        for (const auto &decl : DeclareOutputs()) {
+            names.push_back(decl.name);
+        }
+        return names;
+    }
+
+    /**
+     * @brief Get list of input signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetInputNames() const {
+        std::vector<std::string> names;
+        for (const auto &decl : DeclareInputs()) {
+            names.push_back(decl.name);
+        }
+        return names;
+    }
+
+    /**
      * @brief Number of state variables owned by this component
      */
     [[nodiscard]] virtual std::size_t StateSize() const { return 0; }

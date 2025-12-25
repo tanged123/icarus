@@ -154,6 +154,16 @@ TEST(PointMassIntegration, FreeFallConstantGravity) {
 
     // Run lifecycle
     sim.Provision();
+
+    // Wire components together (after Provision, before Stage)
+    sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
+    sim.Wire<double>("Gravity.position.y", "PointMass3DOF.position.y");
+    sim.Wire<double>("Gravity.position.z", "PointMass3DOF.position.z");
+    sim.Wire<double>("Gravity.mass", "PointMass3DOF.mass");
+    sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
+    sim.Wire<double>("PointMass3DOF.force.y", "Gravity.force.y");
+    sim.Wire<double>("PointMass3DOF.force.z", "Gravity.force.z");
+
     sim.Stage();
 
     // Simulate for 2 seconds
@@ -217,6 +227,16 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
 
     // Run lifecycle
     sim.Provision();
+
+    // Wire components together (after Provision, before Stage)
+    sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
+    sim.Wire<double>("Gravity.position.y", "PointMass3DOF.position.y");
+    sim.Wire<double>("Gravity.position.z", "PointMass3DOF.position.z");
+    sim.Wire<double>("Gravity.mass", "PointMass3DOF.mass");
+    sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
+    sim.Wire<double>("PointMass3DOF.force.y", "Gravity.force.y");
+    sim.Wire<double>("PointMass3DOF.force.z", "Gravity.force.z");
+
     sim.Stage();
 
     // Compute initial mechanical energy

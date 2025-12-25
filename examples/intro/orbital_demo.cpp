@@ -51,6 +51,19 @@ int main() {
     // 5. Initialize lifecycle
     std::cout << "Provisioning and Staging components...\n";
     sim.Provision();
+
+    // Wire components together after Provision(), before Stage()
+    // Gravity reads position and mass from vehicle
+    sim.Wire<double>("Gravity.position.x", "PointMass3DOF.position.x");
+    sim.Wire<double>("Gravity.position.y", "PointMass3DOF.position.y");
+    sim.Wire<double>("Gravity.position.z", "PointMass3DOF.position.z");
+    sim.Wire<double>("Gravity.mass", "PointMass3DOF.mass");
+
+    // Vehicle reads force from gravity
+    sim.Wire<double>("PointMass3DOF.force.x", "Gravity.force.x");
+    sim.Wire<double>("PointMass3DOF.force.y", "Gravity.force.y");
+    sim.Wire<double>("PointMass3DOF.force.z", "Gravity.force.z");
+
     sim.Stage();
 
     // 6. Run simulation loop
@@ -87,5 +100,12 @@ int main() {
     }
 
     std::cout << "\nSimulation Complete. Satellite moved from (+X) towards (+Y).\n";
+
+    // 7. Export Data Dictionary
+    std::cout << "\nExporting Data Dictionary...\n";
+    sim.GenerateDataDictionary("orbital_demo_datadict.yaml");
+    sim.GenerateDataDictionary("orbital_demo_datadict.json");
+    std::cout << "Saved: orbital_demo_datadict.yaml, orbital_demo_datadict.json\n";
+
     return 0;
 }

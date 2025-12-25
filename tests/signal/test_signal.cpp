@@ -147,17 +147,57 @@ TEST(SignalRegistry, RegisterOutput) {
     EXPECT_DOUBLE_EQ(thrust, 3000.0);
 }
 
-TEST(SignalRegistry, RegisterStatic) {
+TEST(SignalRegistry, RegisterOutputInt32) {
     SignalRegistry<double> registry;
 
-    const double gravity = 9.81;
-    registry.register_static("gravity", &gravity, "m/s^2", "Standard gravity");
+    int32_t flight_phase = 2;
+    registry.set_current_component("GNC");
+    registry.register_output<int32_t>("phase", &flight_phase, "", "Flight phase");
 
-    EXPECT_TRUE(registry.HasSignal("gravity"));
+    EXPECT_TRUE(registry.HasSignal("phase"));
 
-    auto desc = registry.get_descriptor("gravity");
-    ASSERT_NE(desc, nullptr);
-    EXPECT_EQ(desc->lifecycle, SignalLifecycle::Static);
+    auto handle = registry.resolve<int32_t>("phase");
+    EXPECT_EQ(*handle, 2);
+
+    flight_phase = 3;
+    EXPECT_EQ(*handle, 3);
+}
+
+TEST(SignalRegistry, RegisterOutputInt64) {
+    SignalRegistry<double> registry;
+
+    int64_t timestamp = 1234567890123456789LL;
+    registry.set_current_component("Recorder");
+    registry.register_output<int64_t>("timestamp", &timestamp, "ns", "Epoch timestamp");
+
+    EXPECT_TRUE(registry.HasSignal("timestamp"));
+
+    auto handle = registry.resolve<int64_t>("timestamp");
+    EXPECT_EQ(*handle, 1234567890123456789LL);
+}
+
+TEST(SignalRegistry, IntegerInputWiring) {
+    SignalRegistry<double> registry;
+
+    // Producer component publishes flight phase
+    int32_t phase_output = 1;
+    registry.set_current_component("GNC");
+    registry.register_output<int32_t>("GNC.phase", &phase_output, "", "Flight phase");
+
+    // Consumer component has input for phase
+    InputHandle<int32_t> phase_input;
+    registry.set_current_component("Controller");
+    registry.register_input<int32_t>("Controller.mode_input", &phase_input, "", "Mode from GNC");
+
+    // Wire input to output
+    registry.wire_input<int32_t>("Controller.mode_input", "GNC.phase");
+
+    // Verify wiring works
+    EXPECT_EQ(phase_input.get(), 1);
+
+    // Update producer, consumer sees new value
+    phase_output = 2;
+    EXPECT_EQ(phase_input.get(), 2);
 }
 
 TEST(SignalRegistry, OwnerTracking) {
@@ -231,7 +271,7 @@ TEST(SignalRegistry, RegisterVec3) {
     SignalRegistry<double> registry;
 
     Vec3<double> position(1.0, 2.0, 3.0);
-    registry.register_vec3("position", &position, "m", "Position");
+    registry.register_output_vec3("position", &position, "m", "Position");
 
     EXPECT_TRUE(registry.HasSignal("position.x"));
     EXPECT_TRUE(registry.HasSignal("position.y"));
@@ -250,7 +290,7 @@ TEST(SignalRegistry, ResolveVec3) {
     SignalRegistry<double> registry;
 
     Vec3<double> velocity(10.0, 20.0, 30.0);
-    registry.register_vec3("velocity", &velocity, "m/s");
+    registry.register_output_vec3("velocity", &velocity, "m/s");
 
     auto handle = registry.resolve_vec3<double>("velocity");
     EXPECT_TRUE(handle.valid());
@@ -751,6 +791,40 @@ TEST(DataDictionary, ComputeStats) {
     EXPECT_EQ(dict.total_config, 1);
     EXPECT_EQ(dict.integrable_states, 1);
     EXPECT_EQ(dict.unwired_inputs, 1);
+}
+
+TEST(WiringConfig, FromYAMLFlat) {
+    // Test flat YAML format: "Component.input": "Source.output"
+    YAML::Node node;
+    node["wiring"]["PointMass.force"] = "Gravity.force";
+    node["wiring"]["PointMass.position"] = "GPS.position";
+
+    auto config = WiringConfig::FromYAML(node);
+
+    EXPECT_EQ(config.size(), 2);
+    EXPECT_TRUE(config.HasWiring("PointMass.force"));
+    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
+    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
+}
+
+TEST(WiringConfig, FromYAMLNested) {
+    // Test nested YAML format: Component: { input: "Source.output" }
+    YAML::Node node;
+    node["wiring"]["PointMass"]["force"] = "Gravity.force";
+    node["wiring"]["PointMass"]["position"] = "GPS.position";
+
+    auto config = WiringConfig::FromYAML(node);
+
+    EXPECT_EQ(config.size(), 2);
+    EXPECT_TRUE(config.HasWiring("PointMass.force"));
+    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
+    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
+}
+
+TEST(WiringConfig, FromYAMLEmpty) {
+    YAML::Node node;
+    auto config = WiringConfig::FromYAML(node);
+    EXPECT_TRUE(config.empty());
 }
 
 } // namespace

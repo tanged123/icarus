@@ -83,28 +83,9 @@ template <typename Scalar> class SignalRegistry {
     }
 
     /**
-     * @brief Register a static (immutable) signal with pointer binding
+     * @brief Register a Vec3 output signal as three scalar components
      *
-     * Static signals are set during Provision/Stage and remain constant.
-     *
-     * @tparam T The signal value type (must have TypeTraits specialization)
-     * @param name Signal path
-     * @param data_ptr Pointer to component-owned storage (const for static)
-     * @param unit Physical unit (optional)
-     * @param description Human-readable description (optional)
-     */
-    template <typename T>
-    void register_static(const std::string &name, const T *data_ptr, const std::string &unit = "",
-                         const std::string &description = "") {
-        // Cast away const for storage (we track lifecycle separately)
-        register_signal_impl<T>(name, const_cast<T *>(data_ptr), unit, description,
-                                SignalLifecycle::Static);
-    }
-
-    /**
-     * @brief Register a Vec3 signal as three scalar components
-     *
-     * Creates three signals with `.x`, `.y`, `.z` suffixes.
+     * Creates three output signals with `.x`, `.y`, `.z` suffixes.
      *
      * @tparam S The scalar type (typically same as Scalar template)
      * @param name Base signal path (e.g., "position")
@@ -113,8 +94,8 @@ template <typename Scalar> class SignalRegistry {
      * @param description Human-readable description (optional)
      */
     template <typename S>
-    void register_vec3(const std::string &name, Vec3<S> *data_ptr, const std::string &unit = "",
-                       const std::string &description = "") {
+    void register_output_vec3(const std::string &name, Vec3<S> *data_ptr,
+                              const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
             throw SignalError("Null data_ptr for Vec3 signal '" + name + "'");
         }
@@ -128,13 +109,13 @@ template <typename Scalar> class SignalRegistry {
     }
 
     /**
-     * @brief Register a Vec4/Quaternion signal as four scalar components
+     * @brief Register a Vec4/Quaternion output signal as four scalar components
      *
-     * Creates four signals with `.w`, `.x`, `.y`, `.z` suffixes.
+     * Creates four output signals with `.w`, `.x`, `.y`, `.z` suffixes.
      */
     template <typename S>
-    void register_quat(const std::string &name, Vec4<S> *data_ptr, const std::string &unit = "",
-                       const std::string &description = "") {
+    void register_output_quat(const std::string &name, Vec4<S> *data_ptr,
+                              const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
             throw SignalError("Null data_ptr for Quat signal '" + name + "'");
         }
@@ -472,6 +453,7 @@ template <typename Scalar> class SignalRegistry {
         entry.info.description = description;
         entry.info.kind = SignalKind::Input;
         entry.info.semantic = typeid(T).name();
+        entry.info.owner_component = current_component_;
 
         inputs_[name] = std::move(entry);
     }
@@ -512,6 +494,7 @@ template <typename Scalar> class SignalRegistry {
         entry.info.kind = SignalKind::Parameter;
         entry.info.semantic = "Scalar";
         entry.info.is_optimizable = true;
+        entry.info.owner_component = current_component_;
 
         params_[name] = std::move(entry);
     }
@@ -603,6 +586,74 @@ template <typename Scalar> class SignalRegistry {
     // =========================================================================
 
     /**
+     * @brief Get all output signal descriptors
+     */
+    [[nodiscard]] std::vector<SignalDescriptor> get_outputs() const {
+        std::vector<SignalDescriptor> result;
+        result.reserve(signals_.size());
+        for (const auto &desc : signals_) {
+            result.push_back(desc);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get output signals for a specific component
+     */
+    [[nodiscard]] std::vector<SignalDescriptor>
+    get_outputs_for_component(const std::string &component_name) const {
+        std::vector<SignalDescriptor> result;
+        for (const auto &desc : signals_) {
+            if (desc.owner_component == component_name) {
+                result.push_back(desc);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get inputs for a specific component
+     */
+    [[nodiscard]] std::vector<SignalDescriptor>
+    get_inputs_for_component(const std::string &component_name) const {
+        std::vector<SignalDescriptor> result;
+        for (const auto &[name, entry] : inputs_) {
+            if (entry.info.owner_component == component_name) {
+                result.push_back(entry.info);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get parameters for a specific component
+     */
+    [[nodiscard]] std::vector<SignalDescriptor>
+    get_params_for_component(const std::string &component_name) const {
+        std::vector<SignalDescriptor> result;
+        for (const auto &[name, entry] : params_) {
+            if (entry.info.owner_component == component_name) {
+                result.push_back(entry.info);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get config for a specific component
+     */
+    [[nodiscard]] std::vector<SignalDescriptor>
+    get_config_for_component(const std::string &component_name) const {
+        std::vector<SignalDescriptor> result;
+        for (const auto &[name, entry] : config_) {
+            if (entry.info.owner_component == component_name) {
+                result.push_back(entry.info);
+            }
+        }
+        return result;
+    }
+
+    /**
      * @brief Get all input info
      */
     [[nodiscard]] std::vector<SignalDescriptor> get_inputs() const {
@@ -674,6 +725,7 @@ template <typename Scalar> class SignalRegistry {
         entry.info.kind = SignalKind::Config;
         entry.info.semantic = type_name;
         entry.info.is_optimizable = false;
+        entry.info.owner_component = current_component_;
 
         config_[name] = std::move(entry);
     }

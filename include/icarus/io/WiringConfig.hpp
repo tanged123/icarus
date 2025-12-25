@@ -8,9 +8,11 @@
  * Maps input ports to their source signals.
  */
 
+#include <fstream>
 #include <icarus/core/Error.hpp>
 #include <string>
 #include <unordered_map>
+#include <yaml-cpp/yaml.h>
 
 namespace icarus {
 
@@ -19,10 +21,75 @@ namespace icarus {
  *
  * Used to configure how component inputs are connected to output signals.
  * Can be populated programmatically or from YAML configuration.
+ *
+ * YAML Format:
+ * @code
+ * wiring:
+ *   # Fully-qualified format
+ *   PointMass3DOF.force: "Gravity.force"
+ *
+ *   # Or nested format
+ *   PointMass3DOF:
+ *     force: "Gravity.force"
+ * @endcode
  */
 class WiringConfig {
   public:
     WiringConfig() = default;
+
+    /**
+     * @brief Load wiring from YAML file
+     *
+     * @param path Path to YAML file
+     * @return WiringConfig populated from file
+     * @throws ConfigError if file cannot be read or parsed
+     */
+    static WiringConfig FromFile(const std::string &path) {
+        try {
+            YAML::Node node = YAML::LoadFile(path);
+            return FromYAML(node);
+        } catch (const YAML::Exception &e) {
+            throw ConfigError("Failed to parse wiring file '" + path + "': " + e.what());
+        }
+    }
+
+    /**
+     * @brief Load wiring from YAML node
+     *
+     * Supports two formats:
+     * 1. Flat: `"Component.input": "Source.output"`
+     * 2. Nested: `Component: { input: "Source.output" }`
+     *
+     * @param node YAML node (expects "wiring" key or direct content)
+     * @return WiringConfig populated from YAML
+     */
+    static WiringConfig FromYAML(const YAML::Node &node) {
+        WiringConfig config;
+
+        // Handle root-level "wiring" key or direct content
+        YAML::Node wiring_node = node["wiring"] ? node["wiring"] : node;
+
+        if (!wiring_node.IsMap()) {
+            return config; // Empty config if not a map
+        }
+
+        for (const auto &entry : wiring_node) {
+            std::string key = entry.first.as<std::string>();
+
+            if (entry.second.IsScalar()) {
+                // Flat format: "Component.input": "Source.output"
+                config.AddWiring(key, entry.second.as<std::string>());
+            } else if (entry.second.IsMap()) {
+                // Nested format: Component: { input: "Source.output" }
+                for (const auto &sub_entry : entry.second) {
+                    std::string input_name = key + "." + sub_entry.first.as<std::string>();
+                    config.AddWiring(input_name, sub_entry.second.as<std::string>());
+                }
+            }
+        }
+
+        return config;
+    }
 
     /**
      * @brief Add a wiring connection

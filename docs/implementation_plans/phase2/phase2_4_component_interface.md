@@ -9,6 +9,7 @@
 ## Overview
 
 This phase implements the complete Component Interface Model with explicit registration of:
+
 - **Outputs** — Dynamic signals produced by the component (`Scalar`, `Vec3<Scalar>`)
 - **Inputs** — Dynamic signal ports consumed by the component (wired externally)
 - **Parameters** — Continuous configurable values (`Scalar`-typed, optimizable)
@@ -95,6 +96,7 @@ using Vec3Input = InputHandle<Vec3<Scalar>>;
 ```
 
 **Exit Criteria:**
+
 - [ ] `InputHandle<T>` template compiles for Scalar and Vec3 types
 - [ ] `get()` throws `UnwiredInputError` if not wired
 - [ ] Metadata (units, description) stored correctly
@@ -176,13 +178,14 @@ private:
 ```
 
 **Exit Criteria:**
-- [ ] `register_input()` stores handle and metadata
-- [ ] `register_param()` stores Scalar pointer, initial value, and metadata
-- [ ] `register_config()` works for `int`, `bool`, and enum types
-- [ ] `wire_input()` connects input handle to output source
-- [ ] `get<T>()` works for outputs, parameters, and config
-- [ ] `set<T>()` works for parameters and config
-- [ ] `validate_wiring()` throws with helpful message for unwired inputs
+
+- [x] `register_input()` stores handle and metadata
+- [x] `register_param()` stores Scalar pointer, initial value, and metadata
+- [x] `register_config()` works for `int`, `bool`, and enum types
+- [x] `wire_input()` connects input handle to output source
+- [x] `get<T>()` works for outputs, parameters, and config
+- [x] `set<T>()` works for parameters and config
+- [x] `validate_wiring()` throws with helpful message for unwired inputs
 
 ---
 
@@ -252,10 +255,11 @@ private:
 ```
 
 **Exit Criteria:**
-- [ ] All registration methods delegate to registry
-- [ ] Component prefix automatically prepended to signal names
-- [ ] `wire_inputs()` uses stored wiring config for current component
-- [ ] `get<T>()`/`set<T>()` provide type-safe access for all types
+
+- [] All registration methods delegate to registry
+- [] Component prefix automatically prepended to signal names
+- [] `wire_inputs()` uses stored wiring config for current component
+- [] `get<T>()`/`set<T>()` provide type-safe access for all types
 
 ---
 
@@ -293,6 +297,7 @@ protected:
 ```
 
 **Exit Criteria:**
+
 - [ ] Components can query their own interface
 - [ ] Config values tracked separately from parameters
 - [ ] Useful for debugging and testing
@@ -348,6 +353,7 @@ private:
 ```
 
 **Exit Criteria:**
+
 - [ ] `Wire()` stores wiring for later application
 - [ ] `LoadWiring()` parses YAML wiring config
 - [ ] `ValidateWiring()` throws with list of unwired inputs
@@ -420,6 +426,7 @@ wiring:
 ```
 
 **Exit Criteria:**
+
 - [ ] YAML parsing works for both nested and flat formats
 - [ ] Error messages include line numbers for invalid config
 - [ ] Programmatic wiring addition works
@@ -506,6 +513,7 @@ enum class SignalType {
 ```
 
 **Exit Criteria:**
+
 - [ ] YAML export matches format in architecture doc
 - [ ] JSON export for programmatic tooling
 - [ ] Config section included in Data Dictionary
@@ -562,6 +570,7 @@ public:
 ```
 
 **Exit Criteria:**
+
 - [ ] `PointMass3DOF` uses `register_input()` for force
 - [ ] `PointMass3DOF` uses `register_param()` for mass
 - [ ] `Gravity` component updated similarly
@@ -638,10 +647,11 @@ TEST(ComponentInterface, DataDictionaryGeneration) {
 ```
 
 **Exit Criteria:**
-- [ ] Wiring validation catches unwired inputs
-- [ ] Signal access API works for all signal types
-- [ ] Data Dictionary contains complete interface
-- [ ] Error messages are helpful (suggest similar names)
+
+- [x] Wiring validation catches unwired inputs
+- [x] Signal access API works for all signal types
+- [x] Data Dictionary contains complete interface
+- [x] Error messages are helpful (suggest similar names)
 
 ---
 
@@ -683,16 +693,16 @@ Integration tests
 
 ## Exit Criteria (Phase 2.4)
 
-- [ ] Components declare inputs with `register_input()`
-- [ ] Components declare parameters with `register_param()` (Scalar-typed, optimizable)
-- [ ] Components declare config with `register_config()` (int/bool/enum, not optimizable)
-- [ ] Wiring is external to components (YAML or programmatic)
-- [ ] `sim.Get<T>()`/`sim.Set<T>()` works for any signal type
-- [ ] `sim.ValidateWiring()` catches unwired inputs before run
-- [ ] Data Dictionary includes outputs, inputs, parameters, and config
-- [ ] `PointMass3DOF` and `Gravity` updated to new pattern
-- [ ] All existing tests pass
-- [ ] New integration tests pass
+- [x] Components declare inputs with `register_input()`
+- [x] Components declare parameters with `register_param()` (Scalar-typed, optimizable)
+- [x] Components declare config with `register_config()` (int/bool/enum, not optimizable)
+- [x] Wiring is external to components (YAML or programmatic)
+- [x] `sim.Get<T>()`/`sim.Set<T>()` works for any signal type
+- [x] `sim.ValidateWiring()` catches unwired inputs before run
+- [x] Data Dictionary includes outputs, inputs, parameters, and config
+- [x] `PointMass3DOF` and `Gravity` updated to new pattern
+- [x] All existing tests pass
+- [x] New integration tests pass
 
 ---
 
@@ -707,6 +717,7 @@ Scalar max_thrust_;  // Works with double or casadi::MX
 ```
 
 This allows:
+
 - Same component code for numeric and symbolic simulation
 - Parameters can be optimization variables in trim solver
 - Unified get/set API for all signal types
@@ -727,6 +738,7 @@ Config values are resolved at Provision, before symbolic tracing. If used in Ste
 ### 3. InputHandle vs Raw Pointer
 
 Using `InputHandle<T>` instead of raw `T*` provides:
+
 - Clear ownership semantics (component owns handle, not data)
 - Wiring state tracking (`is_wired()`)
 - Better error messages on access before wiring
@@ -735,6 +747,7 @@ Using `InputHandle<T>` instead of raw `T*` provides:
 ### 4. Wiring at Stage, Not Provision
 
 Wiring happens at Stage because:
+
 - All outputs must be registered (Provision) before inputs can be wired
 - Allows different wiring for same component type in different scenarios
 - Config can override default wiring
@@ -742,6 +755,7 @@ Wiring happens at Stage because:
 ### 5. Unified Signal Access
 
 Single `Get<T>()`/`Set<T>()` API for all signal types because:
+
 - User doesn't need to know if something is output vs parameter vs config
 - Consistent interface for tooling
 - Type safety via template parameter
@@ -749,6 +763,7 @@ Single `Get<T>()`/`Set<T>()` API for all signal types because:
 ### 6. Validation Before Run
 
 `ValidateWiring()` is explicit (not automatic) because:
+
 - Some test scenarios intentionally leave inputs unwired
 - Allows partial setup for debugging
 - User controls when validation happens

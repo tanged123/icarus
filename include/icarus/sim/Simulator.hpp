@@ -11,6 +11,8 @@
 
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Types.hpp>
+#include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/WiringConfig.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/sim/IntegratorFactory.hpp>
@@ -286,6 +288,79 @@ template <typename Scalar> class Simulator {
         return registry_.get_unwired_inputs();
     }
 
+    /**
+     * @brief Load wiring configuration from YAML file
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @param path Path to YAML wiring configuration file
+     */
+    void LoadWiring(const std::string &path) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("LoadWiring() requires prior Provision()");
+        }
+        wiring_config_ = WiringConfig::FromFile(path);
+    }
+
+    /**
+     * @brief Load wiring configuration from WiringConfig object
+     *
+     * Must be called after Provision() and before Stage().
+     *
+     * @param config WiringConfig with input-to-source mappings
+     */
+    void LoadWiring(const WiringConfig &config) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("LoadWiring() requires prior Provision()");
+        }
+        wiring_config_ = config;
+    }
+
+    /**
+     * @brief Get the loaded wiring configuration
+     */
+    [[nodiscard]] const WiringConfig &GetWiringConfig() const { return wiring_config_; }
+
+    /**
+     * @brief Generate data dictionary to file
+     *
+     * @param path Output file path (.yaml or .json based on extension)
+     */
+    void GenerateDataDictionary(const std::string &path) const {
+        DataDictionary dict = GetDataDictionary();
+        if (path.ends_with(".json")) {
+            dict.ToJSON(path);
+        } else {
+            dict.ToYAML(path);
+        }
+    }
+
+    /**
+     * @brief Get data dictionary for the simulation
+     *
+     * @return DataDictionary with all component interfaces
+     */
+    [[nodiscard]] DataDictionary GetDataDictionary() const {
+        DataDictionary dict;
+
+        for (const auto &comp : components_) {
+            DataDictionary::ComponentEntry entry;
+            entry.name = comp->FullName();
+            entry.type = comp->TypeName();
+
+            // Query registry for this component's signals
+            entry.outputs = registry_.get_outputs_for_component(comp->FullName());
+            entry.inputs = registry_.get_inputs_for_component(comp->FullName());
+            entry.parameters = registry_.get_params_for_component(comp->FullName());
+            entry.config = registry_.get_config_for_component(comp->FullName());
+
+            dict.components.push_back(entry);
+        }
+
+        dict.ComputeStats();
+        return dict;
+    }
+
     // =========================================================================
     // State Management (Phase 2.1)
     // =========================================================================
@@ -491,6 +566,9 @@ template <typename Scalar> class Simulator {
     // Integrator (Phase 2.2) - defaults to RK4
     std::unique_ptr<Integrator<Scalar>> integrator_ = std::make_unique<RK4Integrator<Scalar>>();
     IntegratorConfig<Scalar> integrator_config_ = IntegratorConfig<Scalar>::RK4Default();
+
+    // Wiring configuration (Phase 2.4)
+    WiringConfig wiring_config_;
 };
 
 } // namespace icarus

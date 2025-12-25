@@ -11,12 +11,14 @@
  * NOT suitable for ECEF without adding Coriolis/centrifugal terms.
  *
  * Part of Phase 2.3: First Real Component
+ * Updated for Phase 2.4: Uses register_input for explicit input declaration
  */
 
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Backplane.hpp>
+#include <icarus/signal/InputHandle.hpp>
 
 #include <vulcan/core/VulcanTypes.hpp>
 #include <vulcan/dynamics/PointMass.hpp>
@@ -70,29 +72,36 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     // =========================================================================
 
     /**
-     * @brief Register outputs: position, velocity, mass
+     * @brief Register outputs, inputs, and parameters
      */
     void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+        // === Outputs ===
         // Position (in inertial frame: ECI for orbital, local for validation)
-        bp.template register_vec3<Scalar>("position", &position_, "m", "Position");
+        bp.template register_output_vec3<Scalar>("position", &position_, "m", "Position");
 
         // Velocity (in same inertial frame as position)
-        bp.template register_vec3<Scalar>("velocity", &velocity_, "m/s", "Velocity");
+        bp.template register_output_vec3<Scalar>("velocity", &velocity_, "m/s", "Velocity");
 
-        // Mass (for gravity component to compute force)
+        // === Inputs (Phase 2.4) ===
+        // Force input (from gravity and other force sources)
+        bp.template register_input<Scalar>("force.x", &force_x_, "N", "Applied force X");
+        bp.template register_input<Scalar>("force.y", &force_y_, "N", "Applied force Y");
+        bp.template register_input<Scalar>("force.z", &force_z_, "N", "Applied force Z");
+
+        // === Parameters (Phase 2.4) ===
+        // Mass is a tunable parameter AND published as output for other components to read
+        bp.register_param("mass", &mass_, mass_, "kg", "Point mass");
         bp.template register_output<Scalar>("mass", &mass_, "kg", "Point mass");
     }
 
     /**
-     * @brief Wire force input and apply initial conditions
+     * @brief Stage phase - resolve dependencies
+     *
+     * Note: Wiring is done externally by the Simulator or example setup.
+     * Components declare inputs in Provision(), wiring happens at sim level.
      */
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Resolve force input (from gravity and other force sources)
-        // Uses Vec3Handle pattern for vector inputs
-        force_handle_ = bp.template resolve_vec3<Scalar>("Gravity.force");
-
-        // Apply initial conditions from config if specified
-        (void)cfg; // Config handling to be added later
+    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
+        // No hardcoded wiring - wiring is done externally via sim.Wire()
     }
 
     /**
@@ -139,8 +148,8 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
         position_ = pos;
         velocity_ = vel;
 
-        // Read force input (computed by Gravity using our updated position)
-        Vec3<Scalar> force = force_handle_.get();
+        // Read force input from registered InputHandles
+        Vec3<Scalar> force{force_x_.get(), force_y_.get(), force_z_.get()};
 
         // Compute acceleration using Vulcan (inertial frame: a = F/m)
         Vec3<Scalar> accel = vulcan::dynamics::point_mass_acceleration(force, mass_);
@@ -181,9 +190,6 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     std::string name_;
     std::string entity_;
 
-    // Mass property
-    Scalar mass_{1.0};
-
     // Initial conditions
     Vec3<Scalar> ic_position_ = Vec3<Scalar>::Zero();
     Vec3<Scalar> ic_velocity_ = Vec3<Scalar>::Zero();
@@ -194,8 +200,13 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     Scalar *state_dot_pos_ = nullptr;
     Scalar *state_dot_vel_ = nullptr;
 
-    // Input handles (resolved in Stage)
-    Vec3Handle<Scalar> force_handle_;
+    // === Phase 2.4: Input Handles ===
+    InputHandle<Scalar> force_x_;
+    InputHandle<Scalar> force_y_;
+    InputHandle<Scalar> force_z_;
+
+    // === Phase 2.4: Parameter ===
+    Scalar mass_{1.0};
 
     // Output values
     Vec3<Scalar> position_ = Vec3<Scalar>::Zero();
