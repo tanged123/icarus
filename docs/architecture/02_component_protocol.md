@@ -6,16 +6,17 @@
 
 Components are the atomic units of execution. Each component has a well-defined **interface** consisting of:
 
-| Category | Description | Registered At | Wired/Set At |
-|:---------|:------------|:--------------|:-------------|
-| **Outputs** | Dynamic signals produced by the component | Provision | N/A (owned) |
-| **Inputs** | Dynamic signal ports consumed by the component | Provision | Stage (wiring) |
-| **Parameters** | Configurable values (Scalar-typed for symbolic compatibility) | Provision | Config / Runtime |
+| Category | Description | Types | Registered At | Optimizable |
+|:---------|:------------|:------|:--------------|:------------|
+| **Outputs** | Dynamic signals produced by the component | `Scalar`, `Vec3<Scalar>` | Provision | N/A |
+| **Inputs** | Dynamic signal ports consumed by the component | `Scalar`, `Vec3<Scalar>` | Provision | N/A |
+| **Parameters** | Continuous configurable values | `Scalar` | Provision | Yes |
+| **Config** | Discrete configuration values | `int`, `bool`, `enum` | Provision | No |
 
 All interface elements are:
+
 - **Discoverable** via the auto-generated Data Dictionary
 - **Accessible** at runtime via the Signal Access API (get/set any signal)
-- **Scalar-templated** for seamless numeric and symbolic operation
 
 ---
 
@@ -59,10 +60,10 @@ void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
 
 ### 1.3 Parameters
 
-Parameters are configurable values that affect component behavior. They are **Scalar-typed** for full symbolic compatibility—the same code works with `double` or `casadi::MX`.
+Parameters are **continuous configurable values** that affect component behavior. They are **Scalar-typed** for full symbolic compatibility—the same code works with `double` or `casadi::MX`. Parameters can be optimization variables in trim/trajectory solvers.
 
 ```cpp
-// Parameters: Scalar-typed for symbolic compatibility
+// Parameters: Scalar-typed, can be optimization variables
 Scalar max_thrust_;
 Scalar isp_sea_level_;
 Scalar isp_vacuum_;
@@ -84,6 +85,69 @@ void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
 }
 ```
 
+### 1.4 Config
+
+Config values are **discrete configuration settings** that control component behavior. They use concrete types (`int`, `bool`, `enum`) and are **not part of the symbolic graph**—they cannot be optimization variables.
+
+```cpp
+// Config: Discrete values, not optimizable
+int num_nozzles_;
+bool enable_vectoring_;
+GravityModel gravity_model_;
+
+void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
+    bp.register_config("num_nozzles", &num_nozzles_,
+                       cfg.get<int>("num_nozzles", 4),
+                       "Number of engine nozzles");
+    bp.register_config("enable_vectoring", &enable_vectoring_,
+                       cfg.get<bool>("enable_vectoring", true),
+                       "Enable thrust vector control");
+    bp.register_config("gravity_model", &gravity_model_,
+                       cfg.get<GravityModel>("gravity_model", GravityModel::WGS84),
+                       "Gravity model selection");
+}
+```
+
+#### Config vs Parameters
+
+| Aspect | Parameters (`Scalar`) | Config (`int`, `bool`, `enum`) |
+|:-------|:----------------------|:-------------------------------|
+| **Type** | Continuous | Discrete |
+| **Symbolic** | Yes (part of CasADi graph) | No (fixed during trace) |
+| **Optimizable** | Yes (trim, trajectory) | No |
+| **Example** | Mass, thrust limits, Isp | Nozzle count, flags, model selection |
+| **Runtime change** | Safe (value substitution) | Requires re-Provision |
+
+#### Config and Symbolic Mode
+
+Config values are resolved at Provision time, **before** symbolic tracing. This is safe:
+
+```cpp
+void Provision(...) {
+    // Config resolved here—branch is fixed before trace
+    if (cfg.get<bool>("use_j2")) {
+        enable_j2_ = true;
+    }
+}
+```
+
+Using config in Step requires care:
+
+```cpp
+void Step(Scalar t, Scalar dt) {
+    // BAD: CasADi can't trace through bool branch
+    if (enable_j2_) {
+        accel += j2_perturbation();
+    }
+
+    // GOOD: Convert to Scalar flag, use janus::where()
+    // (j2_flag_ set at Provision: enable_j2_ ? Scalar{1} : Scalar{0})
+    accel += janus::where(j2_flag_ > Scalar{0.5},
+                          j2_perturbation(),
+                          Vec3<Scalar>::Zero());
+}
+```
+
 ---
 
 ## 2. Complete Component Example
@@ -101,10 +165,15 @@ class JetEngine : public Component<Scalar> {
     InputHandle<Scalar> throttle_;
     InputHandle<Scalar> mach_;
 
-    // === PARAMETERS (configurable, Scalar-typed) ===
+    // === PARAMETERS (continuous, Scalar-typed, optimizable) ===
     Scalar max_thrust_;
     Scalar time_constant_;
     Scalar min_throttle_;
+
+    // === CONFIG (discrete, not optimizable) ===
+    int num_nozzles_;
+    bool enable_afterburner_;
+    Scalar afterburner_flag_;  // Scalar version for symbolic branching
 
 public:
     void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
@@ -122,7 +191,7 @@ public:
         bp.register_input("throttle", &throttle_, "", "Throttle command [0,1]");
         bp.register_input("mach", &mach_, "", "Mach number");
 
-        // --- Register Parameters ---
+        // --- Register Parameters (Scalar, optimizable) ---
         bp.register_param("max_thrust", &max_thrust_,
                           cfg.get<Scalar>("max_thrust", Scalar{50000.0}),
                           "N", "Maximum thrust output");
@@ -132,6 +201,17 @@ public:
         bp.register_param("min_throttle", &min_throttle_,
                           cfg.get<Scalar>("min_throttle", Scalar{0.0}),
                           "", "Minimum throttle setting");
+
+        // --- Register Config (discrete, not optimizable) ---
+        bp.register_config("num_nozzles", &num_nozzles_,
+                           cfg.get<int>("num_nozzles", 1),
+                           "Number of engine nozzles");
+        bp.register_config("enable_afterburner", &enable_afterburner_,
+                           cfg.get<bool>("enable_afterburner", false),
+                           "Enable afterburner capability");
+
+        // Convert bool to Scalar for symbolic-safe branching in Step
+        afterburner_flag_ = enable_afterburner_ ? Scalar{1.0} : Scalar{0.0};
     }
 
     void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
@@ -147,10 +227,16 @@ public:
         Scalar m = mach_.get();
 
         // Physics calculations using parameters...
-        Scalar thrust_cmd = max_thrust_ * thr;
+        Scalar base_thrust = max_thrust_ * thr;
 
-        // Update outputs
-        thrust_ = calculated_thrust;
+        // Use janus::where() for symbolic-safe conditional
+        Scalar afterburner_bonus = janus::where(
+            afterburner_flag_ > Scalar{0.5},
+            base_thrust * Scalar{0.3},  // 30% bonus with afterburner
+            Scalar{0.0}
+        );
+
+        thrust_ = base_thrust + afterburner_bonus;
         fuel_flow_ = calculated_fuel_flow;
     }
 };
@@ -160,7 +246,7 @@ public:
 
 ## 3. Wiring Configuration
 
-Input wiring is specified **externally** to the component—either in YAML config or programmatically. Components never hardcode their input sources.
+Input wiring is specified **externally** to the component—either in YAML config or programmatically. Components never hardcode their input sources. Until configuration files are fleshed out, rely on programmatic wiring.
 
 ### 3.1 YAML Wiring
 
@@ -171,9 +257,12 @@ components:
     name: MainEngine
     entity: X15
     config:
-      # Parameters (component configuration)
+      # Parameters (Scalar, optimizable)
       max_thrust: 75000.0
       time_constant: 0.5
+      # Config (discrete, not optimizable)
+      num_nozzles: 4
+      enable_afterburner: true
 
 # wiring.yaml (or inline in scenario)
 wiring:
@@ -242,16 +331,19 @@ auto optimal_thrust = trim_solver.Optimize("X15.MainEngine.max_thrust");
 
 ## 5. Signal Access API
 
-Any registered signal (output, input source, or parameter) can be accessed at runtime:
+Any registered signal (output, input source, parameter, or config) can be accessed at runtime:
 
 ```cpp
 // Get any signal value
 Scalar thrust = sim.Get<Scalar>("X15.MainEngine.thrust");
 Vec3<Scalar> pos = sim.Get<Vec3<Scalar>>("X15.EOM.position");
 
-// Set any signal value (parameters, or outputs for testing)
+// Set parameters (Scalar)
 sim.Set("X15.MainEngine.max_thrust", Scalar{60000.0});
-sim.Set("Environment.Atmosphere.density_override", Scalar{1.225});
+
+// Set config values (discrete types)
+sim.Set("X15.MainEngine.num_nozzles", 6);
+sim.Set("X15.MainEngine.enable_afterburner", false);
 
 // Query signal metadata
 SignalInfo info = sim.GetSignalInfo("X15.MainEngine.thrust");
@@ -260,12 +352,16 @@ SignalInfo info = sim.GetSignalInfo("X15.MainEngine.thrust");
 // info.description = "Net thrust force"
 ```
 
+> [!WARNING]
+> **Config changes at runtime require re-Provision.** Changing discrete config values (int, bool, enum) after Provision may leave the component in an inconsistent state. Parameters (Scalar) can be changed safely at any time.
+
 ### Use Cases
 
 | Use Case | API |
 |:---------|:----|
 | **Debugging** | `sim.Get("signal")` to inspect values |
-| **Parameter Tuning** | `sim.Set("param", value)` during runtime |
+| **Parameter Tuning** | `sim.Set("param", Scalar{value})` during runtime |
+| **Config Override** | `sim.Set("config", value)` before Provision |
 | **Test Harnesses** | Override inputs/outputs for unit testing |
 | **Recording** | Record any signal by name |
 | **Telemetry** | Stream selected signals |
@@ -328,7 +424,7 @@ components:
         description: "Mach number"
         wired_to: "Environment.Atmosphere.mach"
 
-    parameters:
+    parameters:  # Scalar-typed, optimizable
       max_thrust:
         type: Scalar
         units: N
@@ -344,6 +440,16 @@ components:
         units: ""
         value: 0.0
         description: "Minimum throttle setting"
+
+    config:  # Discrete, not optimizable
+      num_nozzles:
+        type: int
+        value: 4
+        description: "Number of engine nozzles"
+      enable_afterburner:
+        type: bool
+        value: true
+        description: "Enable afterburner capability"
 
   Environment.Atmosphere:
     type: StandardAtmosphere
@@ -367,6 +473,7 @@ summary:
   total_outputs: 42
   total_inputs: 38
   total_parameters: 24
+  total_config: 18
   integrable_states: 13
   unwired_inputs: 0  # Validation: should be 0
 ```

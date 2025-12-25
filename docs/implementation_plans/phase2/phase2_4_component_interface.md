@@ -9,21 +9,23 @@
 ## Overview
 
 This phase implements the complete Component Interface Model with explicit registration of:
-- **Outputs** — Dynamic signals produced by the component
+- **Outputs** — Dynamic signals produced by the component (`Scalar`, `Vec3<Scalar>`)
 - **Inputs** — Dynamic signal ports consumed by the component (wired externally)
-- **Parameters** — Configurable Scalar values accessible at runtime
+- **Parameters** — Continuous configurable values (`Scalar`-typed, optimizable)
+- **Config** — Discrete configuration values (`int`, `bool`, `enum`, not optimizable)
 
-All interface elements are Scalar-templated for symbolic compatibility, discoverable via the Data Dictionary, and accessible via a unified Signal Access API.
+All interface elements are discoverable via the Data Dictionary and accessible via a unified Signal Access API.
 
 ---
 
 ## Goals
 
-1. Components declare their full interface at Provision (outputs, inputs, parameters)
+1. Components declare their full interface at Provision (outputs, inputs, parameters, config)
 2. Input wiring is external to components (config or programmatic)
 3. Any signal can be get/set at runtime via unified API
 4. Data Dictionary captures complete interface for tooling
 5. Pre-run validation ensures all inputs are wired
+6. Clear separation: Parameters (Scalar, optimizable) vs Config (discrete, fixed)
 
 ---
 
@@ -103,7 +105,7 @@ using Vec3Input = InputHandle<Vec3<Scalar>>;
 
 **File:** `include/icarus/signal/Registry.hpp` (extend existing)
 
-Add storage for inputs and parameters alongside outputs:
+Add storage for inputs, parameters, and config alongside outputs:
 
 ```cpp
 template <typename Scalar>
@@ -119,10 +121,18 @@ public:
     void register_input(const std::string& name, InputHandle<T>* handle,
                         const std::string& units, const std::string& desc);
 
-    // === Parameter Registration (NEW) ===
-    template <typename T>
-    void register_param(const std::string& name, T* storage, T initial_value,
+    // === Parameter Registration (Scalar, optimizable) ===
+    void register_param(const std::string& name, Scalar* storage, Scalar initial_value,
                         const std::string& units, const std::string& desc);
+
+    // === Config Registration (discrete, not optimizable) ===
+    void register_config(const std::string& name, int* storage, int initial_value,
+                         const std::string& desc);
+    void register_config(const std::string& name, bool* storage, bool initial_value,
+                         const std::string& desc);
+    template <typename EnumT>
+    void register_config(const std::string& name, EnumT* storage, EnumT initial_value,
+                         const std::string& desc);
 
     // === Wiring (NEW) ===
     void wire_input(const std::string& input_name, const std::string& source_name);
@@ -140,6 +150,7 @@ public:
     [[nodiscard]] std::vector<SignalInfo> get_outputs() const;
     [[nodiscard]] std::vector<SignalInfo> get_inputs() const;
     [[nodiscard]] std::vector<SignalInfo> get_parameters() const;
+    [[nodiscard]] std::vector<SignalInfo> get_config() const;
     [[nodiscard]] SignalInfo get_signal_info(const std::string& name) const;
 
     // === Validation ===
@@ -153,8 +164,11 @@ private:
     // Input ports: name -> {handle*, metadata, wired_to}
     std::unordered_map<std::string, InputEntry> inputs_;
 
-    // Parameters: name -> {pointer, metadata, initial_value}
+    // Parameters (Scalar): name -> {pointer, metadata, initial_value}
     std::unordered_map<std::string, ParamEntry> parameters_;
+
+    // Config (discrete): name -> {pointer, type, metadata, initial_value}
+    std::unordered_map<std::string, ConfigEntry> config_;
 
     // Pending wiring configuration
     WiringConfig wiring_config_;
@@ -163,10 +177,11 @@ private:
 
 **Exit Criteria:**
 - [ ] `register_input()` stores handle and metadata
-- [ ] `register_param()` stores pointer, initial value, and metadata
+- [ ] `register_param()` stores Scalar pointer, initial value, and metadata
+- [ ] `register_config()` works for `int`, `bool`, and enum types
 - [ ] `wire_input()` connects input handle to output source
-- [ ] `get<T>()` works for outputs, parameters
-- [ ] `set<T>()` works for parameters (and outputs in test mode)
+- [ ] `get<T>()` works for outputs, parameters, and config
+- [ ] `set<T>()` works for parameters and config
 - [ ] `validate_wiring()` throws with helpful message for unwired inputs
 
 ---
@@ -196,10 +211,18 @@ public:
     void register_input(const std::string& name, InputHandle<T>* handle,
                         const std::string& units, const std::string& desc);
 
-    // === Parameter Registration ===
-    template <typename T>
-    void register_param(const std::string& name, T* storage, T initial_value,
+    // === Parameter Registration (Scalar, optimizable) ===
+    void register_param(const std::string& name, Scalar* storage, Scalar initial_value,
                         const std::string& units, const std::string& desc);
+
+    // === Config Registration (discrete, not optimizable) ===
+    void register_config(const std::string& name, int* storage, int initial_value,
+                         const std::string& desc);
+    void register_config(const std::string& name, bool* storage, bool initial_value,
+                         const std::string& desc);
+    template <typename EnumT>
+    void register_config(const std::string& name, EnumT* storage, EnumT initial_value,
+                         const std::string& desc);
 
     // === Wiring ===
     void set_wiring_config(const WiringConfig& cfg);
@@ -232,7 +255,7 @@ private:
 - [ ] All registration methods delegate to registry
 - [ ] Component prefix automatically prepended to signal names
 - [ ] `wire_inputs()` uses stored wiring config for current component
-- [ ] `get<T>()`/`set<T>()` provide type-safe access
+- [ ] `get<T>()`/`set<T>()` provide type-safe access for all types
 
 ---
 
@@ -255,6 +278,7 @@ public:
     [[nodiscard]] std::vector<std::string> GetOutputNames() const;
     [[nodiscard]] std::vector<std::string> GetInputNames() const;
     [[nodiscard]] std::vector<std::string> GetParamNames() const;
+    [[nodiscard]] std::vector<std::string> GetConfigNames() const;
 
     // Validation helper
     [[nodiscard]] std::vector<std::string> GetUnwiredInputs() const;
@@ -264,11 +288,13 @@ protected:
     std::vector<std::string> registered_outputs_;
     std::vector<std::string> registered_inputs_;
     std::vector<std::string> registered_params_;
+    std::vector<std::string> registered_config_;
 };
 ```
 
 **Exit Criteria:**
 - [ ] Components can query their own interface
+- [ ] Config values tracked separately from parameters
 - [ ] Useful for debugging and testing
 
 ---
@@ -423,7 +449,8 @@ struct DataDictionary {
 
         std::vector<SignalInfo> outputs;
         std::vector<SignalInfo> inputs;
-        std::vector<SignalInfo> parameters;
+        std::vector<SignalInfo> parameters;  // Scalar, optimizable
+        std::vector<SignalInfo> config;      // Discrete, not optimizable
     };
 
     std::vector<ComponentEntry> components;
@@ -432,6 +459,7 @@ struct DataDictionary {
     std::size_t total_outputs = 0;
     std::size_t total_inputs = 0;
     std::size_t total_parameters = 0;
+    std::size_t total_config = 0;
     std::size_t integrable_states = 0;
     std::size_t unwired_inputs = 0;
 
@@ -448,26 +476,30 @@ struct DataDictionary {
 struct SignalInfo {
     std::string name;           // Local name (e.g., "thrust")
     std::string full_name;      // Full name (e.g., "X15.MainEngine.thrust")
-    std::string type_name;      // "Scalar", "Vec3<Scalar>", etc.
-    std::string units;
+    std::string type_name;      // "Scalar", "Vec3<Scalar>", "int", "bool", etc.
+    std::string units;          // Empty for config
     std::string description;
 
-    SignalType signal_type;     // Output, Input, Parameter
+    SignalType signal_type;     // Output, Input, Parameter, Config
 
     // For inputs only
     std::string wired_to;
 
-    // For parameters only
+    // For parameters and config
     std::string initial_value;  // String representation
 
     // For outputs with state
     bool integrable = false;
+
+    // For config only
+    bool is_optimizable = true;  // false for Config
 };
 
 enum class SignalType {
     Output,
     Input,
-    Parameter
+    Parameter,  // Scalar, optimizable
+    Config      // Discrete, not optimizable
 };
 
 } // namespace icarus
@@ -476,7 +508,8 @@ enum class SignalType {
 **Exit Criteria:**
 - [ ] YAML export matches format in architecture doc
 - [ ] JSON export for programmatic tooling
-- [ ] Summary statistics computed correctly
+- [ ] Config section included in Data Dictionary
+- [ ] Summary statistics include total_config
 - [ ] Unwired inputs tracked
 
 ---
@@ -617,16 +650,16 @@ TEST(ComponentInterface, DataDictionaryGeneration) {
 | File | Action | Description |
 |:-----|:-------|:------------|
 | `include/icarus/signal/InputHandle.hpp` | Create | Input handle template |
-| `include/icarus/signal/Registry.hpp` | Extend | Add input/param storage |
+| `include/icarus/signal/Registry.hpp` | Extend | Add input/param/config storage |
 | `include/icarus/signal/Backplane.hpp` | Extend | Add new registration methods |
-| `include/icarus/signal/SignalInfo.hpp` | Create | Signal metadata struct |
+| `include/icarus/signal/SignalInfo.hpp` | Create | Signal metadata struct (incl. Config type) |
 | `include/icarus/core/Component.hpp` | Extend | Interface introspection |
 | `include/icarus/sim/Simulator.hpp` | Extend | Wiring and access API |
 | `include/icarus/io/WiringConfig.hpp` | Create | Wiring config parser |
-| `include/icarus/io/DataDictionary.hpp` | Create | Interface catalog |
+| `include/icarus/io/DataDictionary.hpp` | Create | Interface catalog (outputs, inputs, params, config) |
 | `components/dynamics/PointMass3DOF.hpp` | Update | Use new interface pattern |
 | `components/environment/Gravity.hpp` | Update | Use new interface pattern |
-| `tests/integration/component_interface_test.cpp` | Create | Integration tests |
+| `tests/integration/component_interface_test.cpp` | Create | Integration tests (incl. config access) |
 
 ---
 
@@ -651,11 +684,12 @@ Integration tests
 ## Exit Criteria (Phase 2.4)
 
 - [ ] Components declare inputs with `register_input()`
-- [ ] Components declare parameters with `register_param()` (Scalar-typed)
+- [ ] Components declare parameters with `register_param()` (Scalar-typed, optimizable)
+- [ ] Components declare config with `register_config()` (int/bool/enum, not optimizable)
 - [ ] Wiring is external to components (YAML or programmatic)
-- [ ] `sim.Get<T>()`/`sim.Set<T>()` works for any signal
+- [ ] `sim.Get<T>()`/`sim.Set<T>()` works for any signal type
 - [ ] `sim.ValidateWiring()` catches unwired inputs before run
-- [ ] Data Dictionary includes outputs, inputs, and parameters
+- [ ] Data Dictionary includes outputs, inputs, parameters, and config
 - [ ] `PointMass3DOF` and `Gravity` updated to new pattern
 - [ ] All existing tests pass
 - [ ] New integration tests pass
@@ -677,7 +711,20 @@ This allows:
 - Parameters can be optimization variables in trim solver
 - Unified get/set API for all signal types
 
-### 2. InputHandle vs Raw Pointer
+### 2. Config vs Parameters
+
+Two distinct categories for configurable values:
+
+| Aspect | Parameters | Config |
+|:-------|:-----------|:-------|
+| **Types** | `Scalar` | `int`, `bool`, `enum` |
+| **Symbolic** | Part of CasADi graph | Fixed before trace |
+| **Optimizable** | Yes (trim, trajectory) | No |
+| **Runtime change** | Safe anytime | Requires re-Provision |
+
+Config values are resolved at Provision, before symbolic tracing. If used in Step branching, convert to Scalar flag and use `janus::where()`.
+
+### 3. InputHandle vs Raw Pointer
 
 Using `InputHandle<T>` instead of raw `T*` provides:
 - Clear ownership semantics (component owns handle, not data)
@@ -685,21 +732,21 @@ Using `InputHandle<T>` instead of raw `T*` provides:
 - Better error messages on access before wiring
 - Metadata attachment
 
-### 3. Wiring at Stage, Not Provision
+### 4. Wiring at Stage, Not Provision
 
 Wiring happens at Stage because:
 - All outputs must be registered (Provision) before inputs can be wired
 - Allows different wiring for same component type in different scenarios
 - Config can override default wiring
 
-### 4. Unified Signal Access
+### 5. Unified Signal Access
 
 Single `Get<T>()`/`Set<T>()` API for all signal types because:
-- User doesn't need to know if something is output vs parameter
+- User doesn't need to know if something is output vs parameter vs config
 - Consistent interface for tooling
-- Parameters are just slow-changing signals
+- Type safety via template parameter
 
-### 5. Validation Before Run
+### 6. Validation Before Run
 
 `ValidateWiring()` is explicit (not automatic) because:
 - Some test scenarios intentionally leave inputs unwired
