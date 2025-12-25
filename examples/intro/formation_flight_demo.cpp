@@ -17,6 +17,7 @@
 
 #include <vulcan/core/Constants.hpp>
 
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -25,7 +26,17 @@ using namespace icarus;
 using namespace icarus::components;
 
 int main() {
-    std::cout << "=== Formation Flight Demo (Entity Names) ===\n\n";
+    // =========================================================================
+    // Create Simulator with Logging
+    // =========================================================================
+    Simulator<double> sim;
+
+    // Enable profiling and log file
+    sim.SetProfilingEnabled(true);
+    sim.SetLogFile("formation_flight.log");
+
+    auto &logger = sim.GetLogger();
+    logger.LogStartup();
 
     // =========================================================================
     // Orbital Parameters
@@ -39,12 +50,11 @@ int main() {
     double separation = 100.0; // meters
 
     // =========================================================================
-    // Create Simulator with Multi-Entity Components
+    // Create Multi-Entity Components
     // =========================================================================
-    Simulator<double> sim;
+    logger.BeginPhase(SimPhase::Provision);
 
     // --- Leader Satellite ---
-    // Entity = "Leader", provides unique signal namespace
     auto leader_pm = std::make_unique<PointMass3DOF<double>>(
         500.0,      // mass (kg)
         "Dynamics", // component name
@@ -59,7 +69,6 @@ int main() {
         PointMassGravity<double>::Model::PointMass);
 
     // --- Follower Satellite ---
-    // Entity = "Follower", provides separate signal namespace
     auto follower_pm = std::make_unique<PointMass3DOF<double>>(
         500.0,       // mass (kg)
         "Dynamics",  // same component name
@@ -75,19 +84,33 @@ int main() {
     // =========================================================================
     // Add Components (Gravity before Dynamics for correct ordering!)
     // =========================================================================
+    logger.LogEntityLoad("Leader");
     sim.AddComponent(std::move(leader_grav));
-    sim.AddComponent(std::move(leader_pm));
-    sim.AddComponent(std::move(follower_grav));
-    sim.AddComponent(std::move(follower_pm));
+    logger.LogComponentAdd("Leader.Gravity", "PointMassGravity");
 
-    // Run lifecycle
+    sim.AddComponent(std::move(leader_pm));
+    logger.LogComponentAdd("Leader.Dynamics", "PointMass3DOF");
+
+    logger.LogEntityLoad("Follower");
+    sim.AddComponent(std::move(follower_grav));
+    logger.LogComponentAdd("Follower.Gravity", "PointMassGravity");
+
+    sim.AddComponent(std::move(follower_pm));
+    logger.LogComponentAdd("Follower.Dynamics", "PointMass3DOF");
+
     sim.Provision();
+    logger.LogStateAllocation(sim.GetTotalStateSize());
+
+    // Display Flight Manifest
+    logger.LogManifest(sim.GetDataDictionary());
+    logger.EndPhase();
 
     // =========================================================================
     // Wire Components (after Provision, before Stage)
     // =========================================================================
-    // Each entity has its own internal wiring
-    auto wire_entity = [&sim](const std::string &entity) {
+    logger.BeginPhase(SimPhase::Stage);
+
+    auto wire_entity = [&sim, &logger](const std::string &entity) {
         std::string grav = entity + ".Gravity";
         std::string dyn = entity + ".Dynamics";
 
@@ -97,68 +120,75 @@ int main() {
                              {"position.z", dyn + ".position.z"},
                              {"mass", dyn + ".mass"}});
 
+        logger.LogWiring(dyn + ".position.x", grav + ".position.x");
+        logger.LogWiring(dyn + ".position.y", grav + ".position.y");
+        logger.LogWiring(dyn + ".position.z", grav + ".position.z");
+        logger.LogWiring(dyn + ".mass", grav + ".mass");
+
         // Dynamics reads force from Gravity
         sim.SetWiring(dyn, {{"force.x", grav + ".force.x"},
                             {"force.y", grav + ".force.y"},
                             {"force.z", grav + ".force.z"}});
+
+        logger.LogWiring(grav + ".force.x", dyn + ".force.x");
+        logger.LogWiring(grav + ".force.y", dyn + ".force.y");
+        logger.LogWiring(grav + ".force.z", dyn + ".force.z");
     };
 
     wire_entity("Leader");
     wire_entity("Follower");
 
     sim.Stage();
-
-    // Show component full names (Entity.Component naming)
-    std::cout << "Satellites in formation:\n";
-    std::cout << "  - Leader.Gravity   (PointMassGravity)\n";
-    std::cout << "  - Leader.Dynamics  (PointMass3DOF)\n";
-    std::cout << "  - Follower.Gravity (PointMassGravity)\n";
-    std::cout << "  - Follower.Dynamics (PointMass3DOF)\n";
-    std::cout << "\n";
+    logger.EndPhase();
 
     // =========================================================================
     // Simulate Formation Flight
     // =========================================================================
-    std::cout << std::fixed << std::setprecision(1);
-    std::cout << "Time[s]   Leader(X,Y) [km]     Follower(X,Y) [km]   Separation[m]\n";
-    std::cout << "------   -----------------    ------------------   -------------\n";
+    logger.BeginPhase(SimPhase::Run);
 
-    double dt = 10.0;        // 10 second time steps
-    double t_end = 600.0;    // 10 minutes
-    int print_interval = 12; // Print every 2 minutes
+    double dt = 10.0;     // 10 second time steps
+    double t_end = 600.0; // 10 minutes
 
-    int step = 0;
+    auto wall_start = std::chrono::high_resolution_clock::now();
+
     while (sim.Time() < t_end) {
+        logger.BeginComponentTiming("Step");
+
+        // Compute separation for progress display
+        double lx = sim.GetSignal("Leader.Dynamics.position.x");
+        double ly = sim.GetSignal("Leader.Dynamics.position.y");
+        double fx = sim.GetSignal("Follower.Dynamics.position.x");
+        double fy = sim.GetSignal("Follower.Dynamics.position.y");
+        double dx = lx - fx;
+        double dy = ly - fy;
+        double sep = std::sqrt(dx * dx + dy * dy);
+
+        logger.UpdateProgress(sim.Time(), t_end, {{"Sep", sep}});
+
         sim.Step(dt);
-        step++;
-
-        if (step % print_interval == 0) {
-            // Use GetSignal to read position values
-            double lx = sim.GetSignal("Leader.Dynamics.position.x") / 1000.0;   // km
-            double ly = sim.GetSignal("Leader.Dynamics.position.y") / 1000.0;   // km
-            double fx = sim.GetSignal("Follower.Dynamics.position.x") / 1000.0; // km
-            double fy = sim.GetSignal("Follower.Dynamics.position.y") / 1000.0; // km
-
-            // Compute separation in meters
-            double dx = (lx - fx) * 1000.0;
-            double dy = (ly - fy) * 1000.0;
-            double sep = std::sqrt(dx * dx + dy * dy);
-
-            std::cout << std::setw(5) << sim.Time() << "   (" << std::setw(7) << lx << ", "
-                      << std::setw(7) << ly << ")   (" << std::setw(7) << fx << ", " << std::setw(7)
-                      << fy << ")   " << std::setw(8) << sep << "\n";
-        }
+        logger.EndComponentTiming();
     }
 
-    std::cout << "\nFormation flight complete!\n";
-    std::cout << "Both satellites maintain ~" << separation << "m separation in circular orbit.\n";
+    logger.ClearProgress();
+    logger.EndPhase(sim.Time());
+
+    auto wall_end = std::chrono::high_resolution_clock::now();
+    double wall_time = std::chrono::duration<double>(wall_end - wall_start).count();
 
     // =========================================================================
-    // Export Data Dictionary
+    // Shutdown with Mission Debrief
     // =========================================================================
-    std::cout << "\nExporting Data Dictionary...\n";
+    logger.BeginPhase(SimPhase::Shutdown);
+    logger.LogEvent("Formation Flight Complete", sim.Time(),
+                    "Both satellites maintained ~100m separation");
+
+    logger.LogDebrief(sim.Time(), wall_time);
+
+    // Export Data Dictionary
     sim.GenerateDataDictionary("formation_datadict.yaml");
-    std::cout << "Saved: formation_datadict.yaml\n";
+    logger.LogTimed(LogLevel::Info, sim.Time(), "[IO] Saved: formation_datadict.yaml");
+
+    logger.EndPhase(sim.Time());
 
     return 0;
 }

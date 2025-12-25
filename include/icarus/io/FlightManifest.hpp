@@ -78,7 +78,7 @@ class FlightManifest {
         oss << "  Total Inputs:     " << std::setw(4) << dict.total_inputs
             << "        Total Params:  " << dict.total_parameters << "\n";
         oss << "  Integrable States: " << std::setw(3) << dict.integrable_states
-            << "       Config Values: " << dict.total_config << "\n";
+            << "        Config Values: " << dict.total_config << "\n";
         oss << "\n";
 
         // Component sections
