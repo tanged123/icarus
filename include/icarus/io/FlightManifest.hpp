@@ -29,7 +29,7 @@ namespace icarus {
  * @brief Generate Flight Manifest (ASCII Data Dictionary)
  *
  * Called at the end of Provision phase. Behavior:
- * - Full manifest → file (data_dictionary.txt)
+ * - Full manifest -> file (signal_dictionary.dict)
  * - Summary only → console (counts, unwired inputs, warnings)
  *
  * The full manifest can be thousands of signals, so it's never
@@ -41,7 +41,7 @@ class FlightManifest {
 
     // === Configuration ===
 
-    /// Set output file path (default: "data_dictionary.txt")
+    /// Set output file path (default: "signal_dictionary.dict")
     void SetOutputPath(const std::filesystem::path &path) { output_path_ = path; }
 
     /// Set simulation version string
@@ -95,7 +95,7 @@ class FlightManifest {
         std::ostringstream oss;
 
         oss << Banner::GetSectionHeader("FLIGHT MANIFEST") << "\n";
-        oss << "Data Dictionary written to: " << output_path_.string() << "\n\n";
+        oss << "Signal Dictionary written to: " << output_path_.string() << "\n\n";
 
         oss << "  Components:    " << std::setw(4) << dict.components.size()
             << "          Outputs:     " << std::setw(4) << dict.total_outputs << "\n";
@@ -149,8 +149,8 @@ class FlightManifest {
 
   private:
     const Console &console_;
-    std::filesystem::path output_path_ = "data_dictionary.txt";
-    std::string version_ = "0.1.0-dev";
+    std::filesystem::path output_path_ = "signal_dictionary.dict";
+    std::string version_ = icarus::Version();
     std::map<std::string, std::string> config_sources_;
     bool full_console_ = false;
 

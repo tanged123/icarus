@@ -45,7 +45,7 @@ class MissionLogger {
     MissionLogger() : startup_time_(Clock::now()) {}
 
     explicit MissionLogger(const std::string &log_file_path)
-        : startup_time_(Clock::now()), log_file_(log_file_path) {}
+        : startup_time_(Clock::now()), log_file_(log_file_path), log_file_name_(log_file_path) {}
 
     // === Configuration ===
 
@@ -86,20 +86,34 @@ class MissionLogger {
         WriteToFile(header);
     }
 
-    /// End current phase
-    void EndPhase() {
+    /// End current phase (pass current sim time for consistent timestamps)
+    void EndPhase(double sim_time = 0.0) {
         auto elapsed = std::chrono::duration<double>(Clock::now() - phase_start_time_).count();
         std::ostringstream oss;
-        oss << FormatTime(GetWallClockSeconds()) << " "
-            << "[SYS] " << PhaseToString(current_phase_) << " phase complete ("
+        oss << "[SYS] " << PhaseToString(current_phase_) << " phase complete ("
             << FormatDuration(elapsed) << ")";
-        Log(LogLevel::Info, oss.str());
+        LogTimed(LogLevel::Info, sim_time, oss.str());
+    }
+
+    /// Get the signal dictionary output path (derived from log file name)
+    [[nodiscard]] std::string GetDictionaryPath() const {
+        if (log_file_name_.empty()) {
+            return "signal_dictionary.dict";
+        }
+        // Extract base name without extension
+        std::string base = log_file_name_;
+        auto dot_pos = base.rfind('.');
+        if (dot_pos != std::string::npos) {
+            base = base.substr(0, dot_pos);
+        }
+        return base + "_signal_dictionary.dict";
     }
 
     /// Log the Flight Manifest (Data Dictionary)
     void LogManifest(const DataDictionary &dict) {
         FlightManifest manifest(console_);
         manifest.SetVersion(version_);
+        manifest.SetOutputPath(GetDictionaryPath());
         manifest.Generate(dict);
     }
 
@@ -353,6 +367,7 @@ class MissionLogger {
   private:
     Console console_;
     std::ofstream log_file_;
+    std::string log_file_name_;
     LogLevel file_level_ = LogLevel::Debug;
 
     // Simulation metadata

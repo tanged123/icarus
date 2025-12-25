@@ -123,7 +123,7 @@ int main() {
     }
 
     logger.ClearProgress();
-    logger.EndPhase();
+    logger.EndPhase(sim.Time());
 
     auto wall_end = std::chrono::high_resolution_clock::now();
     double wall_time = std::chrono::duration<double>(wall_end - wall_start).count();
@@ -141,7 +141,7 @@ int main() {
     logger.LogTimed(LogLevel::Info, sim.Time(),
                     "[IO] Saved: orbital_demo_datadict.yaml, orbital_demo_datadict.json");
 
-    logger.EndPhase();
+    logger.EndPhase(sim.Time());
 
     return 0;
 }
