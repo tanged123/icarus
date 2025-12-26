@@ -9,6 +9,7 @@
  * Owns components and orchestrates the Provision/Stage/Step lifecycle.
  */
 
+#include <functional>
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
@@ -26,6 +27,11 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+// Janus includes for GenerateGraph() (only used when Scalar = SymbolicScalar)
+#include <janus/core/Function.hpp>
+#include <janus/core/JanusTypes.hpp>
+#include <janus/math/AutoDiff.hpp>
 
 namespace icarus {
 
@@ -181,6 +187,9 @@ template <typename Scalar> class Simulator {
         }
         phase_ = Phase::Running;
 
+        // Invoke input sources before stepping
+        InvokeInputSources();
+
         // If no stateful components, just call component Step() directly
         if (GetTotalStateSize() == 0) {
             for (auto &comp : components_) {
@@ -193,6 +202,9 @@ template <typename Scalar> class Simulator {
                 comp->PostStep(time_, dt);
             }
             time_ = time_ + dt;
+
+            // Invoke output observers after stepping
+            InvokeOutputObservers();
             return;
         }
 
@@ -209,6 +221,9 @@ template <typename Scalar> class Simulator {
         // Update state and time
         SetState(X_new);
         time_ = time_ + dt;
+
+        // Invoke output observers after stepping
+        InvokeOutputObservers();
     }
 
     /**
@@ -246,6 +261,188 @@ template <typename Scalar> class Simulator {
     void SetSignal(const std::string &name, const Scalar &value) {
         registry_.SetByName(name, value);
     }
+
+    // =========================================================================
+    // External Interface API (Phase 3)
+    // =========================================================================
+
+    /**
+     * @brief Read a signal value by name (typed)
+     * @tparam T Expected signal type
+     * @param name Full signal path: "Entity.Component.signal"
+     * @return Current signal value
+     */
+    template <typename T> [[nodiscard]] T Peek(const std::string &name) const {
+        return registry_.template GetByName<T>(name);
+    }
+
+    /**
+     * @brief Write a signal value by name (typed)
+     * @tparam T Signal type
+     * @param name Full signal path
+     * @param value New value to set
+     */
+    template <typename T> void Poke(const std::string &name, const T &value) {
+        registry_.template SetByName<T>(name, value);
+    }
+
+    /**
+     * @brief Read multiple signals at once (batch read)
+     * @param names Vector of signal names
+     * @return Map of name -> value
+     */
+    [[nodiscard]] std::map<std::string, Scalar>
+    PeekBatch(const std::vector<std::string> &names) const {
+        std::map<std::string, Scalar> result;
+        for (const auto &name : names) {
+            result[name] = GetSignal(name);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Write multiple signals at once (batch write)
+     */
+    void PokeBatch(const std::map<std::string, Scalar> &values) {
+        for (const auto &[name, value] : values) {
+            SetSignal(name, value);
+        }
+    }
+
+    /**
+     * @brief Initialize simulation (Provision + Stage)
+     * Convenience method combining both lifecycle phases.
+     */
+    void Initialize() {
+        if (phase_ == Phase::Uninitialized) {
+            Provision();
+        }
+        if (phase_ == Phase::Provisioned) {
+            Stage();
+        }
+    }
+
+    /**
+     * @brief Reset simulation to initial state
+     * Keeps components, resets time to 0, restores initial conditions.
+     */
+    void Reset() {
+        if (phase_ < Phase::Staged) {
+            throw LifecycleError("Reset() requires prior Stage()");
+        }
+        time_ = Scalar{0};
+        // Zero state vectors
+        for (std::size_t i = 0; i < X_global_.size(); ++i) {
+            X_global_[i] = Scalar{0};
+            X_dot_global_[i] = Scalar{0};
+        }
+
+        // Re-run Stage on components to apply Initial Conditions
+        for (auto &comp : components_) {
+            // Context is needed for wiring resolution, though we assume wiring is constant
+            backplane_.set_context(comp->Entity(), comp->Name());
+            backplane_.clear_tracking();
+
+            // Note: We don't need to re-bind state pointers because X_global_ address hasn't
+            // changed But Stage() is where components typically set X[i] = IC
+            comp->Stage(backplane_, configs_[comp.get()]);
+
+            backplane_.clear_context();
+        }
+
+        phase_ = Phase::Staged;
+    }
+
+    /**
+     * @brief Check if simulation is initialized (Staged or later)
+     */
+    [[nodiscard]] bool IsInitialized() const { return phase_ >= Phase::Staged; }
+
+    /**
+     * @brief Set simulation time (for warmstart/reset)
+     */
+    void SetTime(Scalar t) { time_ = t; }
+
+    /**
+     * @brief Get all signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetSignalNames() const {
+        return registry_.get_all_signal_names();
+    }
+
+    /**
+     * @brief Get all input signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetInputNames() const {
+        return registry_.get_all_input_names();
+    }
+
+    /**
+     * @brief Get all output signal names
+     */
+    [[nodiscard]] std::vector<std::string> GetOutputNames() const {
+        return registry_.get_all_output_names();
+    }
+
+    // =========================================================================
+    // External Control & Telemetry Callbacks (Phase 3.1.2)
+    // =========================================================================
+
+    /// Callback type for input sources: (signal_name) -> value
+    using InputSourceCallback = std::function<Scalar(const std::string &)>;
+
+    /// Callback type for output observers: (signal_name, value) -> void
+    using OutputObserverCallback = std::function<void(const std::string &, const Scalar &)>;
+
+    /**
+     * @brief Register an external input source for a signal
+     *
+     * The callback will be invoked before each Step() to provide the input value.
+     * Useful for pilot inputs, external controllers, hardware-in-the-loop.
+     *
+     * @param signal_name Name of the signal to control
+     * @param callback Function returning the input value
+     */
+    void RegisterInputSource(const std::string &signal_name, InputSourceCallback callback) {
+        input_sources_[signal_name] = std::move(callback);
+    }
+
+    /**
+     * @brief Unregister an external input source
+     */
+    void UnregisterInputSource(const std::string &signal_name) {
+        input_sources_.erase(signal_name);
+    }
+
+    /**
+     * @brief Register an output observer for a signal
+     *
+     * The callback will be invoked after each Step() with the current value.
+     * Useful for telemetry, visualization, external logging.
+     *
+     * @param signal_name Name of the signal to observe
+     * @param callback Function receiving the signal value
+     */
+    void RegisterOutputObserver(const std::string &signal_name, OutputObserverCallback callback) {
+        output_observers_[signal_name] = std::move(callback);
+    }
+
+    /**
+     * @brief Unregister an output observer
+     */
+    void UnregisterOutputObserver(const std::string &signal_name) {
+        output_observers_.erase(signal_name);
+    }
+
+    /**
+     * @brief Get number of registered input sources
+     */
+    [[nodiscard]] std::size_t NumInputSources() const { return input_sources_.size(); }
+
+    /**
+     * @brief Get number of registered output observers
+     */
+    [[nodiscard]] std::size_t NumOutputObservers() const { return output_observers_.size(); }
 
     /**
      * @brief Get number of components
@@ -627,6 +824,104 @@ template <typename Scalar> class Simulator {
         logger_.SetProfilingEnabled(config.profiling_enabled);
     }
 
+    // =========================================================================
+    // Graph Generation (Phase 3.3.4) - Symbolic Mode Only
+    // =========================================================================
+
+    /**
+     * @brief Generate dynamics graph as janus::Function (symbolic mode only)
+     *
+     * Extracts the computational graph xdot = f(t, x) from the simulation.
+     * Only available when Scalar = SymbolicScalar.
+     *
+     * @tparam S SFINAE helper (defaults to Scalar)
+     * @return janus::Function representing the dynamics
+     * @throws LifecycleError if simulator is not staged
+     *
+     * Usage:
+     *   Simulator<SymbolicScalar> sim;
+     *   sim.Initialize();
+     *   auto dynamics = sim.GenerateGraph();
+     *   auto xdot = dynamics(t, x);  // Evaluate numerically
+     */
+    template <typename S = Scalar, typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
+    [[nodiscard]] janus::Function GenerateGraph() {
+        if (!IsInitialized()) {
+            throw LifecycleError("GenerateGraph() requires a Staged simulator");
+        }
+
+        // Save current state and time to prevent side effects
+        Scalar saved_time = time_;
+        JanusVector<Scalar> saved_state = GetState();
+
+        std::size_t n_states = GetTotalStateSize();
+
+        // Create symbolic time
+        auto t_sym = janus::sym("t");
+
+        // Use sym_vec_pair to get both:
+        // - x_vec (SymbolicVector) for templated simulator code
+        // - x_mx (raw MX) for janus::Function inputs
+        auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
+
+        // Set state using SymbolicVector (works with templates)
+        SetState(x_vec);
+        SetTime(t_sym);
+
+        // Compute derivatives
+        ComputeDerivatives(t_sym);
+
+        // Gather derivatives
+        const auto &X_dot = GetDerivatives();
+        std::vector<SymbolicScalar> xdot_elements;
+        xdot_elements.reserve(n_states);
+        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(n_states); ++i) {
+            xdot_elements.push_back(X_dot(i));
+        }
+        SymbolicScalar xdot_mx = SymbolicScalar::vertcat(xdot_elements);
+
+        // Build function with raw MX as input
+        std::vector<janus::SymbolicArg> inputs = {t_sym, x_mx};
+        std::vector<janus::SymbolicArg> outputs = {xdot_mx};
+
+        janus::Function dyn_func("dynamics", inputs, outputs);
+
+        // Restore state and time
+        SetTime(saved_time);
+        SetState(saved_state);
+        // Re-compute derivatives to restore X_dot_global_
+        // Use 0 as dt since we just want derivatives, not a step
+        ComputeDerivatives(saved_time);
+
+        return dyn_func;
+    }
+
+    /**
+     * @brief Generate state Jacobian as janus::Function (symbolic mode only)
+     *
+     * Computes the Jacobian df/dx where xdot = f(t, x).
+     * Only available when Scalar = SymbolicScalar.
+     *
+     * @return janus::Function computing the Jacobian matrix
+     */
+    template <typename S = Scalar, typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
+    [[nodiscard]] janus::Function GenerateJacobian() {
+        std::size_t n_states = GetTotalStateSize();
+
+        // Create symbolic variables for the Jacobian function
+        auto t_sym = janus::sym("t");
+        auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
+
+        // Get dynamics and evaluate
+        auto dynamics = GenerateGraph();
+        auto xdot_result = dynamics.eval(t_sym, x_mx);
+
+        // Compute Jacobian
+        auto J_sym = janus::jacobian({janus::as_mx(xdot_result)}, {x_mx});
+
+        return janus::Function("jacobian", {t_sym, x_mx}, {J_sym});
+    }
+
   private:
     std::vector<std::unique_ptr<Component<Scalar>>> components_;
     SignalRegistry<Scalar> registry_;
@@ -654,6 +949,42 @@ template <typename Scalar> class Simulator {
 
     // Logging (Phase 2.5)
     MissionLogger logger_;
+
+    // External callbacks (Phase 3.1.2)
+    std::unordered_map<std::string, InputSourceCallback> input_sources_;
+    std::unordered_map<std::string, OutputObserverCallback> output_observers_;
+
+    /**
+     * @brief Invoke all registered input sources before Step()
+     */
+    void InvokeInputSources() {
+        for (const auto &[signal_name, callback] : input_sources_) {
+            try {
+                Scalar value = callback(signal_name);
+                SetSignal(signal_name, value);
+            } catch (const std::exception &e) {
+                // Log but don't fail - external sources may be unreliable
+                logger_.Log(LogLevel::Warning,
+                            "InputSource callback failed for " + signal_name + ": " + e.what());
+            }
+        }
+    }
+
+    /**
+     * @brief Invoke all registered output observers after Step()
+     */
+    void InvokeOutputObservers() {
+        for (const auto &[signal_name, callback] : output_observers_) {
+            try {
+                Scalar value = GetSignal(signal_name);
+                callback(signal_name, value);
+            } catch (const std::exception &e) {
+                // Log but don't fail - external observers may be unreliable
+                logger_.Log(LogLevel::Warning,
+                            "OutputObserver callback failed for " + signal_name + ": " + e.what());
+            }
+        }
+    }
 };
 
 } // namespace icarus

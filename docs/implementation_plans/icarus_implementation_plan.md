@@ -103,13 +103,13 @@ Phase 4–7 (horizontal expansion)
   - [x] Data Dictionary with outputs, inputs, and parameters
   - [x] Pre-run wiring validation
 
-- [ ] **2.5 ASCII Logging and Data Dictionary Display**
-  - [ ] Console abstraction with ANSI color support
-  - [ ] ASCII box-drawing table formatter
-  - [ ] Flight Manifest (formatted Data Dictionary at Provision end)
-  - [ ] Mission Logger with lifecycle phase tracking
-  - [ ] Mission Debrief with profiling statistics
-  - [ ] Simulator integration for automatic logging
+- [x] **2.5 ASCII Logging and Data Dictionary Display**
+  - [x] Console abstraction with ANSI color support
+  - [x] ASCII box-drawing table formatter
+  - [x] Flight Manifest (formatted Data Dictionary at Provision end)
+  - [x] Mission Logger with lifecycle phase tracking
+  - [x] Mission Debrief with profiling statistics
+  - [x] Simulator integration for automatic logging
 
 ### Architecture References
 
@@ -122,14 +122,14 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Simulate a falling object (point mass under gravity)
-- [ ] Verify against analytical solution: `y(t) = y₀ + v₀t - ½gt²`
-- [ ] State correctly scattered/gathered through integrator
-- [ ] Components use explicit input/parameter registration
-- [ ] Wiring is external to components
-- [ ] Any signal accessible via `sim.Get<T>()`/`sim.Set<T>()`
-- [ ] Flight Manifest displays at Provision end
-- [ ] Mission Debrief displays at Shutdown with timing stats
+- [x] Simulate a falling object (point mass under gravity)
+- [x] Verify against analytical solution: `y(t) = y₀ + v₀t - ½gt²`
+- [x] State correctly scattered/gathered through integrator
+- [x] Components use explicit input/parameter registration
+- [x] Wiring is external to components
+- [x] Any signal accessible via `sim.Get<T>()`/`sim.Set<T>()`
+- [x] Flight Manifest displays at Provision end
+- [x] Mission Debrief displays at Shutdown with timing stats
 
 ---
 
@@ -160,7 +160,7 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Extract symbolic dynamics as `casadi::Function`
+- [ ] Extract symbolic dynamics as `janus::Function`
 - [ ] Evaluate numerically, match `Simulator<double>` output
 - [ ] Zero template violations in codebase
 

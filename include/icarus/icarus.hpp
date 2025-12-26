@@ -34,6 +34,9 @@
 #include <icarus/sim/RK45Integrator.hpp>
 #include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Scheduler.hpp>
+#include <icarus/sim/SimulationBuilder.hpp>
+#include <icarus/sim/SimulationResults.hpp>
+#include <icarus/sim/SimulationRunner.hpp>
 #include <icarus/sim/Simulator.hpp>
 
 // I/O
@@ -42,6 +45,12 @@
 #include <icarus/io/Playback.hpp>
 #include <icarus/io/Recorder.hpp>
 #include <icarus/io/WiringConfig.hpp>
+
+// Symbolic (Phase 3)
+#include <icarus/symbolic/SymbolicTracer.hpp>
+
+// Utilities
+#include <icarus/util/ScalarFormat.hpp>
 
 namespace icarus {
 // Version functions are defined in core/Types.hpp

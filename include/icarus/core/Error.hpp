@@ -273,4 +273,24 @@ class IOError : public Error {
     explicit IOError(const std::string &msg) : Error("IO: " + msg) {}
 };
 
+/**
+ * @brief Feature not yet implemented
+ *
+ * Thrown when a feature is stubbed for future implementation.
+ */
+class NotImplementedError : public Error {
+  public:
+    explicit NotImplementedError(const std::string &msg) : Error("Not implemented: " + msg) {}
+};
+
+/**
+ * @brief Configuration error
+ *
+ * Thrown when builder or configuration setup is invalid.
+ */
+class ConfigurationError : public Error {
+  public:
+    explicit ConfigurationError(const std::string &msg) : Error("Configuration: " + msg) {}
+};
+
 } // namespace icarus

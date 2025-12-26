@@ -135,6 +135,27 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     }
 
     /**
+     * @brief Publish state outputs BEFORE other components' Step() runs
+     *
+     * This is critical for correct signal propagation: Gravity needs to read
+     * the current position to compute force, but Dynamics reads force in its
+     * Step(). By publishing position in PreStep, we ensure the data flow:
+     *   PreStep: Dynamics publishes position
+     *   Step: Gravity reads position, computes force, publishes force
+     *   Step: Dynamics reads force, computes acceleration
+     */
+    void PreStep(Scalar t, Scalar dt) override {
+        (void)t;
+        (void)dt;
+
+        // Publish current state to outputs BEFORE other components read them
+        Vec3<Scalar> pos{state_pos_[0], state_pos_[1], state_pos_[2]};
+        Vec3<Scalar> vel{state_vel_[0], state_vel_[1], state_vel_[2]};
+        position_ = pos;
+        velocity_ = vel;
+    }
+
+    /**
      * @brief Compute derivatives using Vulcan dynamics
      */
     void Step(Scalar t, Scalar dt) override {
