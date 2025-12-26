@@ -139,17 +139,17 @@ Phase 4–7 (horizontal expansion)
 
 ### Tasks
 
-- [ ] **3.1 Dual-Mode Validation**
-  - [ ] Instantiate `Simulator<casadi::MX>`, ensure compilation
-  - [ ] No `std::` math or `if/else` on Scalar in codebase
+- [x] **3.1 Dual-Mode Validation**
+  - [x] Instantiate `Simulator<casadi::MX>`, ensure compilation
+  - [x] No `std::` math or `if/else` on Scalar in codebase
 
-- [ ] **3.2 Graph Export**
-  - [ ] `GenerateGraph()` returns `casadi::Function`
-  - [ ] Derivatives extractable via AD
+- [x] **3.2 Graph Export**
+  - [x] `GenerateGraph()` returns `casadi::Function`
+  - [x] Derivatives extractable via AD
 
-- [ ] **3.3 Symbolic Test Suite**
-  - [ ] Verify `PointMass3DOF` traces correctly
-  - [ ] Numeric/symbolic output comparison tests
+- [x] **3.3 Symbolic Test Suite**
+  - [x] Verify `PointMass3DOF` traces correctly
+  - [x] Numeric/symbolic output comparison tests
 
 ### Architecture References
 
@@ -160,9 +160,9 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Extract symbolic dynamics as `janus::Function`
-- [ ] Evaluate numerically, match `Simulator<double>` output
-- [ ] Zero template violations in codebase
+- [x] Extract symbolic dynamics as `janus::Function`
+- [x] Evaluate numerically, match `Simulator<double>` output
+- [x] Zero template violations in codebase
 
 ---
 
