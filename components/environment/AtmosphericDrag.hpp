@@ -6,6 +6,7 @@
  *
  * Computes drag force: F_drag = -0.5 * ρ * v² * Cd * A * v_hat
  * Uses Vulcan's exponential atmosphere for density calculation.
+ * THIS FILE IS JUST A DEMO. WILL NEED TO BE REDONE TO PROPERLY JUST OUTPUT ATMOSPHERIC VARS
  */
 
 #include <icarus/core/Component.hpp>
