@@ -45,5 +45,6 @@ target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/c
 add_executable(symbolic_orbital_demo symbolic/symbolic_orbital_demo.cpp)
 target_link_libraries(symbolic_orbital_demo PRIVATE icarus)
 
-
-
+add_executable(reentry_dynamics_demo symbolic/reentry_dynamics_demo.cpp)
+target_link_libraries(reentry_dynamics_demo PRIVATE icarus)
+target_include_directories(reentry_dynamics_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
