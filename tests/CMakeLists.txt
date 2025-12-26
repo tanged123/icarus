@@ -79,5 +79,3 @@ icarus_add_test(test_generate_graph
     symbolic/generate_graph_test.cpp
 )
 target_include_directories(test_generate_graph PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-

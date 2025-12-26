@@ -176,12 +176,19 @@ int main() {
     auto [x_vis_vec, x_vis_mx] = janus::sym_vec_pair("x", 6);
     auto xdot_vis = dynamics.eval(t_vis, x_vis_mx);
 
-    // Export to interactive HTML
+    // Export to interactive HTML (shallow view - shows function call structure)
     janus::export_graph_html(janus::as_mx(xdot_vis), "dynamics_graph", "OrbitalDynamics");
-    logger.Log(LogLevel::Info, "[Graph] Exported: dynamics_graph.html (interactive visualization)");
+    logger.Log(LogLevel::Info, "[Graph] Exported: dynamics_graph.html (shallow view)");
+
+    // Export DEEP graph (fully expanded SX operations)
+    janus::export_graph_deep(dynamics.casadi_function(), "dynamics_graph_deep",
+                             janus::DeepGraphFormat::HTML, "OrbitalDynamics_Deep");
+    logger.Log(LogLevel::Info, "[Graph] Exported: dynamics_graph_deep.html (deep view)");
 
     // Also export to DOT and try PDF rendering
     janus::export_graph_dot(janus::as_mx(xdot_vis), "dynamics_graph", "OrbitalDynamics");
+    janus::export_graph_deep(dynamics.casadi_function(), "dynamics_graph_deep",
+                             janus::DeepGraphFormat::DOT, "OrbitalDynamics_Deep");
     if (janus::render_graph("dynamics_graph.dot", "dynamics_graph.pdf")) {
         logger.Log(LogLevel::Info, "[Graph] Exported: dynamics_graph.pdf");
     } else {
