@@ -336,6 +336,20 @@ template <typename Scalar> class Simulator {
             X_global_[i] = Scalar{0};
             X_dot_global_[i] = Scalar{0};
         }
+
+        // Re-run Stage on components to apply Initial Conditions
+        for (auto &comp : components_) {
+            // Context is needed for wiring resolution, though we assume wiring is constant
+            backplane_.set_context(comp->Entity(), comp->Name());
+            backplane_.clear_tracking();
+
+            // Note: We don't need to re-bind state pointers because X_global_ address hasn't
+            // changed But Stage() is where components typically set X[i] = IC
+            comp->Stage(backplane_, configs_[comp.get()]);
+
+            backplane_.clear_context();
+        }
+
         phase_ = Phase::Staged;
     }
 
@@ -836,6 +850,10 @@ template <typename Scalar> class Simulator {
             throw LifecycleError("GenerateGraph() requires a Staged simulator");
         }
 
+        // Save current state and time to prevent side effects
+        Scalar saved_time = time_;
+        JanusVector<Scalar> saved_state = GetState();
+
         std::size_t n_states = GetTotalStateSize();
 
         // Create symbolic time
@@ -866,7 +884,16 @@ template <typename Scalar> class Simulator {
         std::vector<janus::SymbolicArg> inputs = {t_sym, x_mx};
         std::vector<janus::SymbolicArg> outputs = {xdot_mx};
 
-        return janus::Function("dynamics", inputs, outputs);
+        janus::Function dyn_func("dynamics", inputs, outputs);
+
+        // Restore state and time
+        SetTime(saved_time);
+        SetState(saved_state);
+        // Re-compute derivatives to restore X_dot_global_
+        // Use 0 as dt since we just want derivatives, not a step
+        ComputeDerivatives(saved_time);
+
+        return dyn_func;
     }
 
     /**

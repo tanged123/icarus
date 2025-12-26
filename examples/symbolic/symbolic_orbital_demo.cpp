@@ -273,7 +273,7 @@ int main() {
     std::cout << "  State size:    " << sim.GetTotalStateSize() << std::endl;
     std::cout << "  Jacobian:      " << J.rows() << "x" << J.cols() << std::endl;
     std::cout << std::endl;
-    std::cout << "  Jacobian diagnonal:" << std::endl;
+    std::cout << "  Jacobian diagonal:" << std::endl;
     for (int i = 0; i < std::min(static_cast<int>(J.rows()), 3); ++i) {
         std::cout << "    J[" << i << "," << i << "] = " << J(i, i) << std::endl;
     }

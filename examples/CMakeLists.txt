@@ -44,5 +44,6 @@ target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/c
 # =============================================================================
 add_executable(symbolic_orbital_demo symbolic/symbolic_orbital_demo.cpp)
 target_link_libraries(symbolic_orbital_demo PRIVATE icarus)
-target_include_directories(symbolic_orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+
 
