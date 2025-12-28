@@ -195,10 +195,10 @@ template <typename Scalar> class SimulationBuilder {
      *
      * After Build():
      * - All components added to simulator
-     * - Wiring configuration stored (applied at Stage)
      * - Integrator set
      *
      * Caller must still call Provision() and Stage(), or use BuildAndInitialize().
+     * Wiring is applied during BuildAndInitialize() after Provision().
      */
     Simulator<Scalar> Build() {
         Simulator<Scalar> sim;
@@ -229,10 +229,8 @@ template <typename Scalar> class SimulationBuilder {
         // Set nominal timestep
         sim.SetNominalDt(dt_);
 
-        // Store wiring (applied during Stage)
-        for (const auto &[target, wiring_map] : wiring_) {
-            sim.SetWiring(target, wiring_map);
-        }
+        // NOTE: Wiring is NOT applied here anymore (Phase 4.0 refactor)
+        // Wiring is applied in BuildAndInitialize() after Provision()
 
         return sim;
     }
@@ -240,10 +238,23 @@ template <typename Scalar> class SimulationBuilder {
     /**
      * @brief Build and initialize (Provision + Stage)
      * @return Ready-to-run Simulator
+     *
+     * Applies wiring configuration after Provision() using the registry directly.
      */
     Simulator<Scalar> BuildAndInitialize() {
         Simulator<Scalar> sim = Build();
         sim.Provision();
+
+        // Apply wiring after Provision() - Phase 4.0 pattern
+        // Wire directly on the registry
+        auto &registry = sim.GetRegistry();
+        for (const auto &[target, wiring_map] : wiring_) {
+            for (const auto &[input, source] : wiring_map) {
+                std::string full_input = target + "." + input;
+                registry.template wire_input<Scalar>(full_input, source);
+            }
+        }
+
         sim.Stage();
         return sim;
     }

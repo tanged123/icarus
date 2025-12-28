@@ -78,11 +78,8 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
         bp.register_param("reference_area", &area_, area_);
     }
 
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Apply wiring from configuration
-        for (const auto &[input, source] : cfg.wiring) {
-            bp.template wire_input<Scalar>(input, source);
-        }
+    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
+        // Wiring handled by SignalRouter externally
     }
 
     void Step(Scalar t, Scalar dt) override {

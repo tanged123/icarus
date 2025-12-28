@@ -44,7 +44,6 @@
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/Playback.hpp>
 #include <icarus/io/Recorder.hpp>
-#include <icarus/io/WiringConfig.hpp>
 
 // Symbolic (Phase 3)
 #include <icarus/symbolic/SymbolicTracer.hpp>

@@ -97,13 +97,11 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     /**
      * @brief Stage phase - resolve dependencies
      *
-     * Note: Wiring is defined externally (simulator config) and applied here.
+     * Wiring is now handled externally by SignalRouter, not in Stage().
+     * This method is kept for lifecycle compatibility.
      */
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Apply wiring from configuration
-        for (const auto &[input, source] : cfg.wiring) {
-            bp.template wire_input<Scalar>(input, source);
-        }
+    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
+        // Wiring handled by SignalRouter externally
     }
 
     /**

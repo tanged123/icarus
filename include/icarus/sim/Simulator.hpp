@@ -15,7 +15,6 @@
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/LogConfig.hpp>
 #include <icarus/io/MissionLogger.hpp>
-#include <icarus/io/WiringConfig.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/sim/IntegratorFactory.hpp>
@@ -138,21 +137,6 @@ template <typename Scalar> class Simulator {
                                 state_size);
                 state_layout_.push_back({comp.get(), offset, state_size});
                 offset += state_size;
-            }
-        }
-
-        // Distribute wiring configuration to components
-        const auto &all_wiring = wiring_config_.GetAllWirings();
-        for (auto &comp : components_) {
-            std::string prefix = comp->FullName() + ".";
-            auto &comp_wiring = configs_[comp.get()].wiring;
-            comp_wiring.clear();
-
-            // Find all wirings for this component
-            for (const auto &[input, source] : all_wiring) {
-                if (input.find(prefix) == 0) {
-                    comp_wiring[input] = source;
-                }
             }
         }
 
@@ -474,18 +458,23 @@ template <typename Scalar> class Simulator {
     // =========================================================================
 
     /**
-     * @brief Configure wiring for a component or entity
+     * @brief Configure wiring for a component
      *
-     * Helper to populate wiring config from code.
+     * Convenience method for programmatic wiring setup.
+     * Wiring is applied immediately to the registry.
+     * Must be called after Provision().
      *
-     * @param prefix Component or Entity name prefix (e.g. "Gravity" or "Leader")
-     * @param wiring_map Map of local input name -> full source name
+     * @param prefix Component name prefix (e.g. "Gravity")
+     * @param wiring_map Map of local input name -> source signal path
      */
     void SetWiring(const std::string &prefix,
                    const std::map<std::string, std::string> &wiring_map) {
+        if (phase_ < Phase::Provisioned) {
+            throw LifecycleError("SetWiring() requires prior Provision()");
+        }
         for (const auto &[local, source] : wiring_map) {
             std::string full_input = prefix.empty() ? local : (prefix + "." + local);
-            wiring_config_.AddWiring(full_input, source);
+            registry_.template wire_input<Scalar>(full_input, source);
         }
     }
 
@@ -518,39 +507,6 @@ template <typename Scalar> class Simulator {
     [[nodiscard]] std::vector<std::string> GetUnwiredInputs() const {
         return registry_.get_unwired_inputs();
     }
-
-    /**
-     * @brief Load wiring configuration from YAML file
-     *
-     * Must be called after Provision() and before Stage().
-     *
-     * @param path Path to YAML wiring configuration file
-     */
-    void LoadWiring(const std::string &path) {
-        if (phase_ < Phase::Provisioned) {
-            throw LifecycleError("LoadWiring() requires prior Provision()");
-        }
-        wiring_config_ = WiringConfig::FromFile(path);
-    }
-
-    /**
-     * @brief Load wiring configuration from WiringConfig object
-     *
-     * Must be called after Provision() and before Stage().
-     *
-     * @param config WiringConfig with input-to-source mappings
-     */
-    void LoadWiring(const WiringConfig &config) {
-        if (phase_ < Phase::Provisioned) {
-            throw LifecycleError("LoadWiring() requires prior Provision()");
-        }
-        wiring_config_ = config;
-    }
-
-    /**
-     * @brief Get the loaded wiring configuration
-     */
-    [[nodiscard]] const WiringConfig &GetWiringConfig() const { return wiring_config_; }
 
     /**
      * @brief Generate data dictionary to file
@@ -943,9 +899,6 @@ template <typename Scalar> class Simulator {
     // Integrator (Phase 2.2) - defaults to RK4
     std::unique_ptr<Integrator<Scalar>> integrator_ = std::make_unique<RK4Integrator<Scalar>>();
     IntegratorConfig<Scalar> integrator_config_ = IntegratorConfig<Scalar>::RK4Default();
-
-    // Wiring configuration (Phase 2.4)
-    WiringConfig wiring_config_;
 
     // Logging (Phase 2.5)
     MissionLogger logger_;

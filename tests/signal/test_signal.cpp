@@ -726,26 +726,6 @@ TEST(SignalRegistry, ValidateWiringPasses) {
 }
 
 // =============================================================================
-// Phase 2.4: WiringConfig Tests
-// =============================================================================
-
-TEST(WiringConfig, AddAndGet) {
-    WiringConfig config;
-
-    config.AddWiring("Consumer.input", "Source.output");
-
-    EXPECT_TRUE(config.HasWiring("Consumer.input"));
-    EXPECT_EQ(config.GetSource("Consumer.input"), "Source.output");
-    EXPECT_FALSE(config.HasWiring("Other.input"));
-}
-
-TEST(WiringConfig, GetSourceThrows) {
-    WiringConfig config;
-
-    EXPECT_THROW((void)config.GetSource("nonexistent"), WiringError);
-}
-
-// =============================================================================
 // Phase 2.4: SignalKind Tests
 // =============================================================================
 
@@ -791,40 +771,6 @@ TEST(DataDictionary, ComputeStats) {
     EXPECT_EQ(dict.total_config, 1);
     EXPECT_EQ(dict.integrable_states, 1);
     EXPECT_EQ(dict.unwired_inputs, 1);
-}
-
-TEST(WiringConfig, FromYAMLFlat) {
-    // Test flat YAML format: "Component.input": "Source.output"
-    YAML::Node node;
-    node["wiring"]["PointMass.force"] = "Gravity.force";
-    node["wiring"]["PointMass.position"] = "GPS.position";
-
-    auto config = WiringConfig::FromYAML(node);
-
-    EXPECT_EQ(config.size(), 2);
-    EXPECT_TRUE(config.HasWiring("PointMass.force"));
-    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
-    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
-}
-
-TEST(WiringConfig, FromYAMLNested) {
-    // Test nested YAML format: Component: { input: "Source.output" }
-    YAML::Node node;
-    node["wiring"]["PointMass"]["force"] = "Gravity.force";
-    node["wiring"]["PointMass"]["position"] = "GPS.position";
-
-    auto config = WiringConfig::FromYAML(node);
-
-    EXPECT_EQ(config.size(), 2);
-    EXPECT_TRUE(config.HasWiring("PointMass.force"));
-    EXPECT_EQ(config.GetSource("PointMass.force"), "Gravity.force");
-    EXPECT_EQ(config.GetSource("PointMass.position"), "GPS.position");
-}
-
-TEST(WiringConfig, FromYAMLEmpty) {
-    YAML::Node node;
-    auto config = WiringConfig::FromYAML(node);
-    EXPECT_TRUE(config.empty());
 }
 
 } // namespace

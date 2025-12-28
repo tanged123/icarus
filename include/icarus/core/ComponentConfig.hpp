@@ -11,7 +11,6 @@
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 
-#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -58,10 +57,6 @@ struct ComponentConfig {
 
     /// List-based config (for aggregators with variable source counts, etc.)
     std::vector<std::string> sources;
-
-    /// Input wiring map (LEGACY - prefer SignalRouter for new code)
-    /// Maps input port name -> source signal path
-    std::map<std::string, std::string> wiring;
 
     // =========================================================================
     // Typed Accessors
