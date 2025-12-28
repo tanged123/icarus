@@ -40,6 +40,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Fix for clangd on NixOS: CMake strips implicit system includes (like
+# /nix/store/...) from compile_commands.json. This forces them back in so clangd
+# can find them.
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+  set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES
+      ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
 # --- ccache support ---
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
