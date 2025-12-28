@@ -8,6 +8,7 @@
  * Components implement the Provision/Stage/Step lifecycle.
  */
 
+#include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 #include <string>

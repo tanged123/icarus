@@ -236,6 +236,119 @@ template <typename Scalar> class Backplane {
     }
 
     // =========================================================================
+    // Phase 4.0: Semantic Port Declaration
+    // =========================================================================
+    // These are semantic aliases for register_output/register_input that
+    // clarify the Phase 4.0 pattern: components DECLARE ports, SignalRouter WIRES them.
+
+    /**
+     * @brief Declare an output port (Phase 4.0 semantic alias for register_output)
+     *
+     * Use this in Provision() to declare what signals this component produces.
+     * SignalRouter will connect consumers to this output.
+     *
+     * @param local_name Signal name (without entity/component prefix)
+     * @param data_ptr Pointer to component-owned storage
+     * @param unit Physical unit
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void declare_output(const std::string &local_name, T *data_ptr, const std::string &unit = "",
+                        const std::string &description = "") {
+        register_output<T>(local_name, data_ptr, unit, description);
+    }
+
+    /**
+     * @brief Declare a Vec3 output port
+     */
+    template <typename S>
+    void declare_output_vec3(const std::string &local_name, Vec3<S> *data_ptr,
+                             const std::string &unit = "", const std::string &description = "") {
+        register_output_vec3<S>(local_name, data_ptr, unit, description);
+    }
+
+    /**
+     * @brief Declare an input port (Phase 4.0 semantic alias for register_input)
+     *
+     * Use this in Provision() to declare what signals this component needs.
+     * SignalRouter will wire this input to its source.
+     *
+     * @param local_name Signal name (without entity/component prefix)
+     * @param handle Pointer to InputHandle owned by component
+     * @param unit Physical unit
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void declare_input(const std::string &local_name, InputHandle<T> *handle,
+                       const std::string &unit = "", const std::string &description = "") {
+        register_input<T>(local_name, handle, unit, description);
+    }
+
+    // =========================================================================
+    // Phase 4.0: Wiring with Gain
+    // =========================================================================
+
+    /**
+     * @brief Wire an input to a source with a gain factor
+     *
+     * Called by SignalRouter to connect signals with optional scaling.
+     * The gain factor is applied when reading the input value.
+     *
+     * @param input_path Full path of input (Entity.Component.signal)
+     * @param output_path Full path of source output
+     * @param gain Scale factor (default 1.0)
+     */
+    template <typename T>
+    void WireWithGain(const std::string &input_path, const std::string &output_path,
+                      double gain = 1.0) {
+        registry_.template wire_input_with_gain<T>(input_path, output_path, gain);
+    }
+
+    /**
+     * @brief Wire with gain (type-erased version for SignalRouter)
+     *
+     * Uses the input's registered type to determine how to wire.
+     */
+    void WireWithGain(const std::string &input_path, const std::string &output_path,
+                      double gain = 1.0) {
+        registry_.wire_input_with_gain(input_path, output_path, gain);
+    }
+
+    // =========================================================================
+    // Phase 4.0: Signal Validation
+    // =========================================================================
+
+    /**
+     * @brief Check if an output signal exists
+     */
+    [[nodiscard]] bool HasOutput(const std::string &full_name) const {
+        return registry_.HasOutput(full_name);
+    }
+
+    /**
+     * @brief Check if an input port exists
+     */
+    [[nodiscard]] bool HasInput(const std::string &full_name) const {
+        return registry_.HasInput(full_name);
+    }
+
+    /**
+     * @brief Get all declared input paths
+     *
+     * Used by SignalRouter to find unwired inputs.
+     */
+    [[nodiscard]] std::vector<std::string> GetDeclaredInputs() const {
+        return registry_.GetAllInputPaths();
+    }
+
+    /**
+     * @brief Get all declared output paths
+     */
+    [[nodiscard]] std::vector<std::string> GetDeclaredOutputs() const {
+        return registry_.GetAllOutputPaths();
+    }
+
+    // =========================================================================
     // Dependency Tracking
     // =========================================================================
 

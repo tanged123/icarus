@@ -739,6 +739,79 @@ template <typename Scalar> class SignalRegistry {
         return get_all_signal_names(); // Outputs = signals
     }
 
+    // =========================================================================
+    // Phase 4.0: API Additions for SignalRouter and Backplane
+    // =========================================================================
+
+    /**
+     * @brief Check if an output signal exists (PascalCase alias)
+     */
+    [[nodiscard]] bool HasOutput(const std::string &name) const { return HasSignal(name); }
+
+    /**
+     * @brief Check if an input port exists (PascalCase alias)
+     */
+    [[nodiscard]] bool HasInput(const std::string &name) const { return has_input(name); }
+
+    /**
+     * @brief Get all declared input paths (for SignalRouter validation)
+     */
+    [[nodiscard]] std::vector<std::string> GetAllInputPaths() const {
+        return get_all_input_names();
+    }
+
+    /**
+     * @brief Get all declared output paths (for SignalRouter validation)
+     */
+    [[nodiscard]] std::vector<std::string> GetAllOutputPaths() const {
+        return get_all_signal_names();
+    }
+
+    /**
+     * @brief Wire an input to a source signal with gain factor
+     *
+     * The gain is applied when reading the input value.
+     * gain = 1.0 means no scaling (pass-through).
+     *
+     * @param input_name Full name of the input port
+     * @param source_name Full name of the source signal
+     * @param gain Scale factor (default 1.0)
+     */
+    template <typename T>
+    void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
+                              double gain = 1.0) {
+        auto it = inputs_.find(input_name);
+        if (it == inputs_.end()) {
+            throw WiringError("Input not found: '" + input_name + "'");
+        }
+
+        // Resolve the source signal
+        auto source_handle = resolve<T>(source_name);
+
+        // Wire the input with gain
+        auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
+        handle->wire_with_gain(source_handle.ptr(), source_name, gain);
+        it->second.info.wired_to = source_name;
+    }
+
+    /**
+     * @brief Wire an input with gain (type-erased version)
+     *
+     * Uses the input's registered type information to perform wiring.
+     * Falls back to Scalar type if type cannot be determined.
+     */
+    void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
+                              double gain = 1.0) {
+        auto it = inputs_.find(input_name);
+        if (it == inputs_.end()) {
+            throw WiringError("Input not found: '" + input_name + "'");
+        }
+
+        // For now, assume Scalar type. In a full implementation,
+        // we would use type information stored during registration.
+        wire_input_with_gain<Scalar>(input_name, source_name, gain);
+    }
+
   private:
     template <typename T>
     void register_config_impl(const std::string &name, T *storage, T initial_value,

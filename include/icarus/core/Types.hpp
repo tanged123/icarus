@@ -75,18 +75,8 @@ enum class Phase : uint8_t {
 // Configuration Structures
 // =============================================================================
 
-/**
- * @brief Component configuration structure
- *
- * Passed to components during Provision phase.
- */
-struct ComponentConfig {
-    std::string name;                          ///< Component instance name
-    std::string entity;                        ///< Entity namespace (optional)
-    std::string config_path;                   ///< Path to config file (optional)
-    std::map<std::string, std::string> wiring; ///< Input name -> Source name mapping
-    // Additional config fields will be added as needed
-};
+// ComponentConfig with typed accessors is now in its own header
+// (Phase 4.0: Configuration Infrastructure)
 
 /**
  * @brief Run configuration for Stage phase

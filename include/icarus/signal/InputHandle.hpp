@@ -91,12 +91,25 @@ template <typename T> class InputHandle {
     void wire(const T *source, const std::string &source_name) {
         source_ = source;
         wired_to_ = source_name;
+        gain_ = 1.0; // Default gain
+    }
+
+    /**
+     * @brief Wire with a gain factor (Phase 4.0)
+     *
+     * The gain is applied when reading the value via get().
+     */
+    void wire_with_gain(const T *source, const std::string &source_name, double gain) {
+        source_ = source;
+        wired_to_ = source_name;
+        gain_ = gain;
     }
 
     std::string name_;          // Local name (e.g., "throttle")
     std::string full_name_;     // Full name (e.g., "X15.Engine.throttle")
     std::string wired_to_;      // Source signal name
     const T *source_ = nullptr; // Pointer to source value
+    double gain_ = 1.0;         // Scale factor (Phase 4.0)
 
     // Metadata
     std::string units_;

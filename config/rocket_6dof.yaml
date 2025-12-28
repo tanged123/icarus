@@ -1,0 +1,86 @@
+# Icarus Simulation Configuration
+# Example: 6DOF Rocket with Mass/Force Aggregation
+#
+# Component configuration ONLY - signal routing is separate (see rocket_routes.yaml)
+
+simulation:
+  name: "Rocket 6DOF Test"
+  dt: 0.01
+  t_end: 100.0
+
+components:
+  # ===========================================================================
+  # Mass Sources
+  # ===========================================================================
+
+  - type: Structure
+    name: Structure
+    entity: Rocket
+    scalars:
+      mass: 500.0
+    vectors:
+      cg: [0, 0, 2.0]
+      inertia_diagonal: [100, 100, 50]
+
+  - type: FuelTank
+    name: FuelTank
+    entity: Rocket
+    scalars:
+      initial_fuel: 1000.0
+      tank_volume: 2.0
+    vectors:
+      tank_cg: [0, 0, 1.0]
+      tank_inertia_diagonal: [50, 50, 20]
+
+  # ===========================================================================
+  # Mass Aggregator
+  # ===========================================================================
+
+  - type: MassAggregator
+    name: Mass
+    entity: Rocket
+    integers:
+      num_sources: 2
+
+  # ===========================================================================
+  # Force Sources
+  # ===========================================================================
+
+  - type: PointMassGravity
+    name: Gravity
+    entity: Rocket
+    scalars:
+      mu: 3.986004418e14  # Earth GM [m^3/s^2]
+
+  - type: Thrust
+    name: Engine
+    entity: Rocket
+    scalars:
+      max_thrust: 50000.0
+      isp: 300.0
+    vectors:
+      thrust_direction: [0, 0, -1]
+      nozzle_position: [0, 0, 0]
+
+  # ===========================================================================
+  # Force Aggregator
+  # ===========================================================================
+
+  - type: ForceAggregator
+    name: Forces
+    entity: Rocket
+    integers:
+      num_sources: 2
+
+  # ===========================================================================
+  # Dynamics
+  # ===========================================================================
+
+  - type: RigidBody6DOF
+    name: EOM
+    entity: Rocket
+    vectors:
+      initial_position: [0, 0, 6.471e6]       # LEO altitude [m]
+      initial_velocity: [7500, 0, 0]          # Orbital velocity [m/s]
+      initial_attitude: [1, 0, 0, 0]          # Quaternion [w,x,y,z]
+      initial_angular_velocity: [0, 0, 0]     # [rad/s]

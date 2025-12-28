@@ -140,6 +140,19 @@ class SignalNotFoundError : public SignalError {
 class ConfigError : public Error {
   public:
     explicit ConfigError(const std::string &msg) : Error("Config: " + msg) {}
+
+    ConfigError(const std::string &component, const std::string &key)
+        : Error("Config: " + component + " missing required key '" + key + "'") {}
+};
+
+/**
+ * @brief Signal routing error
+ *
+ * Thrown when signal routing fails (missing signals, type mismatches, etc.)
+ */
+class RoutingError : public Error {
+  public:
+    explicit RoutingError(const std::string &msg) : Error("Routing: " + msg) {}
 };
 
 /**
