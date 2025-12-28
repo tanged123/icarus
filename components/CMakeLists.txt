@@ -9,7 +9,7 @@ target_include_directories(icarus_components
 )
 
 target_link_libraries(icarus_components
-  INTERFACE icarus_core
+  INTERFACE icarus
 )
 
 add_library(icarus::components ALIAS icarus_components)

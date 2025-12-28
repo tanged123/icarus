@@ -184,6 +184,56 @@ namespace icarus {
  * Loaded from YAML or constructed programmatically.
  * Passed to Simulator::FromConfig() for initialization.
  */
+/**
+ * @brief Trim optimization configuration
+ *
+ * Defines how the simulator finds equilibrium/trim conditions during Stage().
+ */
+template <typename Scalar>
+struct TrimConfig {
+    bool enabled = false;                    // Whether to run trim optimization
+
+    // Trim targets: which derivatives should be zero?
+    std::vector<std::string> zero_derivatives;  // e.g., ["velocity", "angular_velocity"]
+
+    // Trim controls: which signals can be adjusted?
+    std::vector<std::string> control_signals;   // e.g., ["throttle", "elevator"]
+
+    // Optimization settings
+    Scalar tolerance = Scalar{1e-6};
+    int max_iterations = 100;
+    std::string method = "newton";           // "newton", "gradient", "simplex"
+
+    // Initial guesses for controls (optional)
+    std::unordered_map<std::string, Scalar> initial_guesses;
+};
+
+/**
+ * @brief Staging configuration
+ *
+ * Configures the Stage() phase: trim optimization and symbolic generation.
+ */
+template <typename Scalar>
+struct StageConfig {
+    // =========================================================================
+    // Trim Configuration
+    // =========================================================================
+    TrimConfig<Scalar> trim;
+
+    // =========================================================================
+    // Symbolic Mode Configuration
+    // =========================================================================
+    bool generate_symbolics = false;         // Generate symbolic dynamics graph
+    bool generate_jacobian = false;          // Generate symbolic Jacobian
+    std::string symbolic_output_dir = "";    // Where to export symbolic functions
+
+    // =========================================================================
+    // Validation
+    // =========================================================================
+    bool validate_wiring = true;             // Throw if unwired inputs exist
+    bool warn_on_unwired = true;             // Log warning for unwired inputs
+};
+
 template <typename Scalar>
 struct SimulatorConfig {
     // =========================================================================
@@ -196,6 +246,7 @@ struct SimulatorConfig {
     // =========================================================================
     Scalar dt = Scalar{0.01};      // Nominal timestep
     Scalar t_end = Scalar{100.0};  // End time (optional, for batch runs)
+    Scalar t_start = Scalar{0.0};  // Start time
 
     // =========================================================================
     // Component Configuration
@@ -206,6 +257,17 @@ struct SimulatorConfig {
     // Signal Routing
     // =========================================================================
     std::vector<signal::SignalRoute> routes;
+
+    // =========================================================================
+    // Initial Conditions (Config-driven ICs)
+    // =========================================================================
+    // Applied during Provision(), before trim optimization
+    std::unordered_map<std::string, Scalar> initial_conditions;  // signal -> value
+
+    // =========================================================================
+    // Staging Configuration
+    // =========================================================================
+    StageConfig<Scalar> staging;
 
     // =========================================================================
     // Integrator Configuration
@@ -370,14 +432,19 @@ public:
     /**
      * @brief Stage the simulation
      *
-     * - Applies signal routing
-     * - Allocates and binds state vectors
-     * - Applies initial conditions
-     * - Validates all inputs are wired
+     * "Staging" prepares the vehicle for launch:
+     * - Runs trim optimization to find equilibrium state (if configured)
+     * - Generates symbolic dynamics graph (if symbolic mode)
+     * - Generates symbolic Jacobian (if configured)
+     * - Exports symbolic functions (if output dir specified)
      *
+     * Must be called after FromConfig() (which calls Provision internally).
      * Must be called before Step().
+     *
+     * @param config Optional staging config override (uses SimulatorConfig.staging if not provided)
      */
     void Stage();
+    void Stage(const StageConfig<Scalar>& config);
 
     /**
      * @brief Execute one simulation step
@@ -557,16 +624,29 @@ private:
     std::unordered_map<std::string, std::function<void(const std::string&, const Scalar&)>> output_observers_;
 
     // =========================================================================
-    // Internal Methods
+    // Internal Methods - Provision Phase
     // =========================================================================
 
-    void ProvisionComponents();
-    void ApplyRouting();
-    void AllocateAndBindState();
-    void StageComponents();
-    void ValidateWiring();
-    void InvokeInputSources();
-    void InvokeOutputObservers();
+    void ProvisionComponents();       // Call Provision() on all components
+    void ApplyRouting();              // Wire signals via SignalRouter
+    void AllocateAndBindState();      // Allocate X_global_, bind to components
+    void ApplyInitialConditions();    // Apply config.initial_conditions
+    void ValidateWiring();            // Check all inputs are wired
+
+    // =========================================================================
+    // Internal Methods - Stage Phase
+    // =========================================================================
+
+    void RunTrimOptimization();       // Find equilibrium state
+    void GenerateSymbolicGraphs();    // Generate dynamics/Jacobian
+    void ExportSymbolicFunctions();   // Write to symbolic_output_dir
+
+    // =========================================================================
+    // Internal Methods - Step Phase
+    // =========================================================================
+
+    void InvokeInputSources();        // Call external input callbacks
+    void InvokeOutputObservers();     // Call external output callbacks
 };
 
 } // namespace icarus
@@ -576,7 +656,7 @@ private:
 
 ### Step 4: Update Lifecycle
 
-The new lifecycle is cleaner:
+The new lifecycle has clear semantic separation:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -584,25 +664,133 @@ The new lifecycle is cleaner:
 │    ↓                                                         │
 │  FromConfig(path) or AddComponent() + Configure()            │
 │    ↓                                                         │
-│  PROVISIONED (components created, ports declared)            │
+│  CREATED (components exist but not wired)                    │
 │    ↓                                                         │
-│  Stage()                                                     │
-│    ├── Apply routing                                         │
-│    ├── Allocate state                                        │
-│    ├── Bind state to components                              │
-│    ├── Apply initial conditions                              │
-│    └── Validate wiring                                       │
+│  Provision()  ← Called automatically by FromConfig()         │
+│    ├── Components declare ports (inputs/outputs)             │
+│    ├── Apply signal routing from config                      │
+│    ├── Allocate global state vectors                         │
+│    ├── Bind state pointers to components                     │
+│    ├── Apply initial conditions from config                  │
+│    └── Validate all inputs are wired                         │
 │    ↓                                                         │
-│  STAGED (ready to run)                                       │
+│  PROVISIONED (wired, state bound, ICs applied)               │
+│    ↓                                                         │
+│  Stage()  ← User calls this                                  │
+│    ├── Generate symbolic graphs (if symbolic mode)           │
+│    ├── Run trim optimization (find equilibrium)              │
+│    ├── Apply trim results to state                           │
+│    └── Prepare "staged" initial state                        │
+│    ↓                                                         │
+│  STAGED (ready to run - like a rocket on the pad)            │
 │    ↓                                                         │
 │  Step(dt) ... Step(dt) ... Step(dt)                          │
 │    ↓                                                         │
 │  RUNNING                                                     │
 │    ↓                                                         │
-│  Reset() → back to STAGED                                    │
+│  Reset() → back to PROVISIONED (re-apply ICs, re-Stage)      │
 │    ↓                                                         │
 │  ~Simulator() → cleanup                                      │
 └──────────────────────────────────────────────────────────────┘
+```
+
+**Key Insight:** "Stage" means "staging" the vehicle - like staging a rocket on the launch pad. This involves:
+1. Finding the trim state (equilibrium initial conditions)
+2. Generating symbolic graphs for analysis/optimization
+3. Preparing the simulation for execution
+
+This is separate from "Provision" which is the mechanical wiring/binding phase.
+
+---
+
+### Step 5: YAML Schema for Staging
+
+The staging configuration is fully YAML-driven:
+
+```yaml
+# rocket_sim.yaml - Complete simulation configuration
+
+simulation:
+  name: "Rocket 6DOF Test"
+  dt: 0.01
+  t_start: 0.0
+  t_end: 100.0
+
+# Components and their configs
+components:
+  - type: PointMassGravity
+    name: Gravity
+    entity: Rocket
+    scalars:
+      mu: 3.986004418e14
+
+  - type: RigidBody6DOF
+    name: EOM
+    entity: Rocket
+    vectors:
+      initial_position: [0, 0, 6.471e6]
+      initial_velocity: [7500, 0, 0]
+      initial_attitude: [1, 0, 0, 0]
+
+# Signal routing (can also be in separate file)
+routes:
+  - input: Rocket.EOM.gravity_accel
+    output: Rocket.Gravity.accel
+    gain: 1.0
+
+# Initial conditions (applied during Provision, before trim)
+initial_conditions:
+  Rocket.GNC.throttle: 0.8
+  Rocket.GNC.pitch_cmd: 0.0
+
+# Staging configuration
+staging:
+  # Trim optimization settings
+  trim:
+    enabled: true
+    method: newton           # newton, gradient, simplex
+    tolerance: 1.0e-6
+    max_iterations: 100
+
+    # Which derivatives should be zero at trim?
+    zero_derivatives:
+      - Rocket.EOM.velocity_dot      # Steady velocity
+      - Rocket.EOM.angular_rate_dot  # No angular acceleration
+
+    # Which signals can be adjusted to achieve trim?
+    control_signals:
+      - Rocket.GNC.throttle          # Adjust thrust
+      - Rocket.GNC.pitch_cmd         # Adjust pitch
+
+    # Initial guesses for controls
+    initial_guesses:
+      Rocket.GNC.throttle: 0.7
+      Rocket.GNC.pitch_cmd: 0.1
+
+  # Symbolic generation (optional)
+  generate_symbolics: false
+  generate_jacobian: false
+  symbolic_output_dir: "./symbolic_output"
+
+  # Validation
+  validate_wiring: true
+  warn_on_unwired: true
+
+# Integrator settings
+integrator:
+  type: RK4                  # Euler, RK4, RK45
+  # For adaptive integrators:
+  # abs_tol: 1.0e-6
+  # rel_tol: 1.0e-3
+
+# Logging settings
+logging:
+  console_level: Info
+  file_enabled: true
+  file_path: "sim.log"
+  file_level: Debug
+  progress_enabled: true
+  profiling_enabled: false
 ```
 
 ---
@@ -690,61 +878,149 @@ while (sim.Time() < 100.0) {
 ### After (New API)
 
 ```cpp
-// Create from config (one line!)
+// Create from config - FromConfig() calls Provision() internally
+// This handles: component creation, signal wiring, state binding, ICs
 auto sim = Simulator<double>::FromConfig("rocket.yaml", "routes.yaml");
 
-// Stage (applies ICs, wiring)
+// Stage - prepares the vehicle for launch
+// This handles: trim optimization, symbolic generation (if configured)
 sim.Stage();
 
-// Run
+// Run - numerical stepping
 while (sim.Time() < 100.0) {
     sim.Step(0.01);
 }
+
+// Read telemetry
+auto pos = sim.Peek<Vec3<double>>("Rocket.EOM.position");
 ```
 
 Or for programmatic setup:
 
 ```cpp
 SimulatorConfig<double> config;
+config.name = "Rocket Sim";
 config.dt = 0.01;
+
+// Components
+config.components.push_back({.type = "PointMassGravity", .name = "Gravity", .entity = "Rocket"});
+
+// Routes
+config.routes.push_back({.input_path = "Rocket.EOM.gravity", .output_path = "Rocket.Gravity.accel"});
+
+// Initial conditions
+config.initial_conditions["Rocket.GNC.throttle"] = 0.8;
+
+// Trim configuration
+config.staging.trim.enabled = true;
+config.staging.trim.zero_derivatives = {"Rocket.EOM.velocity_dot"};
+config.staging.trim.control_signals = {"Rocket.GNC.throttle"};
+
+// Integrator and logging
 config.integrator = IntegratorConfig<double>::RK4Default();
 config.logging.file_path = "sim.log";
 
-// Add components
-config.components.push_back({.type = "PointMassGravity", .name = "Gravity", .entity = "Rocket"});
-
-// Add routes
-config.routes.push_back({.input_path = "...", .output_path = "...", .gain = 1.0});
-
+// Create and run
 auto sim = Simulator<double>::FromConfig(config);
-sim.Stage();
+sim.Stage();  // Runs trim optimization
 sim.Step();
+```
+
+### With Trim and Symbolic Mode
+
+```cpp
+// Load config with trim enabled
+auto sim = Simulator<double>::FromConfig("rocket_with_trim.yaml");
+
+// Stage with custom override
+StageConfig<double> stage_cfg;
+stage_cfg.trim.enabled = true;
+stage_cfg.trim.tolerance = 1e-8;  // Tighter tolerance
+stage_cfg.generate_symbolics = true;
+stage_cfg.symbolic_output_dir = "./casadi_functions";
+
+sim.Stage(stage_cfg);  // Runs trim, generates CasADi functions
+
+// Now in equilibrium state, ready to step
+sim.Step(0.01);
 ```
 
 ---
 
 ## Implementation Order
 
-1. **4.0.7a** Create `SimulatorConfig` struct
-2. **4.0.7b** Create `StateManager` internal class
-3. **4.0.7c** Create `IntegrationManager` internal class
-4. **4.0.7d** Refactor `Simulator` public API
-5. **4.0.7e** Implement `FromConfig()` factory
-6. **4.0.7f** Update lifecycle (Provision becomes private)
-7. **4.0.7g** Update all examples and tests
-8. **4.0.7h** Remove deprecated methods
+### Phase A: Configuration Infrastructure
+1. **4.0.7a** Create `TrimConfig<Scalar>` struct
+2. **4.0.7b** Create `StageConfig<Scalar>` struct
+3. **4.0.7c** Create `SimulatorConfig<Scalar>` struct with YAML loading
+
+### Phase B: Internal Managers
+4. **4.0.7d** Create `StateManager<Scalar>` class
+5. **4.0.7e** Create `IntegrationManager<Scalar>` class
+
+### Phase C: Simulator Core Refactor
+6. **4.0.7f** Refactor `Simulator` public API (4 core operations)
+7. **4.0.7g** Implement `FromConfig()` factory method
+8. **4.0.7h** Move `Provision()` to private, wire routing/state/ICs
+9. **4.0.7i** Implement new `Stage()` with trim/symbolic placeholders
+
+### Phase D: Trim Optimization
+10. **4.0.7j** Implement `RunTrimOptimization()` using Janus
+11. **4.0.7k** Add Newton method for trim solver
+
+### Phase E: Symbolic Mode
+12. **4.0.7l** Implement `GenerateSymbolicGraphs()`
+13. **4.0.7m** Implement `ExportSymbolicFunctions()`
+
+### Phase F: Testing & Cleanup
+14. **4.0.7n** Update existing tests to new API
+15. **4.0.7o** Add integration test: YAML → FromConfig → Stage → Step
+16. **4.0.7p** Add trim optimization tests
+17. **4.0.7q** Remove deprecated public methods
+18. **4.0.7r** Update documentation
 
 ---
 
 ## Exit Criteria
 
-- [ ] `SimulatorConfig<Scalar>` struct with `FromFile()`, `FromFiles()`
+### Configuration Structs
+- [ ] `TrimConfig<Scalar>` with optimization settings
+- [ ] `StageConfig<Scalar>` with trim + symbolic settings
+- [ ] `SimulatorConfig<Scalar>` with all configuration consolidated
+- [ ] `SimulatorConfig::FromFile()` / `FromFiles()` YAML loading
+
+### Internal Managers
 - [ ] `StateManager<Scalar>` encapsulating state vector management
 - [ ] `IntegrationManager<Scalar>` encapsulating integrator logic
-- [ ] `Simulator<Scalar>` with clean 4-operation core API
-- [ ] `Simulator::FromConfig()` factory method
+
+### Simulator Refactor
+- [ ] Clean 4-operation core API: `FromConfig()`, `Stage()`, `Step()`, `~Simulator()`
+- [ ] Query interface: `Time()`, `Peek<T>()`, `GetDataDictionary()`
+- [ ] Control interface: `Poke<T>()`, `Reset()`, `SetInputSource()`
+- [ ] Expert interface: `GetState()`, `GenerateGraph()`, `AdaptiveStep()`
+
+### Lifecycle Implementation
+- [ ] `FromConfig()` calls `Provision()` internally
+- [ ] `Provision()` handles: components, routing, state binding, ICs, validation
+- [ ] `Stage()` handles: trim optimization, symbolic generation
+- [ ] `Step()` handles: integration, callbacks
+
+### Trim Optimization
+- [ ] `RunTrimOptimization()` using Janus optimization
+- [ ] Newton method for trim
+- [ ] Configurable zero_derivatives and control_signals
+
+### Symbolic Mode
+- [ ] `GenerateSymbolicGraphs()` for dynamics and Jacobian
+- [ ] `ExportSymbolicFunctions()` to output directory
+
+### Testing
 - [ ] Existing tests updated to new API
 - [ ] New integration test: YAML → FromConfig → Stage → Step
+- [ ] Trim optimization unit test
+- [ ] Symbolic generation test
+
+### Cleanup
 - [ ] Old deprecated methods removed or made private
 - [ ] Documentation updated
 

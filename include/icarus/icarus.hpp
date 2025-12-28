@@ -40,7 +40,6 @@
 #include <icarus/sim/Simulator.hpp>
 
 // I/O
-#include <icarus/io/Config.hpp>
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/Playback.hpp>
 #include <icarus/io/Recorder.hpp>

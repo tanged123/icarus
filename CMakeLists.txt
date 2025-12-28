@@ -66,22 +66,32 @@ find_package(nlohmann_json REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(spdlog REQUIRED)
 
-# --- Core Library (src/) ---
-# Icarus core is a compiled static library
-add_subdirectory(src)
+# --- Core Library (header-only) ---
+# Icarus is a header-only library - all templates in include/
+add_library(icarus INTERFACE)
+add_library(icarus::icarus ALIAS icarus)
+
+target_include_directories(
+  icarus INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+                   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+target_link_libraries(
+  icarus
+  INTERFACE Eigen3::Eigen
+            casadi
+            janus::janus
+            vulcan::vulcan
+            HighFive
+            HDF5::HDF5
+            nlohmann_json::nlohmann_json
+            yaml-cpp::yaml-cpp
+            spdlog::spdlog)
 
 # --- Component Models (components/) ---
 if(BUILD_COMPONENTS)
   add_subdirectory(components)
-endif()
-
-# --- Umbrella target for convenience ---
-add_library(icarus INTERFACE)
-target_link_libraries(icarus INTERFACE icarus_core)
-if(BUILD_COMPONENTS)
   target_link_libraries(icarus INTERFACE icarus_components)
 endif()
-add_library(icarus::icarus ALIAS icarus)
 
 # --- Coverage ---
 if(ENABLE_COVERAGE)
@@ -96,13 +106,21 @@ endif()
 # --- Install ---
 include(GNUInstallDirs)
 
+# Export icarus (header-only core)
 install(
-  TARGETS icarus_core
+  TARGETS icarus
   EXPORT icarusTargets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   INCLUDES
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# Export icarus_components if built
+if(BUILD_COMPONENTS)
+  install(
+    TARGETS icarus_components
+    EXPORT icarusTargets
+    INCLUDES
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
