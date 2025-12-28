@@ -11,8 +11,6 @@
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 
-#include <optional>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>

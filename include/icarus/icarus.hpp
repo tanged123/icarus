@@ -20,7 +20,6 @@
 
 // Signal
 #include <icarus/signal/Backplane.hpp>
-#include <icarus/signal/Descriptor.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>

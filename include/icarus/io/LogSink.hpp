@@ -11,7 +11,6 @@
 #include <icarus/io/LogEntry.hpp>
 #include <icarus/io/LogService.hpp>
 
-#include <algorithm>
 #include <fstream>
 #include <functional>
 #include <iostream>

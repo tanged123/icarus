@@ -9,8 +9,6 @@
  */
 
 #include <cstdint>
-#include <map>
-#include <string>
 
 // Re-export Janus types for dual-backend support
 #include <janus/core/JanusTypes.hpp>

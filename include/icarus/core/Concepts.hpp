@@ -9,7 +9,6 @@
 
 #include <concepts>
 #include <string>
-#include <type_traits>
 
 // Re-export Janus concepts
 #include <janus/core/JanusConcepts.hpp>

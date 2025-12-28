@@ -31,9 +31,6 @@ constexpr bool kDebugMode = false;
 
 #ifdef ICARUS_DEBUG
 
-#include <stdexcept>
-#include <string>
-
 /**
  * @brief Assert a condition in debug builds, throw if false
  * @param cond Condition to check
