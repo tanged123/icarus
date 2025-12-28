@@ -389,11 +389,11 @@
         "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
-        "lastModified": 1766733582,
-        "narHash": "sha256-HNFcaehGFcLj555UkIE2aQ3A4uTNdZF/4RHLPleXZLY=",
+        "lastModified": 1766895765,
+        "narHash": "sha256-7o+zTPhcibdXeJ9lizNBKNoeHVc3Sad+DLnL/4fmr8Q=",
         "owner": "tanged123",
         "repo": "vulcan",
-        "rev": "021034eb95e8369ce484d06fcda295f582a75e1c",
+        "rev": "b6f267ef509652970542a9b3ef6b09a2ef0d9841",
         "type": "github"
       },
       "original": {

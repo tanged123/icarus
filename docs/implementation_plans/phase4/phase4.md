@@ -1,7 +1,26 @@
 # Phase 4: Aggregation & 6DOF Implementation Plan
 
-**Status:** Proposed
+**Status:** Blocked on Phase 4.0
 **Goal:** Multi-component force/moment and mass property aggregation with full 6DOF dynamics
+
+---
+
+## Prerequisites
+
+> [!CAUTION]
+> **Complete Phase 4.0 first.** The configuration infrastructure must be in place before implementing Phase 4 components.
+
+| Prerequisite | Document | Status |
+|:-------------|:---------|:-------|
+| Config Infrastructure | [phase4_0_config_infrastructure.md](phase4_0_config_infrastructure.md) | Not Started |
+
+Phase 4.0 establishes:
+- `ComponentConfig` with typed accessors (`cfg.Require<T>()`, `cfg.Get<T>()`)
+- YAML configuration loader
+- `ComponentFactory` for type registration
+- Refactored existing components (no public setters)
+
+**All Phase 4 components must follow the config-driven pattern.**
 
 ---
 
@@ -19,6 +38,247 @@ Phase 4 enables **quantity aggregation** where multiple components contribute fo
 
 > [!NOTE]
 > **Gold Standard.** The aggregator components establish the canonical patterns for component development.
+
+---
+
+## Implementation Checklist
+
+### 4.1 Signal Backplane Extensions
+
+- [ ] **4.1.1** Add `MassProperties<Scalar>` support to `Backplane`
+  - [ ] `register_output<vulcan::mass::MassProperties<Scalar>>`
+  - [ ] `register_input<vulcan::mass::MassProperties<Scalar>>`
+  - [ ] Update `InputHandle` to work with composite types
+- [ ] **4.1.2** Add `Mat3<Scalar>` inertia tensor support
+  - [ ] Already supported for 3x3 matrices, verify works for inertia
+- [ ] **4.1.3** Unit tests for new signal types
+  - [ ] Test MassProperties signal registration/resolution
+  - [ ] Test Mat3 inertia signal wiring
+
+---
+
+### 4.2 Mass Source Components
+
+#### 4.2.1 Structure Component (Static Mass)
+
+**File:** `components/mass/Structure.hpp`
+
+- [ ] Create `components/mass/` directory
+- [ ] Implement `Structure<Scalar>` component
+  - [ ] Constructor with name/entity
+  - [ ] `Provision()`: register `mass_properties` output
+  - [ ] `Stage()`: apply configuration (mass, CG, inertia from config)
+  - [ ] `Step()`: outputs remain constant (static mass)
+- [ ] Configuration support:
+  - [ ] `mass`: total mass [kg]
+  - [ ] `cg`: CG position in body frame [m]
+  - [ ] `inertia_diagonal`: [Ixx, Iyy, Izz] [kg·m²]
+- [ ] Unit tests (numeric + symbolic)
+
+```cpp
+// Usage example
+Structure<double> structure("Structure", "Rocket");
+structure.SetMass(500.0);
+structure.SetCG({0, 0, 2.0});
+structure.SetInertiaDiagonal(100, 100, 50);
+```
+
+#### 4.2.2 FuelTank Component (Dynamic Mass)
+
+**File:** `components/mass/FuelTank.hpp`
+
+- [ ] Implement `FuelTank<Scalar>` component
+  - [ ] Has 1 state variable: `fuel_mass_`
+  - [ ] Input: `fuel_flow_rate` [kg/s]
+  - [ ] Output: `mass_properties`, `fuel_mass`
+  - [ ] `BindState()` for integrator connection
+  - [ ] `Step()`: update mass properties based on current fuel
+- [ ] Configuration:
+  - [ ] `initial_fuel`: starting fuel mass [kg]
+  - [ ] `tank_cg`: tank center in body frame [m]
+  - [ ] `tank_inertia`: inertia tensor when full [kg·m²]
+- [ ] State derivative: `fuel_mass_dot = -fuel_flow_rate_`
+- [ ] Unit tests (numeric + symbolic)
+
+---
+
+### 4.3 MassAggregator Component
+
+**File:** `components/aggregators/MassAggregator.hpp`
+
+- [ ] Create `components/aggregators/` directory
+- [ ] Implement `MassAggregator<Scalar>` component
+  - [ ] Config-driven source wiring (list of source paths)
+  - [ ] `Provision()`: register outputs + create input handles for each source
+  - [ ] `Stage()`: wire input handles to source paths
+  - [ ] `Step()`: aggregate using `vulcan::mass::MassProperties<Scalar>::operator+`
+- [ ] Outputs:
+  - [ ] `total_mass` (Scalar)
+  - [ ] `cg` (Vec3)
+  - [ ] `inertia` (Mat3)
+  - [ ] `mass_properties` (MassProperties)
+- [ ] Unit tests:
+  - [ ] Two point masses at different locations → verify CG
+  - [ ] Verify parallel axis theorem application
+  - [ ] Symbolic mode tracing
+
+**Config example:**
+
+```yaml
+MassAggregator:
+  name: Mass
+  entity: Rocket
+  sources:
+    - Structure.mass_properties
+    - FuelTank.mass_properties
+```
+
+---
+
+### 4.4 Force Source Updates
+
+#### 4.4.1 PointMassGravity Update (Existing)
+
+**File:** `components/environment/PointMassGravity.hpp`
+
+- [ ] Verify force output is in body frame (or add body frame transform)
+- [ ] Optional: Add `body_frame` input for frame transformation
+- [ ] Add `acts_at_cg: true` semantic in config (no application point needed)
+
+#### 4.4.2 AtmosphericDrag Component (NEW)
+
+**File:** `components/environment/AtmosphericDrag.hpp`
+
+- [ ] Implement `AtmosphericDrag<Scalar>` component
+  - [ ] Inputs: `velocity`, `altitude`, `body_frame`
+  - [ ] Outputs: `force` (Vec3), `application_point` (Vec3)
+  - [ ] Parameters: `Cd` (drag coefficient), `area` (reference area)
+  - [ ] Uses `vulcan::atmosphere::us76()` for density
+  - [ ] Uses `vulcan::aero::dynamic_pressure()` for q
+- [ ] Force in body frame: `F = -drag * v_hat`
+- [ ] Unit tests (numeric + symbolic)
+
+#### 4.4.3 Thrust Component (NEW)
+
+**File:** `components/propulsion/Thrust.hpp`
+
+- [ ] Implement `Thrust<Scalar>` component
+  - [ ] Input: `throttle` [0-1]
+  - [ ] Outputs: `force`, `moment`, `application_point`
+  - [ ] Config: `max_thrust`, `thrust_direction`, `nozzle_position`
+- [ ] Force: `F = max_thrust * throttle * direction`
+- [ ] Unit tests (numeric + symbolic)
+
+---
+
+### 4.5 ForceAggregator Component
+
+**File:** `components/aggregators/ForceAggregator.hpp`
+
+- [ ] Implement `ForceAggregator<Scalar>` component
+  - [ ] Config-driven source wiring
+  - [ ] Input: `cg` from MassAggregator
+  - [ ] For each source: `force`, optional `moment`, optional `application_point`
+  - [ ] `Step()`: sum forces, compute moments about CG
+- [ ] Outputs:
+  - [ ] `total_force` (Vec3)
+  - [ ] `total_moment` (Vec3)
+- [ ] Moment calculation:
+  - [ ] If `acts_at_cg`: no moment arm
+  - [ ] Else: `M = M_src + (app_point - cg) × F`
+- [ ] Unit tests:
+  - [ ] Two forces at CG → verify sum
+  - [ ] Force with offset → verify moment arm
+  - [ ] Symbolic mode tracing
+
+**Config example:**
+
+```yaml
+ForceAggregator:
+  name: Forces
+  entity: Rocket
+  cg_source: Mass.cg
+  sources:
+    - name: gravity
+      force: Gravity.force
+      acts_at_cg: true
+    - name: thrust
+      force: Thrust.force
+      application_point: Thrust.application_point
+```
+
+---
+
+### 4.6 RigidBody6DOF Component
+
+**File:** `components/dynamics/RigidBody6DOF.hpp`
+
+- [ ] Implement `RigidBody6DOF<Scalar>` component
+  - [ ] 13 states: [px,py,pz, vx,vy,vz, qw,qx,qy,qz, ωx,ωy,ωz]
+  - [ ] Uses `vulcan::dynamics::compute_6dof_derivatives()`
+  - [ ] Uses `janus::Quaternion<Scalar>` for attitude
+- [ ] Inputs:
+  - [ ] `total_force` (Vec3 in body frame)
+  - [ ] `total_moment` (Vec3 about CG, body frame)
+  - [ ] `total_mass` (Scalar)
+  - [ ] `inertia` (Mat3)
+- [ ] Outputs:
+  - [ ] `position` (Vec3)
+  - [ ] `velocity` (Vec3, body or reference frame)
+  - [ ] `attitude` (Vec4, quaternion wxyz)
+  - [ ] `angular_velocity` (Vec3, body frame)
+  - [ ] `body_dcm` (Mat3, body-to-reference rotation)
+- [ ] `BindState()`: bind to global state vector
+- [ ] `PreStep()`: publish current state to outputs
+- [ ] `Step()`: compute derivatives
+- [ ] Quaternion normalization (derivative adjustment)
+- [ ] Unit tests:
+  - [ ] Torque-free tumbling: `L = Iω` conserved
+  - [ ] Constant force: linear acceleration
+  - [ ] Quaternion norm maintained
+  - [ ] Symbolic mode tracing
+
+---
+
+### 4.7 Integration Tests
+
+- [ ] **4.7.1** `test_tumbling_rigid_body.cpp`
+  - [ ] No external torque, initial angular velocity
+  - [ ] Verify angular momentum conservation
+  - [ ] Verify kinetic energy conservation
+  - [ ] Verify quaternion normalization
+- [ ] **4.7.2** `test_aggregation.cpp`
+  - [ ] Multiple mass + force sources
+  - [ ] Verify total mass = sum of sources
+  - [ ] Verify CG is mass-weighted average
+  - [ ] Verify moment calculation about CG
+- [ ] **4.7.3** Symbolic graph test for 6DOF
+  - [ ] Extract `CasADi::Function` from 6DOF system
+  - [ ] Verify derivative shapes match state
+
+---
+
+### 4.8 CMake Updates
+
+- [ ] **4.8.1** `components/CMakeLists.txt`
+  - [ ] Add `aggregators/` subdirectory/sources
+  - [ ] Add `mass/` subdirectory/sources
+  - [ ] Add new propulsion sources
+- [ ] **4.8.2** `tests/CMakeLists.txt`
+  - [ ] Add `test_mass_aggregator`
+  - [ ] Add `test_force_aggregator`
+  - [ ] Add `test_rigid_body_6dof`
+  - [ ] Add integration tests
+
+---
+
+### 4.9 Examples & Documentation
+
+- [ ] **4.9.1** Create 6DOF rocket example
+  - [ ] `examples/rocket_6dof/` directory
+  - [ ] Configuration file with all components
+  - [ ] Main driver code
+- [ ] **4.9.2** Update this document with final implementation notes
 
 ---
 
@@ -66,6 +326,7 @@ struct MassProperties {
 ```
 
 **Benefits:**
+
 - Single signal instead of three
 - `operator+` handles parallel axis theorem automatically
 - Factory constructors for shapes (sphere, cylinder, box)
@@ -85,567 +346,10 @@ total_force_ = gravity_force_.get() + drag_force_.get() + thrust_force_.get();
 ```
 
 **Benefits:**
+
 - Aggregator is trivial (just summation)
 - Frame knowledge stays with the source (where it belongs)
 - No frame metadata to track
-
----
-
-## Implementation Tasks
-
-### 4.1 Signal Conventions
-
-**Goal:** Define standard signal names and types for aggregation.
-
-#### 4.1.1 Mass Source Convention
-
-Mass-contributing components publish a `mass_properties` signal:
-
-```cpp
-// In component
-vulcan::mass::MassProperties<Scalar> mass_props_;
-
-void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-    bp.register_output("mass_properties", &mass_props_, "kg,m,kg*m^2",
-                       "Mass, CG, and inertia");
-}
-
-void Step(Scalar t, Scalar dt) override {
-    mass_props_.mass = current_fuel_mass_;
-    mass_props_.cg = fuel_cg_body_;
-    mass_props_.inertia = fuel_inertia_;
-}
-```
-
-#### 4.1.2 Force Source Convention
-
-Force-contributing components publish:
-- `force` (Vec3, **in body frame**, required)
-- `moment` (Vec3, about CG, body frame, optional)
-- `application_point` (Vec3, body frame, optional — for moment calculation by aggregator)
-
-```cpp
-// In component
-Vec3<Scalar> force_body_;
-Vec3<Scalar> application_point_;  // Optional
-
-void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-    bp.register_output_vec3("force", &force_body_, "N", "Force in body frame");
-    bp.register_output_vec3("application_point", &application_point_, "m",
-                            "Force application point in body frame");
-}
-```
-
-#### 4.1.3 Backplane Extensions
-
-Add support for `MassProperties<Scalar>` and `CoordinateFrame<Scalar>` as signal types:
-
-```cpp
-// MassProperties output
-bp.register_output("mass_properties", &mass_props_, "kg,m,kg*m^2", "Mass properties");
-
-// MassProperties input
-InputHandle<vulcan::mass::MassProperties<Scalar>> mass_input_;
-bp.register_input("mass_properties", &mass_input_, "kg,m,kg*m^2", "Mass input");
-
-// CoordinateFrame output
-bp.register_output("body_frame", &body_frame_, "", "Body coordinate frame");
-
-// CoordinateFrame input
-InputHandle<vulcan::coordinates::CoordinateFrame<Scalar>> frame_input_;
-bp.register_input("body_frame", &frame_input_, "", "Body frame input");
-```
-
-#### Exit Criteria (4.1)
-
-- [ ] `MassProperties<Scalar>` supported as signal type
-- [ ] `CoordinateFrame<Scalar>` supported as signal type
-- [ ] Unit tests for new signal types
-
----
-
-### 4.2 Aggregator Components
-
-**Goal:** Components that sum contributions via explicit wiring.
-
-#### 4.2.1 MassAggregator
-
-**File:** `components/aggregators/MassAggregator.hpp`
-
-**Responsibility:** Sum mass properties from configured sources.
-
-**Config-driven wiring:**
-```yaml
-MassAggregator:
-  name: Mass
-  entity: Rocket
-  sources:
-    - Structure.mass_properties
-    - FuelTank.mass_properties
-    - Payload.mass_properties
-```
-
-**Implementation:**
-```cpp
-template <typename Scalar>
-class MassAggregator : public Component<Scalar> {
-    // Inputs: wired from config
-    std::vector<InputHandle<vulcan::mass::MassProperties<Scalar>>> sources_;
-
-    // Outputs
-    Scalar total_mass_;
-    Vec3<Scalar> cg_;
-    Mat3<Scalar> inertia_;
-    vulcan::mass::MassProperties<Scalar> mass_props_;  // Combined output
-
-    void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // Outputs
-        bp.register_output("total_mass", &total_mass_, "kg", "Total mass");
-        bp.register_output_vec3("cg", &cg_, "m", "Center of gravity");
-        bp.register_output("inertia", &inertia_, "kg*m^2", "Inertia tensor");
-        bp.register_output("mass_properties", &mass_props_, "", "Combined mass properties");
-
-        // Create input handles for each source (from config)
-        for (const auto& source_path : cfg.mass_sources) {
-            sources_.emplace_back();
-            bp.register_input(source_path, &sources_.back(), "", "Mass source");
-        }
-    }
-
-    void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // Wire each source
-        for (size_t i = 0; i < cfg.mass_sources.size(); ++i) {
-            bp.wire_input(cfg.mass_sources[i], cfg.mass_sources[i]);
-        }
-    }
-
-    void Step(Scalar t, Scalar dt) override {
-        // Use Vulcan's operator+ for aggregation (handles parallel axis)
-        vulcan::mass::MassProperties<Scalar> total{};
-
-        for (const auto& src : sources_) {
-            total = total + src.get();
-        }
-
-        total_mass_ = total.mass;
-        cg_ = total.cg;
-        inertia_ = total.inertia;
-        mass_props_ = total;
-    }
-};
-```
-
-#### 4.2.2 ForceAggregator
-
-**File:** `components/aggregators/ForceAggregator.hpp`
-
-**Responsibility:** Sum forces and compute moments about CG.
-
-**Config-driven wiring:**
-```yaml
-ForceAggregator:
-  name: Forces
-  entity: Rocket
-  cg_source: Mass.cg
-  sources:
-    - name: gravity
-      force: Gravity.force
-      acts_at_cg: true
-    - name: drag
-      force: Drag.force
-      application_point: Drag.application_point
-    - name: thrust
-      force: Thrust.force
-      moment: Thrust.moment
-      application_point: Thrust.application_point
-```
-
-**Implementation:**
-```cpp
-template <typename Scalar>
-class ForceAggregator : public Component<Scalar> {
-    struct ForceInput {
-        InputHandle<Vec3<Scalar>> force;
-        InputHandle<Vec3<Scalar>> moment;           // Optional
-        InputHandle<Vec3<Scalar>> application_point; // Optional
-        bool acts_at_cg = false;
-    };
-
-    std::vector<ForceInput> sources_;
-    InputHandle<Vec3<Scalar>> cg_;
-
-    // Outputs
-    Vec3<Scalar> total_force_;
-    Vec3<Scalar> total_moment_;
-
-    void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        bp.register_output_vec3("total_force", &total_force_, "N", "Total force");
-        bp.register_output_vec3("total_moment", &total_moment_, "N*m", "Total moment about CG");
-
-        bp.register_input_vec3("cg", &cg_, "m", "Center of gravity");
-
-        // Register inputs for each source
-        for (const auto& src_cfg : cfg.force_sources) {
-            ForceInput input;
-            bp.register_input_vec3(src_cfg.name + ".force", &input.force, "N", "Force");
-
-            if (src_cfg.has_moment) {
-                bp.register_input_vec3(src_cfg.name + ".moment", &input.moment, "N*m", "Moment");
-            }
-            if (src_cfg.has_application_point) {
-                bp.register_input_vec3(src_cfg.name + ".app_pt", &input.application_point, "m", "Application point");
-            }
-            input.acts_at_cg = src_cfg.acts_at_cg;
-
-            sources_.push_back(std::move(input));
-        }
-    }
-
-    void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        bp.wire_input("cg", cfg.cg_source);
-
-        for (size_t i = 0; i < cfg.force_sources.size(); ++i) {
-            const auto& src_cfg = cfg.force_sources[i];
-            bp.wire_input(src_cfg.name + ".force", src_cfg.force_signal);
-
-            if (src_cfg.has_moment) {
-                bp.wire_input(src_cfg.name + ".moment", src_cfg.moment_signal);
-            }
-            if (src_cfg.has_application_point) {
-                bp.wire_input(src_cfg.name + ".app_pt", src_cfg.application_point_signal);
-            }
-        }
-    }
-
-    void Step(Scalar t, Scalar dt) override {
-        Vec3<Scalar> F_total = Vec3<Scalar>::Zero();
-        Vec3<Scalar> M_total = Vec3<Scalar>::Zero();
-        Vec3<Scalar> cg = cg_.get();
-
-        for (const auto& src : sources_) {
-            Vec3<Scalar> F = src.force.get();
-            F_total = F_total + F;
-
-            // Add explicit moment if provided
-            if (src.moment.is_connected()) {
-                M_total = M_total + src.moment.get();
-            }
-
-            // Moment transfer: M = r × F
-            if (!src.acts_at_cg && src.application_point.is_connected()) {
-                Vec3<Scalar> r = src.application_point.get() - cg;
-                M_total = M_total + janus::cross(r, F);
-            }
-        }
-
-        total_force_ = F_total;
-        total_moment_ = M_total;
-    }
-};
-```
-
-#### Exit Criteria (4.2)
-
-- [ ] MassAggregator sums mass properties correctly (parallel axis theorem)
-- [ ] ForceAggregator sums forces and computes moments about CG
-- [ ] Config-driven wiring works
-- [ ] Symbolic mode traces correctly
-
----
-
-### 4.3 RigidBody6DOF Component
-
-**File:** `components/dynamics/RigidBody6DOF.hpp`
-
-**Responsibility:** Full 6DOF translational and rotational dynamics.
-
-**State Vector (13 states):**
-```
-[px, py, pz, vx, vy, vz, qw, qx, qy, qz, wx, wy, wz]
- └─position─┘ └─velocity─┘ └──quaternion──┘ └─ang vel─┘
-```
-
-**Inputs (wired from aggregators):**
-```yaml
-RigidBody6DOF:
-  wiring:
-    total_force: Forces.total_force
-    total_moment: Forces.total_moment
-    total_mass: Mass.total_mass
-    inertia: Mass.inertia
-```
-
-**Implementation:**
-```cpp
-template <typename Scalar>
-class RigidBody6DOF : public Component<Scalar> {
-    static constexpr std::size_t kStateSize = 13;
-
-    // Inputs
-    InputHandle<Vec3<Scalar>> total_force_;
-    InputHandle<Vec3<Scalar>> total_moment_;
-    InputHandle<Scalar> total_mass_;
-    InputHandle<Mat3<Scalar>> inertia_;
-
-    // State
-    Vec3<Scalar> position_;
-    Vec3<Scalar> velocity_;
-    janus::Quaternion<Scalar> quaternion_;
-    Vec3<Scalar> angular_velocity_;
-
-    // Outputs
-    vulcan::coordinates::CoordinateFrame<Scalar> body_frame_;
-    vulcan::coordinates::CoordinateFrame<Scalar> ned_frame_;
-
-    void Step(Scalar t, Scalar dt) override {
-        vulcan::mass::MassProperties<Scalar> mass_props;
-        mass_props.mass = total_mass_.get();
-        mass_props.cg = Vec3<Scalar>::Zero();  // Forces already about CG
-        mass_props.inertia = inertia_.get();
-
-        vulcan::dynamics::RigidBodyState<Scalar> state;
-        state.position = position_;
-        state.velocity = velocity_;
-        state.quaternion = quaternion_;
-        state.angular_velocity = angular_velocity_;
-
-        auto derivs = vulcan::dynamics::compute_6dof_derivatives(
-            state,
-            total_force_.get(),
-            total_moment_.get(),
-            mass_props
-        );
-
-        // Write state derivatives
-        position_dot_ = derivs.position_dot;
-        velocity_dot_ = derivs.velocity_dot;
-        quaternion_dot_ = derivs.quaternion_dot;
-        angular_velocity_dot_ = derivs.angular_velocity_dot;
-
-        // Update output frames
-        ned_frame_ = vulcan::coordinates::local_ned_at(position_, earth_model_);
-        body_frame_ = vulcan::coordinates::body_from_quaternion(ned_frame_, quaternion_);
-    }
-};
-```
-
-#### Exit Criteria (4.3)
-
-- [ ] 13-state quaternion-based 6DOF dynamics
-- [ ] Correct translational dynamics: F = ma
-- [ ] Correct rotational dynamics: I·ω̇ = M - ω × (I·ω)
-- [ ] Quaternion normalization maintained
-- [ ] Publishes `body_frame` and `ned_frame` for other components
-- [ ] Symbolic mode traces correctly
-
----
-
-### 4.4 Force/Mass Source Examples
-
-#### 4.4.1 PointMassGravity (Force Source)
-
-Force computed in ECEF, **transformed to body frame before publishing**:
-
-```cpp
-template <typename Scalar>
-class PointMassGravity : public Component<Scalar> {
-    Vec3<Scalar> force_body_;
-
-    // Inputs
-    InputHandle<Vec3<Scalar>> position_;
-    InputHandle<Scalar> mass_;
-    InputHandle<vulcan::coordinates::CoordinateFrame<Scalar>> body_frame_;
-
-    void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        bp.register_output_vec3("force", &force_body_, "N", "Gravity force in body frame");
-
-        bp.register_input_vec3("position", &position_, "m", "Position ECEF");
-        bp.register_input("mass", &mass_, "kg", "Vehicle mass");
-        bp.register_input("body_frame", &body_frame_, "", "Body frame");
-    }
-
-    void Step(Scalar t, Scalar dt) override {
-        Vec3<Scalar> pos = position_.get();
-        Scalar m = mass_.get();
-
-        // Compute gravity in ECEF
-        Vec3<Scalar> accel_ecef = vulcan::gravity::point_mass(pos, mu_);
-        Vec3<Scalar> force_ecef = accel_ecef * m;
-
-        // Transform to body frame
-        auto ecef = vulcan::coordinates::CoordinateFrame<Scalar>::ecef();
-        force_body_ = vulcan::coordinates::transform_vector(
-            force_ecef, ecef, body_frame_.get());
-    }
-};
-```
-
-#### 4.4.2 FuelTank (Mass Source)
-
-Publishes `MassProperties<Scalar>` directly:
-
-```cpp
-template <typename Scalar>
-class FuelTank : public Component<Scalar> {
-    vulcan::mass::MassProperties<Scalar> mass_props_;
-
-    // Config
-    Vec3<Scalar> tank_cg_body_;      // Tank CG in body frame
-    Mat3<Scalar> tank_inertia_;      // Inertia when full
-    Scalar initial_fuel_mass_;
-
-    // State
-    Scalar fuel_mass_;
-
-    void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        bp.register_output("mass_properties", &mass_props_, "", "Tank mass properties");
-        bp.register_output("fuel_mass", &fuel_mass_, "kg", "Current fuel mass");
-    }
-
-    void Step(Scalar t, Scalar dt) override {
-        // Update mass properties based on current fuel
-        Scalar fraction = fuel_mass_ / initial_fuel_mass_;
-
-        mass_props_.mass = fuel_mass_;
-        mass_props_.cg = tank_cg_body_;  // Assume CG doesn't move (simplification)
-        mass_props_.inertia = tank_inertia_ * fraction;  // Scale inertia
-    }
-};
-```
-
-#### 4.4.3 Thrust (Force Source with Application Point)
-
-```cpp
-template <typename Scalar>
-class Thrust : public Component<Scalar> {
-    Vec3<Scalar> force_body_;
-    Vec3<Scalar> moment_body_;
-    Vec3<Scalar> nozzle_position_;  // In body frame
-
-    // Config
-    Vec3<Scalar> thrust_direction_body_;  // Unit vector in body frame
-
-    // Inputs
-    InputHandle<Scalar> throttle_;
-
-    void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        bp.register_output_vec3("force", &force_body_, "N", "Thrust force in body frame");
-        bp.register_output_vec3("moment", &moment_body_, "N*m", "Thrust moment in body frame");
-        bp.register_output_vec3("application_point", &nozzle_position_, "m",
-                                "Nozzle position in body frame");
-
-        bp.register_input("throttle", &throttle_, "", "Throttle command 0-1");
-    }
-
-    void Step(Scalar t, Scalar dt) override {
-        Scalar thrust_mag = max_thrust_ * throttle_.get();
-
-        // Force already in body frame (thrust direction is body-fixed)
-        force_body_ = thrust_direction_body_ * thrust_mag;
-
-        // Moment from thrust misalignment (if any)
-        moment_body_ = Vec3<Scalar>::Zero();  // Or compute from gimbal angle
-    }
-};
-```
-
----
-
-### 4.5 Example Wiring Configuration
-
-Complete example showing how everything connects:
-
-```yaml
-# Rocket simulation configuration
-entity: Rocket
-
-components:
-  # Mass sources
-  - type: Structure
-    name: Structure
-    config:
-      mass: 500.0
-      cg: [0, 0, 2.0]
-      inertia_diagonal: [100, 100, 50]
-
-  - type: FuelTank
-    name: FuelTank
-    config:
-      initial_fuel: 1000.0
-      cg: [0, 0, 1.0]
-
-  # Force sources
-  - type: PointMassGravity
-    name: Gravity
-    wiring:
-      position: EOM.position
-      mass: Mass.total_mass
-      body_frame: EOM.body_frame
-
-  - type: Thrust
-    name: Thrust
-    config:
-      max_thrust: 50000.0
-      nozzle_position: [0, 0, 0]
-      thrust_direction: [0, 0, -1]  # Points "down" in body frame
-    wiring:
-      throttle: Controller.throttle
-
-  # Aggregators
-  - type: MassAggregator
-    name: Mass
-    sources:
-      - Structure.mass_properties
-      - FuelTank.mass_properties
-
-  - type: ForceAggregator
-    name: Forces
-    cg_source: Mass.cg
-    sources:
-      - name: gravity
-        force: Gravity.force
-        acts_at_cg: true
-      - name: thrust
-        force: Thrust.force
-        application_point: Thrust.application_point
-
-  # Dynamics
-  - type: RigidBody6DOF
-    name: EOM
-    wiring:
-      total_force: Forces.total_force
-      total_moment: Forces.total_moment
-      total_mass: Mass.total_mass
-      inertia: Mass.inertia
-```
-
----
-
-### 4.6 Integration Tests
-
-#### 4.6.1 Tumbling Rigid Body
-
-**File:** `tests/integration/test_tumbling_rigid_body.cpp`
-
-**Scenario:** Rigid body with known inertia, initial angular velocity, no external forces.
-
-**Validation:**
-- Angular momentum conservation: L = I·ω constant
-- Energy conservation: E = ½ω·I·ω constant
-- Quaternion normalization: |q| = 1
-
-#### 4.6.2 Multi-Source Aggregation
-
-**File:** `tests/integration/test_aggregation.cpp`
-
-**Scenario:** Multiple force and mass sources.
-
-**Validation:**
-- Total mass equals sum of source masses
-- CG computed correctly (mass-weighted average)
-- Inertia uses parallel axis theorem
-- Total force equals sum of body-frame forces
-- Moments computed correctly about CG
 
 ---
 
@@ -673,31 +377,45 @@ include/icarus/
 ├── core/
 │   └── Types.hpp                    # No changes needed
 ├── signal/
-│   └── Backplane.hpp               # Add MassProperties/CoordinateFrame support
+│   └── Backplane.hpp               # Add MassProperties/Mat3 support
 
 components/
-├── aggregators/
+├── aggregators/                    # NEW directory
 │   ├── ForceAggregator.hpp         # NEW
 │   └── MassAggregator.hpp          # NEW
 ├── dynamics/
 │   ├── PointMass3DOF.hpp           # Existing
 │   └── RigidBody6DOF.hpp           # NEW
 ├── environment/
-│   └── PointMassGravity.hpp        # Update: transform to body frame
-├── mass/
-│   ├── Structure.hpp               # NEW: static mass source
-│   └── FuelTank.hpp                # NEW: dynamic mass source
+│   ├── AtmosphericDrag.hpp         # NEW
+│   └── PointMassGravity.hpp        # Update: verify body frame
+├── mass/                           # NEW directory
+│   ├── FuelTank.hpp                # NEW
+│   └── Structure.hpp               # NEW
 └── propulsion/
-    └── Thrust.hpp                   # NEW
+    └── Thrust.hpp                  # NEW
 
 tests/
-├── unit/
+├── components/
 │   ├── test_mass_aggregator.cpp    # NEW
-│   └── test_force_aggregator.cpp   # NEW
+│   ├── test_force_aggregator.cpp   # NEW
+│   └── test_rigid_body_6dof.cpp    # NEW
 └── integration/
-    ├── test_tumbling_rigid_body.cpp # NEW
-    └── test_aggregation.cpp         # NEW
+    └── test_aggregation.cpp        # NEW
 ```
+
+---
+
+## Dependencies
+
+| Dependency | Purpose | Status |
+|:-----------|:--------|:-------|
+| `vulcan::mass::MassProperties<Scalar>` | Mass/CG/inertia representation | ✓ Available |
+| `vulcan::dynamics::compute_6dof_derivatives()` | 6DOF EOM | ✓ Available |
+| `vulcan::dynamics::translational_dynamics()` | Body-frame F=ma | ✓ Available |
+| `vulcan::dynamics::rotational_dynamics()` | Euler's equations | ✓ Available |
+| `janus::Quaternion<Scalar>` | Quaternion math | ✓ Available |
+| `janus::cross()` | Symbolic-safe cross product | ✓ Available |
 
 ---
 
@@ -711,19 +429,6 @@ tests/
 - [ ] **4.6** Integration tests pass
 - [ ] All tests pass in both numeric and symbolic mode
 - [ ] Symbolic graph extraction works for 6DOF system
-
----
-
-## Dependencies
-
-| Dependency | Purpose |
-|:-----------|:--------|
-| `vulcan::mass::MassProperties<Scalar>` | Mass/CG/inertia representation |
-| `vulcan::coordinates::CoordinateFrame<Scalar>` | Frame transformations |
-| `vulcan::coordinates::transform_vector()` | Vector frame transforms |
-| `vulcan::dynamics::compute_6dof_derivatives()` | 6DOF EOM |
-| `janus::Quaternion<Scalar>` | Quaternion math |
-| `janus::cross()` | Symbolic-safe cross product |
 
 ---
 
