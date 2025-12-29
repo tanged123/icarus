@@ -105,6 +105,17 @@ class SimulationLoader {
         return ParseComponent(node);
     }
 
+    /**
+     * @brief Load entity template from YAML node (public API)
+     */
+    static EntityTemplate LoadEntityTemplate(const vulcan::io::YamlNode &node) {
+        // Handle both "entity:" wrapper and direct template
+        if (node.Has("entity")) {
+            return ParseEntityTemplateContent(node["entity"]);
+        }
+        return ParseEntityTemplateContent(node);
+    }
+
   private:
     // =========================================================================
     // Root Parsing
@@ -128,10 +139,11 @@ class SimulationLoader {
         // Either components (single-file) or entities (multi-file) must exist
         bool has_components = root.Has("components");
         bool has_entities = root.Has("entities");
+        bool has_swarms = root.Has("swarms");
 
-        if (!has_components && !has_entities) {
-            throw icarus::ConfigError("Config must have either 'components' or 'entities' section",
-                                      source_path);
+        if (!has_components && !has_entities && !has_swarms) {
+            throw icarus::ConfigError(
+                "Config must have 'components', 'entities', or 'swarms' section", source_path);
         }
 
         if (has_components) {
@@ -141,6 +153,11 @@ class SimulationLoader {
         // Entity expansion for multi-file mode
         if (has_entities) {
             ParseEntities(cfg, root["entities"], source_path);
+        }
+
+        // Swarm expansion for bulk entity spawning
+        if (has_swarms) {
+            ParseSwarms(cfg, root["swarms"], source_path);
         }
 
         // Parse routes
@@ -463,14 +480,50 @@ class SimulationLoader {
     }
 
     /**
-     * @brief Load entity template from YAML node
+     * @brief Parse swarms section and expand to flat components
      */
-    static EntityTemplate LoadEntityTemplate(const vulcan::io::YamlNode &node) {
-        // Handle both "entity:" wrapper and direct template
-        if (node.Has("entity")) {
-            return ParseEntityTemplateContent(node["entity"]);
+    static void ParseSwarms(SimulatorConfig &cfg, const vulcan::io::YamlNode &node,
+                            const std::string &source_path) {
+        node.ForEach([&](const vulcan::io::YamlNode &swarm_node) {
+            SwarmConfig swarm;
+            swarm.name_prefix = swarm_node.Require<std::string>("name_prefix");
+            swarm.count = swarm_node.Get<int>("count", 1);
+
+            // Load template
+            if (swarm_node.Has("template")) {
+                swarm.entity_template = LoadEntityTemplate(swarm_node["template"]);
+            } else if (swarm_node.Has("entity")) {
+                swarm.entity_template = LoadEntityTemplate(swarm_node);
+            } else {
+                throw icarus::ConfigError("Swarm must have 'template' or inline 'entity'",
+                                          source_path);
+            }
+
+            // Expand swarm into entity instances
+            ExpandSwarm(cfg, swarm);
+        });
+    }
+
+    /**
+     * @brief Expand swarm into multiple entity instances
+     *
+     * Generates count copies with names: prefix_000, prefix_001, etc.
+     */
+    static void ExpandSwarm(SimulatorConfig &cfg, const SwarmConfig &swarm) {
+        for (int i = 0; i < swarm.count; ++i) {
+            // Generate instance name with zero-padded index
+            std::ostringstream oss;
+            oss << swarm.name_prefix << "_" << std::setfill('0') << std::setw(3) << i;
+            std::string instance_name = oss.str();
+
+            // Create entity instance (no overrides for swarm copies)
+            EntityInstance instance;
+            instance.entity_template = swarm.entity_template;
+            instance.name = instance_name;
+
+            // Expand as normal entity
+            ExpandEntity(cfg, instance);
         }
-        return ParseEntityTemplateContent(node);
     }
 
     /**
@@ -640,6 +693,102 @@ namespace icarus {
 
 inline SimulatorConfig SimulatorConfig::FromFile(const std::string &path) {
     return io::SimulationLoader::Load(path);
+}
+
+inline EntityTemplate EntityTemplate::FromFile(const std::string &yaml_path) {
+    auto root = vulcan::io::YamlEnv::LoadWithIncludesAndEnv(yaml_path);
+    return io::SimulationLoader::LoadEntityTemplate(root);
+}
+
+inline std::tuple<std::vector<ComponentConfig>, std::vector<signal::SignalRoute>, SchedulerConfig>
+EntitySystemConfig::ExpandAll() const {
+    std::vector<ComponentConfig> expanded_components;
+    std::vector<signal::SignalRoute> expanded_routes;
+    SchedulerConfig merged_scheduler;
+
+    // Helper to merge overrides
+    auto merge_configs = [](const ComponentConfig &base, const ComponentConfig &overrides) {
+        ComponentConfig merged = base;
+        for (const auto &[k, v] : overrides.scalars)
+            merged.scalars[k] = v;
+        for (const auto &[k, v] : overrides.vectors)
+            merged.vectors[k] = v;
+        for (const auto &[k, v] : overrides.strings)
+            merged.strings[k] = v;
+        for (const auto &[k, v] : overrides.integers)
+            merged.integers[k] = v;
+        for (const auto &[k, v] : overrides.booleans)
+            merged.booleans[k] = v;
+        return merged;
+    };
+
+    // Expand entities
+    for (const auto &instance : entities) {
+        const auto &tmpl = instance.entity_template;
+
+        // Expand components with entity prefix
+        for (auto comp_cfg : tmpl.components) {
+            if (instance.overrides.count(comp_cfg.name)) {
+                comp_cfg = merge_configs(comp_cfg, instance.overrides.at(comp_cfg.name));
+            }
+            comp_cfg.entity = instance.name;
+            expanded_components.push_back(comp_cfg);
+        }
+
+        // Expand internal routes
+        for (auto route : tmpl.routes) {
+            route.input_path = instance.name + "." + route.input_path;
+            route.output_path = instance.name + "." + route.output_path;
+            expanded_routes.push_back(route);
+        }
+
+        // Merge scheduler groups
+        for (auto group : tmpl.scheduler.groups) {
+            group.name = instance.name + "." + group.name;
+            for (auto &member : group.members) {
+                member.component = instance.name + "." + member.component;
+            }
+            merged_scheduler.groups.push_back(group);
+        }
+    }
+
+    // Expand swarms
+    for (const auto &swarm : swarms) {
+        for (int i = 0; i < swarm.count; ++i) {
+            std::ostringstream oss;
+            oss << swarm.name_prefix << "_" << std::setfill('0') << std::setw(3) << i;
+            std::string instance_name = oss.str();
+
+            // Expand components
+            for (auto comp_cfg : swarm.entity_template.components) {
+                comp_cfg.entity = instance_name;
+                expanded_components.push_back(comp_cfg);
+            }
+
+            // Expand routes
+            for (auto route : swarm.entity_template.routes) {
+                route.input_path = instance_name + "." + route.input_path;
+                route.output_path = instance_name + "." + route.output_path;
+                expanded_routes.push_back(route);
+            }
+
+            // Merge scheduler groups
+            for (auto group : swarm.entity_template.scheduler.groups) {
+                group.name = instance_name + "." + group.name;
+                for (auto &member : group.members) {
+                    member.component = instance_name + "." + member.component;
+                }
+                merged_scheduler.groups.push_back(group);
+            }
+        }
+    }
+
+    // Add cross-entity routes (already absolute)
+    for (const auto &route : cross_entity_routes) {
+        expanded_routes.push_back(route);
+    }
+
+    return {expanded_components, expanded_routes, merged_scheduler};
 }
 
 } // namespace icarus

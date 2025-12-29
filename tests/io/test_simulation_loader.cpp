@@ -266,5 +266,59 @@ entities:
     EXPECT_EQ(cfg.components[1].entity, "Follower");
 }
 
+// =============================================================================
+// Swarm Tests
+// =============================================================================
+
+TEST(SimulationLoaderTest, SwarmExpandsToMultipleInstances) {
+    const char *yaml = R"(
+swarms:
+  - name_prefix: Drone
+    count: 3
+    entity:
+      components:
+        - type: Quadcopter
+          name: EOM
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.components.size(), 3u);
+    EXPECT_EQ(cfg.components[0].entity, "Drone_000");
+    EXPECT_EQ(cfg.components[1].entity, "Drone_001");
+    EXPECT_EQ(cfg.components[2].entity, "Drone_002");
+}
+
+TEST(SimulationLoaderTest, SwarmWithRoutesExpandsCorrectly) {
+    const char *yaml = R"(
+swarms:
+  - name_prefix: Bot
+    count: 2
+    entity:
+      components:
+        - type: A
+          name: Comp
+      routes:
+        - input: Comp.in
+          output: Comp.out
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.routes.size(), 2u);
+    EXPECT_EQ(cfg.routes[0].input_path, "Bot_000.Comp.in");
+    EXPECT_EQ(cfg.routes[1].input_path, "Bot_001.Comp.in");
+}
+
+TEST(SimulationLoaderTest, SwarmDefaultCountIsOne) {
+    const char *yaml = R"(
+swarms:
+  - name_prefix: Single
+    entity:
+      components:
+        - type: Test
+          name: T
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.components.size(), 1u);
+    EXPECT_EQ(cfg.components[0].entity, "Single_000");
+}
+
 } // namespace
 } // namespace icarus::io

@@ -331,6 +331,9 @@ struct EntityTemplate {
 
     /// Internal staging configuration
     StageConfig staging;
+
+    /// Load template from YAML file (implemented in SimulationLoader.hpp)
+    static EntityTemplate FromFile(const std::string &yaml_path);
 };
 
 // =============================================================================
@@ -351,6 +354,59 @@ struct EntityInstance {
 
     /// Component name -> config overrides
     std::unordered_map<std::string, ComponentConfig> overrides;
+};
+
+// =============================================================================
+// SwarmConfig
+// =============================================================================
+
+/**
+ * @brief Swarm configuration for bulk entity spawning
+ *
+ * Creates count copies of the template with names: prefix_000, prefix_001, ...
+ * All copies are identical (per-instance expressions are future work).
+ */
+struct SwarmConfig {
+    /// Entity template (inline or loaded from file)
+    EntityTemplate entity_template;
+
+    /// Name prefix (instances will be prefix_000, prefix_001, etc.)
+    std::string name_prefix;
+
+    /// Number of instances to create
+    int count = 1;
+
+    // Future: per-instance overrides with Jinja-style templating
+    // Future: swarm-internal routes (neighbor connections)
+};
+
+// =============================================================================
+// EntitySystemConfig
+// =============================================================================
+
+/**
+ * @brief Entity system configuration
+ *
+ * Holds entities, swarms, cross-entity routes, and entity execution order.
+ * Provides ExpandAll() to flatten everything to components and routes.
+ */
+struct EntitySystemConfig {
+    std::vector<EntityInstance> entities;
+    std::vector<SwarmConfig> swarms;
+    std::vector<signal::SignalRoute> cross_entity_routes;
+
+    /// Entity execution order (empty = auto-order based on dependencies)
+    std::vector<std::string> entity_order;
+    bool auto_order = true;
+
+    /**
+     * @brief Expand all entities and swarms to flat component list
+     *
+     * Expands all entity instances and swarms, prefixing signal paths.
+     * @return Tuple of (components, routes, merged scheduler)
+     */
+    std::tuple<std::vector<ComponentConfig>, std::vector<signal::SignalRoute>, SchedulerConfig>
+    ExpandAll() const;
 };
 
 // =============================================================================
