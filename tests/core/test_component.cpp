@@ -3,6 +3,7 @@
  * @brief Tests for Component Base (Phase 1.4)
  *
  * Tests Backplane, Component lifecycle, and Simulator integration.
+ * Updated for Phase 4.0.7 non-templated Simulator API.
  */
 
 #include <gtest/gtest.h>
@@ -201,41 +202,38 @@ TEST(DummyComponent, Lifecycle) {
 }
 
 // =============================================================================
-// Simulator Integration Tests
+// Simulator Integration Tests (Updated for new API)
 // =============================================================================
 
 TEST(Simulator, AddComponent) {
-    Simulator<double> sim;
+    Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Test"));
     EXPECT_EQ(sim.NumComponents(), 1);
 }
 
 TEST(Simulator, ProvisionStage) {
-    Simulator<double> sim;
+    Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Counter"));
 
-    sim.Provision();
-    EXPECT_EQ(sim.GetPhase(), Phase::Provisioned);
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Counter.counter"));
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Counter.time"));
-
+    // Note: Provision() is now private, called via Configure/Stage
     sim.Stage();
     EXPECT_EQ(sim.GetPhase(), Phase::Staged);
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Counter.counter"));
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Counter.time"));
 }
 
 TEST(Simulator, Step) {
-    Simulator<double> sim;
+    Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Counter"));
 
-    sim.Provision();
     sim.Stage();
 
     sim.Step(0.01);
     EXPECT_EQ(sim.GetPhase(), Phase::Running);
     EXPECT_DOUBLE_EQ(sim.Time(), 0.01);
 
-    // Access signal through registry
-    auto handle = sim.GetRegistry().resolve<double>("Counter.counter");
+    // Access signal through backplane
+    auto handle = sim.GetBackplane().resolve<double>("Counter.counter");
     EXPECT_DOUBLE_EQ(*handle, 1.0);
 
     sim.Step(0.01);
@@ -244,35 +242,34 @@ TEST(Simulator, Step) {
 }
 
 TEST(Simulator, MultipleComponents) {
-    Simulator<double> sim;
+    Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Counter1"));
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Counter2"));
 
-    sim.Provision();
     sim.Stage();
 
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Counter1.counter"));
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Counter2.counter"));
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Counter1.counter"));
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Counter2.counter"));
 
     sim.Step(0.01);
 
-    EXPECT_DOUBLE_EQ(*sim.GetRegistry().resolve<double>("Counter1.counter"), 1.0);
-    EXPECT_DOUBLE_EQ(*sim.GetRegistry().resolve<double>("Counter2.counter"), 1.0);
+    EXPECT_DOUBLE_EQ(*sim.GetBackplane().resolve<double>("Counter1.counter"), 1.0);
+    EXPECT_DOUBLE_EQ(*sim.GetBackplane().resolve<double>("Counter2.counter"), 1.0);
 }
 
 TEST(Simulator, EntityNamespacing) {
-    Simulator<double> sim;
+    Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Engine", "Stage1"));
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Engine", "Stage2"));
 
-    sim.Provision();
+    sim.Stage();
 
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Stage1.Engine.counter"));
-    EXPECT_TRUE(sim.GetRegistry().HasSignal("Stage2.Engine.counter"));
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Stage1.Engine.counter"));
+    EXPECT_TRUE(sim.GetBackplane().has_signal("Stage2.Engine.counter"));
 }
 
 // =============================================================================
-// Symbolic Backend Tests
+// Symbolic Backend Tests (Components only - Simulator<MX> removed)
 // =============================================================================
 
 TEST(ComponentSymbolic, DummyLifecycle) {
@@ -291,20 +288,8 @@ TEST(ComponentSymbolic, DummyLifecycle) {
     EXPECT_TRUE(registry.HasSignal("SymCounter.time"));
 }
 
-TEST(SimulatorSymbolic, FullLifecycle) {
-    Simulator<SymbolicScalar> sim;
-    sim.AddComponent(std::make_unique<DummyComponent<SymbolicScalar>>("SymTest"));
-
-    sim.Provision();
-    EXPECT_EQ(sim.GetPhase(), Phase::Provisioned);
-
-    sim.Stage();
-    EXPECT_EQ(sim.GetPhase(), Phase::Staged);
-
-    SymbolicScalar dt = SymbolicScalar(0.01);
-    sim.Step(dt);
-    EXPECT_EQ(sim.GetPhase(), Phase::Running);
-}
+// NOTE: SimulatorSymbolic tests removed - Simulator is no longer templated.
+// Symbolic mode is handled internally during Stage() for analysis.
 
 } // namespace
 } // namespace icarus

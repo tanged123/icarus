@@ -33,9 +33,10 @@
 #include <icarus/sim/RK45Integrator.hpp>
 #include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Scheduler.hpp>
-#include <icarus/sim/SimulationBuilder.hpp>
+// Note: SimulationBuilder and SimulationRunner disabled pending Phase 4.0.7 update
+// #include <icarus/sim/SimulationBuilder.hpp>
 #include <icarus/sim/SimulationResults.hpp>
-#include <icarus/sim/SimulationRunner.hpp>
+// #include <icarus/sim/SimulationRunner.hpp>
 #include <icarus/sim/Simulator.hpp>
 
 // I/O
@@ -43,8 +44,8 @@
 #include <icarus/io/Playback.hpp>
 #include <icarus/io/Recorder.hpp>
 
-// Symbolic (Phase 3)
-#include <icarus/symbolic/SymbolicTracer.hpp>
+// Symbolic (Phase 3) - disabled pending Phase 4.0.7 update
+// #include <icarus/symbolic/SymbolicTracer.hpp>
 
 // Utilities
 #include <icarus/util/ScalarFormat.hpp>

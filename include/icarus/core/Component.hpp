@@ -236,6 +236,7 @@ template <typename Scalar> class Component {
 
     // Allow Simulator to call Mark* methods
     template <typename S> friend class Simulator;
+    friend class Simulator; // Non-templated Simulator (Phase 4.0.7)
 
   private:
     bool provisioned_ = false;

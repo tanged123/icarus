@@ -4,940 +4,613 @@
  * @file Simulator.hpp
  * @brief Top-level simulation coordinator
  *
- * Part of Phase 1.4: Component Base.
- * Extended in Phase 2.2 with integrator support.
- * Owns components and orchestrates the Provision/Stage/Step lifecycle.
+ * Part of Phase 4.0.7: Simulator API Refactor.
+ *
+ * The Simulator is NOT templated - users see one class.
+ * Internally uses double for numeric execution.
+ * Symbolic mode (casadi::MX) is used during Stage() for analysis.
  */
 
 #include <functional>
 #include <icarus/core/Component.hpp>
+#include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
-#include <icarus/io/LogConfig.hpp>
 #include <icarus/io/MissionLogger.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
-#include <icarus/sim/IntegratorFactory.hpp>
-#include <icarus/sim/IntegratorTypes.hpp>
-#include <icarus/sim/RK45Integrator.hpp>
-#include <icarus/sim/RK4Integrator.hpp>
-#include <map>
+#include <icarus/signal/SignalRouter.hpp>
+#include <icarus/sim/IntegrationManager.hpp>
+#include <icarus/sim/Scheduler.hpp>
+#include <icarus/sim/SimulatorConfig.hpp>
+#include <icarus/sim/StateManager.hpp>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-// Janus includes for GenerateGraph() (only used when Scalar = SymbolicScalar)
+// Janus includes for symbolic graph generation
 #include <janus/core/Function.hpp>
 #include <janus/core/JanusTypes.hpp>
-#include <janus/math/AutoDiff.hpp>
 
 namespace icarus {
 
 /**
- * @brief Metadata for a component's state slice
- *
- * Tracks a component's position within the global state vectors.
- */
-template <typename Scalar> struct StateSlice {
-    Component<Scalar> *owner; ///< Component that owns this slice
-    std::size_t offset;       ///< Starting index in X_global_
-    std::size_t size;         ///< Number of state variables
-};
-
-/**
  * @brief Top-level simulation coordinator
  *
- * The Simulator owns all components and the signal backplane,
- * coordinating the Provision/Stage/Step lifecycle.
- *
- * @tparam Scalar The numeric type (double or casadi::MX)
+ * NOT templated on Scalar - user sees one class.
+ * Provides clean 4-operation external interface:
+ * - FromConfig() - Initialize from YAML
+ * - Stage() - Prepare for execution (validation, optional trim/linearization)
+ * - Step() - Advance simulation
+ * - ~Simulator() - Cleanup (RAII)
  */
-template <typename Scalar> class Simulator {
+class Simulator {
   public:
-    Simulator() : backplane_(registry_) {}
+    // =========================================================================
+    // CORE LIFECYCLE (The 4 Operations)
+    // =========================================================================
+
+    /**
+     * @brief Create simulator from configuration file
+     *
+     * Loads component configs and routes from YAML, creates components,
+     * provisions them. Ready for Stage() after this.
+     *
+     * @param config_path Path to simulation YAML configuration
+     * @return Configured Simulator ready for Stage()
+     */
+    [[nodiscard]] static std::unique_ptr<Simulator> FromConfig(const std::string &config_path);
+
+    /**
+     * @brief Create simulator from configuration struct
+     */
+    [[nodiscard]] static std::unique_ptr<Simulator> FromConfig(const SimulatorConfig &config);
+
+    /**
+     * @brief Default constructor for programmatic setup
+     */
+    Simulator();
+
+    /// Destructor
     ~Simulator() = default;
 
-    // Non-copyable, movable
+    // Non-copyable, non-movable (Backplane holds reference to registry_)
     Simulator(const Simulator &) = delete;
     Simulator &operator=(const Simulator &) = delete;
-    Simulator(Simulator &&) = default;
-    Simulator &operator=(Simulator &&) = default;
+    Simulator(Simulator &&) = delete;
+    Simulator &operator=(Simulator &&) = delete;
 
     /**
-     * @brief Add a component to the simulation
+     * @brief Stage the simulation
      *
-     * Must be called before Provision().
+     * Prepares the vehicle for launch:
+     * - Calls Stage() on all components (input wiring)
+     * - Validates all signal wiring
+     * - Generates symbolic graphs (if configured)
+     * - Runs trim optimization (if configured)
      */
-    void AddComponent(std::unique_ptr<Component<Scalar>> component) {
-        components_.push_back(std::move(component));
-    }
+    void Stage();
+    void Stage(const StageConfig &config);
 
     /**
-     * @brief Provision all components
+     * @brief Execute one simulation step
      *
-     * Calls Provision() on each component in order.
-     */
-    void Provision() {
-        if (phase_ != Phase::Uninitialized) {
-            throw LifecycleError("Provision() can only be called once");
-        }
-        for (auto &comp : components_) {
-            backplane_.set_context(comp->Entity(), comp->Name());
-            backplane_.clear_tracking();
-
-            ComponentConfig config;
-            config.name = comp->Name();
-            config.entity = comp->Entity();
-            configs_[comp.get()] = config;
-
-            comp->Provision(backplane_, config);
-            comp->MarkProvisioned();
-
-            // Record outputs for dependency graph
-            outputs_[comp.get()] = backplane_.registered_outputs();
-
-            backplane_.clear_context();
-        }
-        phase_ = Phase::Provisioned;
-    }
-
-    /**
-     * @brief Stage all components
+     * Uses scheduler for multi-rate execution.
+     * Advances time by dt using configured integrator.
      *
-     * Allocates global state vectors and binds component state pointers,
-     * then calls Stage() on each component for input wiring.
+     * @param dt Timestep (uses nominal dt if not specified)
      */
-    void Stage() {
-        if (phase_ != Phase::Provisioned) {
-            throw LifecycleError("Stage() requires prior Provision()");
-        }
+    void Step(double dt);
+    void Step(); // Uses config dt
 
-        // =====================================================================
-        // Phase 2.1: Allocate global state vectors
-        // =====================================================================
-        std::size_t total_state_size = GetTotalStateSize();
-        X_global_.resize(total_state_size);
-        X_dot_global_.resize(total_state_size);
-        state_layout_.clear();
+    // =========================================================================
+    // QUERY INTERFACE (Read-only)
+    // =========================================================================
 
-        // Initialize to zero
-        for (std::size_t i = 0; i < total_state_size; ++i) {
-            X_global_[i] = Scalar{0};
-            X_dot_global_[i] = Scalar{0};
-        }
+    /// Get current simulation time
+    [[nodiscard]] double Time() const { return time_; }
 
-        // Bind each component to its slice
-        std::size_t offset = 0;
-        for (auto &comp : components_) {
-            std::size_t state_size = comp->StateSize();
-
-            if (state_size > 0) {
-                comp->BindState(X_global_.data() + offset, X_dot_global_.data() + offset,
-                                state_size);
-                state_layout_.push_back({comp.get(), offset, state_size});
-                offset += state_size;
-            }
-        }
-
-        // =====================================================================
-        // Existing Stage logic (signal wiring)
-        // =====================================================================
-        for (auto &comp : components_) {
-            backplane_.set_context(comp->Entity(), comp->Name());
-            backplane_.clear_tracking();
-
-            comp->Stage(backplane_, configs_[comp.get()]);
-            comp->MarkStaged();
-
-            // Record inputs for dependency graph
-            inputs_[comp.get()] = backplane_.resolved_inputs();
-
-            backplane_.clear_context();
-        }
-        phase_ = Phase::Staged;
-        time_ = Scalar{0};
-    }
-
-    /**
-     * @brief Execute one time step using configured integrator
-     *
-     * Uses the integrator to advance state, which internally calls
-     * ComputeDerivatives() at multiple points (for multi-stage methods).
-     */
-    void Step(Scalar dt) {
-        if (phase_ != Phase::Staged && phase_ != Phase::Running) {
-            throw LifecycleError("Step() requires prior Stage()");
-        }
-        phase_ = Phase::Running;
-
-        // Invoke input sources before stepping
-        InvokeInputSources();
-
-        // If no stateful components, just call component Step() directly
-        if (GetTotalStateSize() == 0) {
-            for (auto &comp : components_) {
-                comp->PreStep(time_, dt);
-            }
-            for (auto &comp : components_) {
-                comp->Step(time_, dt);
-            }
-            for (auto &comp : components_) {
-                comp->PostStep(time_, dt);
-            }
-            time_ = time_ + dt;
-
-            // Invoke output observers after stepping
-            InvokeOutputObservers();
-            return;
-        }
-
-        // Create derivative function for integrator
-        auto deriv_func = [this](Scalar t, const JanusVector<Scalar> &x) -> JanusVector<Scalar> {
-            this->SetState(x);
-            return this->ComputeDerivatives(t);
-        };
-
-        // Get current state and integrate
-        JanusVector<Scalar> X = GetState();
-        JanusVector<Scalar> X_new = integrator_->Step(deriv_func, X, time_, dt);
-
-        // Update state and time
-        SetState(X_new);
-        time_ = time_ + dt;
-
-        // Invoke output observers after stepping
-        InvokeOutputObservers();
-    }
-
-    /**
-     * @brief Get current simulation time
-     */
-    [[nodiscard]] Scalar Time() const { return time_; }
-
-    /**
-     * @brief Get current simulation phase
-     */
+    /// Get current simulation phase
     [[nodiscard]] Phase GetPhase() const { return phase_; }
 
-    /**
-     * @brief Get signal registry (for external access)
-     */
-    [[nodiscard]] SignalRegistry<Scalar> &GetRegistry() { return registry_; }
-    [[nodiscard]] const SignalRegistry<Scalar> &GetRegistry() const { return registry_; }
-
-    /**
-     * @brief Get backplane (for external access)
-     */
-    [[nodiscard]] Backplane<Scalar> &GetBackplane() { return backplane_; }
-    [[nodiscard]] const Backplane<Scalar> &GetBackplane() const { return backplane_; }
-
-    /**
-     * @brief Get signal value by name
-     */
-    [[nodiscard]] Scalar GetSignal(const std::string &name) const {
-        return registry_.GetByName(name);
-    }
-
-    /**
-     * @brief Set signal value by name
-     */
-    void SetSignal(const std::string &name, const Scalar &value) {
-        registry_.SetByName(name, value);
-    }
-
-    // =========================================================================
-    // External Interface API (Phase 3)
-    // =========================================================================
-
-    /**
-     * @brief Read a signal value by name (typed)
-     * @tparam T Expected signal type
-     * @param name Full signal path: "Entity.Component.signal"
-     * @return Current signal value
-     */
-    template <typename T> [[nodiscard]] T Peek(const std::string &name) const {
-        return registry_.template GetByName<T>(name);
-    }
-
-    /**
-     * @brief Write a signal value by name (typed)
-     * @tparam T Signal type
-     * @param name Full signal path
-     * @param value New value to set
-     */
-    template <typename T> void Poke(const std::string &name, const T &value) {
-        registry_.template SetByName<T>(name, value);
-    }
-
-    /**
-     * @brief Read multiple signals at once (batch read)
-     * @param names Vector of signal names
-     * @return Map of name -> value
-     */
-    [[nodiscard]] std::map<std::string, Scalar>
-    PeekBatch(const std::vector<std::string> &names) const {
-        std::map<std::string, Scalar> result;
-        for (const auto &name : names) {
-            result[name] = GetSignal(name);
-        }
-        return result;
-    }
-
-    /**
-     * @brief Write multiple signals at once (batch write)
-     */
-    void PokeBatch(const std::map<std::string, Scalar> &values) {
-        for (const auto &[name, value] : values) {
-            SetSignal(name, value);
-        }
-    }
-
-    /**
-     * @brief Initialize simulation (Provision + Stage)
-     * Convenience method combining both lifecycle phases.
-     */
-    void Initialize() {
-        if (phase_ == Phase::Uninitialized) {
-            Provision();
-        }
-        if (phase_ == Phase::Provisioned) {
-            Stage();
-        }
-    }
-
-    /**
-     * @brief Reset simulation to initial state
-     * Keeps components, resets time to 0, restores initial conditions.
-     */
-    void Reset() {
-        if (phase_ < Phase::Staged) {
-            throw LifecycleError("Reset() requires prior Stage()");
-        }
-        time_ = Scalar{0};
-        // Zero state vectors
-        for (std::size_t i = 0; i < X_global_.size(); ++i) {
-            X_global_[i] = Scalar{0};
-            X_dot_global_[i] = Scalar{0};
-        }
-
-        // Re-run Stage on components to apply Initial Conditions
-        for (auto &comp : components_) {
-            // Context is needed for wiring resolution, though we assume wiring is constant
-            backplane_.set_context(comp->Entity(), comp->Name());
-            backplane_.clear_tracking();
-
-            // Note: We don't need to re-bind state pointers because X_global_ address hasn't
-            // changed But Stage() is where components typically set X[i] = IC
-            comp->Stage(backplane_, configs_[comp.get()]);
-
-            backplane_.clear_context();
-        }
-
-        phase_ = Phase::Staged;
-    }
-
-    /**
-     * @brief Check if simulation is initialized (Staged or later)
-     */
+    /// Check if simulation is initialized (Staged or later)
     [[nodiscard]] bool IsInitialized() const { return phase_ >= Phase::Staged; }
 
     /**
-     * @brief Set simulation time (for warmstart/reset)
+     * @brief Read a signal value by name
+     * @param name Full signal path: "Entity.Component.signal"
      */
-    void SetTime(Scalar t) { time_ = t; }
-
     /**
-     * @brief Get all signal names
+     * @brief Read a scalar signal value by name
      */
-    [[nodiscard]] std::vector<std::string> GetSignalNames() const {
-        return registry_.get_all_signal_names();
-    }
+    [[nodiscard]] double Peek(const std::string &name) const { return registry_.GetByName(name); }
 
-    /**
-     * @brief Get all input signal names
-     */
-    [[nodiscard]] std::vector<std::string> GetInputNames() const {
-        return registry_.get_all_input_names();
-    }
-
-    /**
-     * @brief Get all output signal names
-     */
-    [[nodiscard]] std::vector<std::string> GetOutputNames() const {
-        return registry_.get_all_output_names();
-    }
+    /// Get data dictionary for the simulation
+    [[nodiscard]] DataDictionary GetDataDictionary() const;
 
     // =========================================================================
-    // External Control & Telemetry Callbacks (Phase 3.1.2)
+    // CONTROL INTERFACE (Runtime modification)
     // =========================================================================
 
-    /// Callback type for input sources: (signal_name) -> value
-    using InputSourceCallback = std::function<Scalar(const std::string &)>;
-
-    /// Callback type for output observers: (signal_name, value) -> void
-    using OutputObserverCallback = std::function<void(const std::string &, const Scalar &)>;
+    /**
+     * @brief Write a signal value by name
+     */
+    /**
+     * @brief Write a scalar signal value by name
+     */
+    void Poke(const std::string &name, double value) { registry_.SetByName(name, value); }
 
     /**
-     * @brief Register an external input source for a signal
-     *
-     * The callback will be invoked before each Step() to provide the input value.
-     * Useful for pilot inputs, external controllers, hardware-in-the-loop.
-     *
-     * @param signal_name Name of the signal to control
-     * @param callback Function returning the input value
+     * @brief Reset simulation to initial state
+     * Re-applies ICs, resets time to 0.
      */
-    void RegisterInputSource(const std::string &signal_name, InputSourceCallback callback) {
-        input_sources_[signal_name] = std::move(callback);
-    }
+    void Reset();
+
+    /// Input source callback: (signal_name) -> value
+    using InputSourceCallback = std::function<double(const std::string &)>;
+
+    /// Output observer callback: (signal_name, value) -> void
+    using OutputObserverCallback = std::function<void(const std::string &, double)>;
+
+    /// Register an external input source for a signal
+    void SetInputSource(const std::string &signal_name, InputSourceCallback callback);
+
+    /// Register an output observer for a signal
+    void SetOutputObserver(const std::string &signal_name, OutputObserverCallback callback);
+
+    /// Remove an input source
+    void ClearInputSource(const std::string &signal_name);
+
+    /// Remove an output observer
+    void ClearOutputObserver(const std::string &signal_name);
+
+    // =========================================================================
+    // EXPERT INTERFACE (Advanced users)
+    // =========================================================================
+
+    /// Get current state vector
+    [[nodiscard]] Eigen::VectorXd GetState() const;
+
+    /// Set state vector
+    void SetState(const Eigen::VectorXd &X);
+
+    /// Compute derivatives for current state at time t
+    Eigen::VectorXd ComputeDerivatives(double t);
+
+    /// Execute adaptive step (requires RK45 integrator)
+    AdaptiveStepResult<double> AdaptiveStep(double dt_request);
 
     /**
-     * @brief Unregister an external input source
+     * @brief Get symbolic dynamics graph
+     * Available after Stage() if symbolics.enabled = true.
      */
-    void UnregisterInputSource(const std::string &signal_name) {
-        input_sources_.erase(signal_name);
-    }
+    [[nodiscard]] std::optional<janus::Function> GetDynamicsGraph() const;
 
     /**
-     * @brief Register an output observer for a signal
-     *
-     * The callback will be invoked after each Step() with the current value.
-     * Useful for telemetry, visualization, external logging.
-     *
-     * @param signal_name Name of the signal to observe
-     * @param callback Function receiving the signal value
+     * @brief Get symbolic Jacobian
+     * Available after Stage() if symbolics.generate_jacobian = true.
      */
-    void RegisterOutputObserver(const std::string &signal_name, OutputObserverCallback callback) {
-        output_observers_[signal_name] = std::move(callback);
-    }
+    [[nodiscard]] std::optional<janus::Function> GetJacobian() const;
 
-    /**
-     * @brief Unregister an output observer
-     */
-    void UnregisterOutputObserver(const std::string &signal_name) {
-        output_observers_.erase(signal_name);
-    }
+    // =========================================================================
+    // PROGRAMMATIC SETUP (Alternative to FromConfig)
+    // =========================================================================
 
-    /**
-     * @brief Get number of registered input sources
-     */
-    [[nodiscard]] std::size_t NumInputSources() const { return input_sources_.size(); }
+    /// Add a component to the simulation
+    void AddComponent(std::unique_ptr<Component<double>> component);
 
-    /**
-     * @brief Get number of registered output observers
-     */
-    [[nodiscard]] std::size_t NumOutputObservers() const { return output_observers_.size(); }
+    /// Add a component from config (requires ComponentFactory)
+    void AddComponent(const ComponentConfig &config);
 
-    /**
-     * @brief Get number of components
-     */
+    /// Configure simulator with full config struct
+    void Configure(const SimulatorConfig &config);
+
+    /// Add signal routes
+    void AddRoutes(const std::vector<signal::SignalRoute> &routes);
+
+    /// Get number of components
     [[nodiscard]] std::size_t NumComponents() const { return components_.size(); }
 
-    /**
-     * @brief Get outputs registered by a component
-     */
-    [[nodiscard]] const std::vector<std::string> &
-    GetComponentOutputs(Component<Scalar> *comp) const {
-        static const std::vector<std::string> empty;
-        auto it = outputs_.find(comp);
-        return (it != outputs_.end()) ? it->second : empty;
-    }
-
-    /**
-     * @brief Get inputs resolved by a component
-     */
-    [[nodiscard]] const std::vector<std::string> &
-    GetComponentInputs(Component<Scalar> *comp) const {
-        static const std::vector<std::string> empty;
-        auto it = inputs_.find(comp);
-        return (it != inputs_.end()) ? it->second : empty;
-    }
-
-    // =========================================================================
-    // Phase 2.4: Wiring API
-    // =========================================================================
-
-    /**
-     * @brief Configure wiring for a component
-     *
-     * Convenience method for programmatic wiring setup.
-     * Wiring is applied immediately to the registry.
-     * Must be called after Provision().
-     *
-     * @param prefix Component name prefix (e.g. "Gravity")
-     * @param wiring_map Map of local input name -> source signal path
-     */
-    void SetWiring(const std::string &prefix,
-                   const std::map<std::string, std::string> &wiring_map) {
-        if (phase_ < Phase::Provisioned) {
-            throw LifecycleError("SetWiring() requires prior Provision()");
-        }
-        for (const auto &[local, source] : wiring_map) {
-            std::string full_input = prefix.empty() ? local : (prefix + "." + local);
-            registry_.template wire_input<Scalar>(full_input, source);
-        }
-    }
-
-    /**
-     * @brief Wire an input to a source signal
-     *
-     * Must be called after Provision() and before Stage().
-     *
-     * @tparam T The value type
-     * @param input_name Full name of the input port
-     * @param source_name Full name of the source signal
-     */
-    template <typename T> void Wire(const std::string &input_name, const std::string &source_name) {
-        if (phase_ < Phase::Provisioned) {
-            throw LifecycleError("Wire() requires prior Provision()");
-        }
-        registry_.template wire_input<T>(input_name, source_name);
-    }
-
-    /**
-     * @brief Validate all inputs are wired
-     *
-     * @throws WiringError if any inputs are unwired
-     */
-    void ValidateWiring() const { registry_.validate_wiring(); }
-
-    /**
-     * @brief Get list of unwired inputs
-     */
-    [[nodiscard]] std::vector<std::string> GetUnwiredInputs() const {
-        return registry_.get_unwired_inputs();
-    }
-
-    /**
-     * @brief Generate data dictionary to file
-     *
-     * @param path Output file path (.yaml or .json based on extension)
-     */
-    void GenerateDataDictionary(const std::string &path) const {
-        DataDictionary dict = GetDataDictionary();
-        if (path.ends_with(".json")) {
-            dict.ToJSON(path);
-        } else {
-            dict.ToYAML(path);
-        }
-    }
-
-    /**
-     * @brief Get data dictionary for the simulation
-     *
-     * @return DataDictionary with all component interfaces
-     */
-    [[nodiscard]] DataDictionary GetDataDictionary() const {
-        DataDictionary dict;
-
-        for (const auto &comp : components_) {
-            DataDictionary::ComponentEntry entry;
-            entry.name = comp->FullName();
-            entry.type = comp->TypeName();
-
-            // Query registry for this component's signals
-            entry.outputs = registry_.get_outputs_for_component(comp->FullName());
-            entry.inputs = registry_.get_inputs_for_component(comp->FullName());
-            entry.parameters = registry_.get_params_for_component(comp->FullName());
-            entry.config = registry_.get_config_for_component(comp->FullName());
-
-            dict.components.push_back(entry);
-        }
-
-        dict.ComputeStats();
-        return dict;
-    }
-
-    // =========================================================================
-    // State Management (Phase 2.1)
-    // =========================================================================
-
-    /**
-     * @brief Get total state vector size
-     *
-     * Sum of StateSize() across all components.
-     */
-    [[nodiscard]] std::size_t GetTotalStateSize() const {
-        std::size_t total = 0;
-        for (const auto &comp : components_) {
-            total += comp->StateSize();
-        }
-        return total;
-    }
-
-    /**
-     * @brief Get current state vector
-     *
-     * Returns a copy of X_global_ (for integrator use).
-     */
-    [[nodiscard]] JanusVector<Scalar> GetState() const { return X_global_; }
-
-    /**
-     * @brief Set state vector
-     *
-     * Copies values into X_global_. Called by integrator after advancing.
-     */
-    void SetState(const JanusVector<Scalar> &X) {
-        if (X.size() != X_global_.size()) {
-            throw StateError("State size mismatch: expected " + std::to_string(X_global_.size()) +
-                             ", got " + std::to_string(X.size()));
-        }
-        X_global_ = X;
-    }
-
-    /**
-     * @brief Compute derivatives for current state
-     *
-     * Called by integrator. Components read from X_global_ (via pointers)
-     * and write to X_dot_global_ (via pointers).
-     *
-     * @param t Current time
-     * @return Reference to derivative vector X_dot_global_
-     */
-    const JanusVector<Scalar> &ComputeDerivatives(Scalar t) {
-        // Zero derivatives (components accumulate into them)
-        for (std::size_t i = 0; i < X_dot_global_.size(); ++i) {
-            X_dot_global_[i] = Scalar{0};
-        }
-
-        // All components compute derivatives
-        // (pointers already bound, scatter/gather automatic)
-        Scalar dt = dt_nominal_;
-        for (auto &comp : components_) {
-            comp->PreStep(t, dt);
-        }
-        for (auto &comp : components_) {
-            comp->Step(t, dt);
-        }
-        for (auto &comp : components_) {
-            comp->PostStep(t, dt);
-        }
-
-        return X_dot_global_;
-    }
-
-    /**
-     * @brief Get derivative vector (after ComputeDerivatives)
-     */
-    [[nodiscard]] const JanusVector<Scalar> &GetDerivatives() const { return X_dot_global_; }
-
-    /**
-     * @brief Get state layout metadata
-     *
-     * Useful for debugging and introspection.
-     */
-    [[nodiscard]] const std::vector<StateSlice<Scalar>> &GetStateLayout() const {
-        return state_layout_;
-    }
-
-    /**
-     * @brief Set nominal timestep for derivative computation
-     */
-    void SetNominalDt(Scalar dt) { dt_nominal_ = dt; }
-
-    /**
-     * @brief Get nominal timestep
-     */
-    [[nodiscard]] Scalar GetNominalDt() const { return dt_nominal_; }
-
-    // =========================================================================
-    // Integrator Interface (Phase 2.2)
-    // =========================================================================
-
-    /**
-     * @brief Set integrator using configuration
-     */
-    void SetIntegrator(const IntegratorConfig<Scalar> &config) {
-        integrator_ = IntegratorFactory<Scalar>::Create(config);
-        integrator_config_ = config;
-    }
-
-    /**
-     * @brief Set integrator by type enum
-     */
-    void SetIntegrator(IntegratorType type) {
-        SetIntegrator(IntegratorConfig<Scalar>::ForMethod(type));
-    }
-
-    /**
-     * @brief Set integrator by type name string
-     */
-    void SetIntegrator(const std::string &type_name) {
-        SetIntegrator(IntegratorConfig<Scalar>::ForMethod(parse_integrator_type(type_name)));
-    }
-
-    /**
-     * @brief Set integrator directly
-     *
-     * If the integrator is adaptive, syncs tolerance config from the integrator.
-     */
-    void SetIntegrator(std::unique_ptr<Integrator<Scalar>> integrator) {
-        integrator_ = std::move(integrator);
-        integrator_config_.type = integrator_->Type();
-
-        // Sync adaptive integrator config if applicable
-        if (auto *adaptive = dynamic_cast<AdaptiveIntegrator<Scalar> *>(integrator_.get())) {
-            integrator_config_.abs_tol = adaptive->GetAbsTol();
-            integrator_config_.rel_tol = adaptive->GetRelTol();
-        }
-    }
-
-    /**
-     * @brief Get current integrator
-     */
-    [[nodiscard]] Integrator<Scalar> *GetIntegrator() const { return integrator_.get(); }
-
-    /**
-     * @brief Get current integrator configuration
-     */
-    [[nodiscard]] const IntegratorConfig<Scalar> &GetIntegratorConfig() const {
-        return integrator_config_;
-    }
-
-    /**
-     * @brief Get current integrator type
-     */
-    [[nodiscard]] IntegratorType GetIntegratorType() const { return integrator_config_.type; }
-
-    /**
-     * @brief Execute adaptive step (for RK45)
-     *
-     * Returns actual step taken and error estimate.
-     * Requires adaptive integrator.
-     */
-    AdaptiveStepResult<Scalar> AdaptiveStep(Scalar dt_request) {
-        if (phase_ != Phase::Staged && phase_ != Phase::Running) {
-            throw LifecycleError("AdaptiveStep() requires prior Stage()");
-        }
-        phase_ = Phase::Running;
-
-        auto *adaptive = dynamic_cast<AdaptiveIntegrator<Scalar> *>(integrator_.get());
-        if (!adaptive) {
-            throw IntegrationError("AdaptiveStep() requires an AdaptiveIntegrator");
-        }
-
-        auto deriv_func = [this](Scalar t, const JanusVector<Scalar> &x) -> JanusVector<Scalar> {
-            this->SetState(x);
-            return this->ComputeDerivatives(t);
-        };
-
-        JanusVector<Scalar> X = GetState();
-        auto result = adaptive->AdaptiveStep(deriv_func, X, time_, dt_request);
-
-        if (result.accepted) {
-            SetState(result.state);
-            time_ = time_ + result.dt_actual;
-        }
-
-        return result;
-    }
-
-    // =========================================================================
-    // Logging Interface (Phase 2.5)
-    // =========================================================================
-
-    /**
-     * @brief Get the mission logger
-     */
-    [[nodiscard]] MissionLogger &GetLogger() { return logger_; }
-    [[nodiscard]] const MissionLogger &GetLogger() const { return logger_; }
-
-    /**
-     * @brief Enable/disable quiet mode (suppress all but errors)
-     */
-    void SetQuietMode(bool quiet) {
-        if (quiet) {
-            logger_.SetConsoleLevel(LogLevel::Error);
-            logger_.SetProgressEnabled(false);
-        } else {
-            logger_.SetConsoleLevel(LogLevel::Info);
-            logger_.SetProgressEnabled(true);
-        }
-    }
-
-    /**
-     * @brief Set log file path
-     *
-     * When set, all logs are written to the specified file.
-     */
-    void SetLogFile(const std::string &path) { logger_.SetLogFile(path); }
-
-    /**
-     * @brief Enable/disable profiling
-     */
-    void SetProfilingEnabled(bool enabled) { logger_.SetProfilingEnabled(enabled); }
-
-    /**
-     * @brief Apply logging configuration
-     */
-    void ApplyLogConfig(const LogConfig &config) {
-        if (config.file_enabled && !config.file_path.empty()) {
-            logger_.SetLogFile(config.file_path);
-            logger_.SetFileLevel(config.file_level);
-        }
-        logger_.SetConsoleLevel(config.console_level);
-        logger_.SetProgressEnabled(config.progress_enabled);
-        logger_.SetProfilingEnabled(config.profiling_enabled);
-    }
-
-    // =========================================================================
-    // Graph Generation (Phase 3.3.4) - Symbolic Mode Only
-    // =========================================================================
-
-    /**
-     * @brief Generate dynamics graph as janus::Function (symbolic mode only)
-     *
-     * Extracts the computational graph xdot = f(t, x) from the simulation.
-     * Only available when Scalar = SymbolicScalar.
-     *
-     * @tparam S SFINAE helper (defaults to Scalar)
-     * @return janus::Function representing the dynamics
-     * @throws LifecycleError if simulator is not staged
-     *
-     * Usage:
-     *   Simulator<SymbolicScalar> sim;
-     *   sim.Initialize();
-     *   auto dynamics = sim.GenerateGraph();
-     *   auto xdot = dynamics(t, x);  // Evaluate numerically
-     */
-    template <typename S = Scalar, typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-    [[nodiscard]] janus::Function GenerateGraph() {
-        if (!IsInitialized()) {
-            throw LifecycleError("GenerateGraph() requires a Staged simulator");
-        }
-
-        // Save current state and time to prevent side effects
-        Scalar saved_time = time_;
-        JanusVector<Scalar> saved_state = GetState();
-
-        std::size_t n_states = GetTotalStateSize();
-
-        // Create symbolic time
-        auto t_sym = janus::sym("t");
-
-        // Use sym_vec_pair to get both:
-        // - x_vec (SymbolicVector) for templated simulator code
-        // - x_mx (raw MX) for janus::Function inputs
-        auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
-
-        // Set state using SymbolicVector (works with templates)
-        SetState(x_vec);
-        SetTime(t_sym);
-
-        // Compute derivatives
-        ComputeDerivatives(t_sym);
-
-        // Gather derivatives
-        const auto &X_dot = GetDerivatives();
-        std::vector<SymbolicScalar> xdot_elements;
-        xdot_elements.reserve(n_states);
-        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(n_states); ++i) {
-            xdot_elements.push_back(X_dot(i));
-        }
-        SymbolicScalar xdot_mx = SymbolicScalar::vertcat(xdot_elements);
-
-        // Build function with raw MX as input
-        std::vector<janus::SymbolicArg> inputs = {t_sym, x_mx};
-        std::vector<janus::SymbolicArg> outputs = {xdot_mx};
-
-        janus::Function dyn_func("dynamics", inputs, outputs);
-
-        // Restore state and time
-        SetTime(saved_time);
-        SetState(saved_state);
-        // Re-compute derivatives to restore X_dot_global_
-        // Use 0 as dt since we just want derivatives, not a step
-        ComputeDerivatives(saved_time);
-
-        return dyn_func;
-    }
-
-    /**
-     * @brief Generate state Jacobian as janus::Function (symbolic mode only)
-     *
-     * Computes the Jacobian df/dx where xdot = f(t, x).
-     * Only available when Scalar = SymbolicScalar.
-     *
-     * @return janus::Function computing the Jacobian matrix
-     */
-    template <typename S = Scalar, typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-    [[nodiscard]] janus::Function GenerateJacobian() {
-        std::size_t n_states = GetTotalStateSize();
-
-        // Create symbolic variables for the Jacobian function
-        auto t_sym = janus::sym("t");
-        auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
-
-        // Get dynamics and evaluate
-        auto dynamics = GenerateGraph();
-        auto xdot_result = dynamics.eval(t_sym, x_mx);
-
-        // Compute Jacobian
-        auto J_sym = janus::jacobian({janus::as_mx(xdot_result)}, {x_mx});
-
-        return janus::Function("jacobian", {t_sym, x_mx}, {J_sym});
-    }
+    /// Get backplane for signal introspection (expert)
+    [[nodiscard]] Backplane<double> &GetBackplane() { return backplane_; }
+    [[nodiscard]] const Backplane<double> &GetBackplane() const { return backplane_; }
 
   private:
-    std::vector<std::unique_ptr<Component<Scalar>>> components_;
-    SignalRegistry<Scalar> registry_;
-    Backplane<Scalar> backplane_;
-    Scalar time_{};
-    Phase phase_ = Phase::Uninitialized;
+    // =========================================================================
+    // PRIVATE METHODS
+    // =========================================================================
 
-    // Configuration and dependency tracking
-    std::unordered_map<Component<Scalar> *, ComponentConfig> configs_;
-    std::unordered_map<Component<Scalar> *, std::vector<std::string>> outputs_;
-    std::unordered_map<Component<Scalar> *, std::vector<std::string>> inputs_;
+    /// Provision all components (called by FromConfig)
+    void Provision();
 
-    // State management (Phase 2.1)
-    JanusVector<Scalar> X_global_;                 ///< Global state vector
-    JanusVector<Scalar> X_dot_global_;             ///< Global derivative vector
-    std::vector<StateSlice<Scalar>> state_layout_; ///< Per-component metadata
-    Scalar dt_nominal_{0.01};                      ///< Nominal timestep
+    /// Apply signal routing from config
+    void ApplyRouting();
 
-    // Integrator (Phase 2.2) - defaults to RK4
-    std::unique_ptr<Integrator<Scalar>> integrator_ = std::make_unique<RK4Integrator<Scalar>>();
-    IntegratorConfig<Scalar> integrator_config_ = IntegratorConfig<Scalar>::RK4Default();
+    /// Allocate state vectors and bind to components
+    void AllocateAndBindState();
 
-    // Logging (Phase 2.5)
+    /// Apply initial conditions from config
+    void ApplyInitialConditions();
+
+    /// Validate all inputs are wired
+    void ValidateWiring();
+
+    /// Invoke input source callbacks before Step
+    void InvokeInputSources();
+
+    /// Invoke output observer callbacks after Step
+    void InvokeOutputObservers();
+
+    // =========================================================================
+    // PRIVATE DATA
+    // =========================================================================
+
+    SimulatorConfig config_;
+
+    // Components
+    std::vector<std::unique_ptr<Component<double>>> components_;
+    std::unordered_map<Component<double> *, ComponentConfig> component_configs_;
+
+    // Signal system
+    SignalRegistry<double> registry_;
+    Backplane<double> backplane_;
+    signal::SignalRouter<double> router_;
+
+    // Managers
+    StateManager<double> state_manager_;
+    IntegrationManager<double> integration_manager_;
+    Scheduler scheduler_;
+
+    // Logging
     MissionLogger logger_;
 
-    // External callbacks (Phase 3.1.2)
+    // Time and phase
+    double time_ = 0.0;
+    Phase phase_ = Phase::Uninitialized;
+    int frame_count_ = 0;
+
+    // Symbolic results (optional, after Stage)
+    std::optional<janus::Function> dynamics_graph_;
+    std::optional<janus::Function> jacobian_;
+
+    // External callbacks
     std::unordered_map<std::string, InputSourceCallback> input_sources_;
     std::unordered_map<std::string, OutputObserverCallback> output_observers_;
 
-    /**
-     * @brief Invoke all registered input sources before Step()
-     */
-    void InvokeInputSources() {
-        for (const auto &[signal_name, callback] : input_sources_) {
-            try {
-                Scalar value = callback(signal_name);
-                SetSignal(signal_name, value);
-            } catch (const std::exception &e) {
-                // Log but don't fail - external sources may be unreliable
-                logger_.Log(LogLevel::Warning,
-                            "InputSource callback failed for " + signal_name + ": " + e.what());
-            }
-        }
+    // Dependency tracking
+    std::unordered_map<Component<double> *, std::vector<std::string>> outputs_;
+    std::unordered_map<Component<double> *, std::vector<std::string>> inputs_;
+};
+
+// =============================================================================
+// INLINE IMPLEMENTATIONS
+// =============================================================================
+
+inline Simulator::Simulator() : backplane_(registry_) { integration_manager_.ConfigureDefault(); }
+
+inline std::unique_ptr<Simulator> Simulator::FromConfig(const std::string &config_path) {
+    SimulatorConfig config = SimulatorConfig::FromFile(config_path);
+    return FromConfig(config);
+}
+
+inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &config) {
+    auto sim = std::make_unique<Simulator>();
+    sim->Configure(config);
+    sim->Provision();
+    return sim;
+}
+
+inline void Simulator::Configure(const SimulatorConfig &config) {
+    config_ = config;
+
+    // Configure integrator
+    integration_manager_.Configure(config_.integrator.type);
+
+    // Configure scheduler
+    double sim_rate = config_.scheduler.MaxRate();
+    auto timing_errors = config_.scheduler.ValidateGlobalTiming(sim_rate);
+    if (!timing_errors.empty()) {
+        throw ConfigError("Scheduler timing validation failed: " + timing_errors[0]);
+    }
+    scheduler_.Configure(config_.scheduler, sim_rate);
+}
+
+inline void Simulator::AddComponent(std::unique_ptr<Component<double>> component) {
+    components_.push_back(std::move(component));
+}
+
+inline void Simulator::AddComponent(const ComponentConfig & /*config*/) {
+    // TODO: Implement ComponentFactory
+    throw std::runtime_error("ComponentFactory not yet implemented. Use AddComponent(unique_ptr) "
+                             "for programmatic setup.");
+}
+
+inline void Simulator::AddRoutes(const std::vector<signal::SignalRoute> &routes) {
+    for (const auto &route : routes) {
+        router_.AddRoute(route);
+    }
+}
+
+inline void Simulator::Provision() {
+    if (phase_ != Phase::Uninitialized) {
+        throw LifecycleError("Provision() can only be called once");
     }
 
-    /**
-     * @brief Invoke all registered output observers after Step()
-     */
-    void InvokeOutputObservers() {
-        for (const auto &[signal_name, callback] : output_observers_) {
-            try {
-                Scalar value = GetSignal(signal_name);
-                callback(signal_name, value);
-            } catch (const std::exception &e) {
-                // Log but don't fail - external observers may be unreliable
-                logger_.Log(LogLevel::Warning,
-                            "OutputObserver callback failed for " + signal_name + ": " + e.what());
-            }
-        }
+    // Provision each component
+    for (auto &comp : components_) {
+        backplane_.set_context(comp->Entity(), comp->Name());
+        backplane_.clear_tracking();
+
+        ComponentConfig config;
+        config.name = comp->Name();
+        config.entity = comp->Entity();
+        component_configs_[comp.get()] = config;
+
+        comp->Provision(backplane_, config);
+        comp->MarkProvisioned();
+
+        outputs_[comp.get()] = backplane_.registered_outputs();
+        backplane_.clear_context();
     }
-};
+
+    // Apply routing
+    ApplyRouting();
+
+    // Allocate and bind state
+    AllocateAndBindState();
+
+    phase_ = Phase::Provisioned;
+}
+
+inline void Simulator::ApplyRouting() { router_.ApplyRoutes(backplane_); }
+
+inline void Simulator::AllocateAndBindState() {
+    state_manager_.AllocateState(components_);
+    state_manager_.BindComponents(components_);
+}
+
+inline void Simulator::ApplyInitialConditions() {
+    // ICs are typically applied in component Stage() methods
+    // Config-driven ICs could be applied here in the future
+}
+
+inline void Simulator::ValidateWiring() {
+    auto unwired = registry_.get_unwired_inputs();
+    if (!unwired.empty()) {
+        std::string msg = "Unwired inputs: ";
+        for (const auto &name : unwired) {
+            msg += name + ", ";
+        }
+        throw WiringError(msg);
+    }
+}
+
+inline void Simulator::Stage() {
+    // Auto-provision if components were added programmatically
+    if (phase_ == Phase::Uninitialized && !components_.empty()) {
+        Provision();
+    }
+
+    if (phase_ != Phase::Provisioned) {
+        throw LifecycleError("Stage() requires components to be added first");
+    }
+
+    // Stage each component (input wiring)
+    for (auto &comp : components_) {
+        backplane_.set_context(comp->Entity(), comp->Name());
+        backplane_.clear_tracking();
+
+        comp->Stage(backplane_, component_configs_[comp.get()]);
+        comp->MarkStaged();
+
+        inputs_[comp.get()] = backplane_.resolved_inputs();
+        backplane_.clear_context();
+    }
+
+    // Validate wiring
+    ValidateWiring();
+
+    // Generate symbolic graphs if enabled
+    if (config_.staging.symbolics.enabled) {
+        // TODO: Implement symbolic graph generation
+        // This requires creating symbolic components and tracing
+    }
+
+    // Run trim if enabled
+    if (config_.staging.trim.enabled) {
+        // TODO: Implement trim optimization
+    }
+
+    phase_ = Phase::Staged;
+    time_ = 0.0;
+}
+
+inline void Simulator::Stage(const StageConfig &config) {
+    config_.staging = config;
+    Stage();
+}
+
+inline void Simulator::Step(double dt) {
+    if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+        throw LifecycleError("Step() requires prior Stage()");
+    }
+    phase_ = Phase::Running;
+
+    // Invoke input sources
+    InvokeInputSources();
+
+    // Get active groups for this frame
+    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
+
+    // If no state, just call components directly
+    if (state_manager_.TotalSize() == 0) {
+        for (auto &comp : components_) {
+            comp->PreStep(time_, dt);
+        }
+        for (auto &comp : components_) {
+            comp->Step(time_, dt);
+        }
+        for (auto &comp : components_) {
+            comp->PostStep(time_, dt);
+        }
+    } else {
+        // Create derivative function for integrator
+        auto deriv_func = [this](double t, const JanusVector<double> &x) -> JanusVector<double> {
+            state_manager_.SetState(x);
+            state_manager_.ZeroDerivatives();
+
+            for (auto &comp : components_) {
+                comp->PreStep(t, config_.dt);
+            }
+            for (auto &comp : components_) {
+                comp->Step(t, config_.dt);
+            }
+            for (auto &comp : components_) {
+                comp->PostStep(t, config_.dt);
+            }
+
+            return state_manager_.GetDerivatives();
+        };
+
+        // Integrate
+        JanusVector<double> X = state_manager_.GetState();
+        JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, time_, dt);
+        state_manager_.SetState(X_new);
+    }
+
+    time_ += dt;
+    frame_count_++;
+
+    // Invoke output observers
+    InvokeOutputObservers();
+}
+
+inline void Simulator::Step() { Step(config_.dt); }
+
+inline void Simulator::Reset() {
+    if (phase_ < Phase::Staged) {
+        throw LifecycleError("Reset() requires prior Stage()");
+    }
+
+    time_ = 0.0;
+    frame_count_ = 0;
+
+    // Zero state
+    if (state_manager_.TotalSize() > 0) {
+        JanusVector<double> zero =
+            JanusVector<double>::Zero(static_cast<Eigen::Index>(state_manager_.TotalSize()));
+        state_manager_.SetState(zero);
+    }
+
+    // Re-run Stage on components
+    for (auto &comp : components_) {
+        backplane_.set_context(comp->Entity(), comp->Name());
+        comp->Stage(backplane_, component_configs_[comp.get()]);
+        backplane_.clear_context();
+    }
+
+    phase_ = Phase::Staged;
+}
+
+inline void Simulator::SetInputSource(const std::string &signal_name,
+                                      InputSourceCallback callback) {
+    input_sources_[signal_name] = std::move(callback);
+}
+
+inline void Simulator::SetOutputObserver(const std::string &signal_name,
+                                         OutputObserverCallback callback) {
+    output_observers_[signal_name] = std::move(callback);
+}
+
+inline void Simulator::ClearInputSource(const std::string &signal_name) {
+    input_sources_.erase(signal_name);
+}
+
+inline void Simulator::ClearOutputObserver(const std::string &signal_name) {
+    output_observers_.erase(signal_name);
+}
+
+inline Eigen::VectorXd Simulator::GetState() const { return state_manager_.GetState(); }
+
+inline void Simulator::SetState(const Eigen::VectorXd &X) { state_manager_.SetState(X); }
+
+inline Eigen::VectorXd Simulator::ComputeDerivatives(double t) {
+    state_manager_.ZeroDerivatives();
+
+    double dt = config_.dt;
+    for (auto &comp : components_) {
+        comp->PreStep(t, dt);
+    }
+    for (auto &comp : components_) {
+        comp->Step(t, dt);
+    }
+    for (auto &comp : components_) {
+        comp->PostStep(t, dt);
+    }
+
+    return state_manager_.GetDerivatives();
+}
+
+inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
+    if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+        throw LifecycleError("AdaptiveStep() requires prior Stage()");
+    }
+    phase_ = Phase::Running;
+
+    auto deriv_func = [this](double t, const JanusVector<double> &x) -> JanusVector<double> {
+        state_manager_.SetState(x);
+        return ComputeDerivatives(t);
+    };
+
+    JanusVector<double> X = state_manager_.GetState();
+    auto result = integration_manager_.AdaptiveStep(deriv_func, X, time_, dt_request);
+
+    if (result.accepted) {
+        state_manager_.SetState(result.state);
+        time_ += result.dt_actual;
+    }
+
+    return result;
+}
+
+inline std::optional<janus::Function> Simulator::GetDynamicsGraph() const {
+    return dynamics_graph_;
+}
+
+inline std::optional<janus::Function> Simulator::GetJacobian() const { return jacobian_; }
+
+inline DataDictionary Simulator::GetDataDictionary() const {
+    DataDictionary dict;
+
+    for (const auto &comp : components_) {
+        DataDictionary::ComponentEntry entry;
+        entry.name = comp->FullName();
+        entry.type = comp->TypeName();
+        entry.outputs = registry_.get_outputs_for_component(comp->FullName());
+        entry.inputs = registry_.get_inputs_for_component(comp->FullName());
+        entry.parameters = registry_.get_params_for_component(comp->FullName());
+        entry.config = registry_.get_config_for_component(comp->FullName());
+        dict.components.push_back(entry);
+    }
+
+    dict.ComputeStats();
+    return dict;
+}
+
+inline void Simulator::InvokeInputSources() {
+    for (const auto &[name, callback] : input_sources_) {
+        double value = callback(name);
+        registry_.SetByName(name, value);
+    }
+}
+
+inline void Simulator::InvokeOutputObservers() {
+    for (const auto &[name, callback] : output_observers_) {
+        double value = registry_.GetByName(name);
+        callback(name, value);
+    }
+}
 
 } // namespace icarus

@@ -125,17 +125,17 @@ TEST(SignalRegistry, UnknownSignalThrows) {
 }
 
 // ============================================
-// Simulator Tests
+// Simulator Tests (Updated for Phase 4.0.7)
 // ============================================
 
 TEST(Simulator, DefaultConstruction) {
-    icarus::Simulator<double> sim;
+    icarus::Simulator sim;
     EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
     EXPECT_EQ(sim.NumComponents(), 0);
 }
 
 // ============================================
-// Symbolic Backend Tests (SymbolicScalar)
+// Symbolic Backend Tests (SignalRegistry only - Simulator is no longer templated)
 // ============================================
 
 TEST(SignalRegistrySymbolic, RegisterAndResolve) {
@@ -170,8 +170,5 @@ TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
     EXPECT_TRUE(retrieved.is_symbolic());
 }
 
-TEST(SimulatorSymbolic, DefaultConstruction) {
-    icarus::Simulator<janus::SymbolicScalar> sim;
-    EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
-    EXPECT_EQ(sim.NumComponents(), 0);
-}
+// NOTE: SimulatorSymbolic test removed - Simulator is no longer templated.
+// Symbolic mode is handled internally during Stage() for analysis.

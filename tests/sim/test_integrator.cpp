@@ -1,12 +1,12 @@
 /**
  * @file test_integrator.cpp
  * @brief Tests for Phase 2.2: Integrator Interface
+ *
+ * Updated for Phase 4.0.7 - removed Simulator<T> integration tests.
  */
 
 #include <gtest/gtest.h>
 #include <icarus/icarus.hpp>
-
-#include "testing/StatefulComponent.hpp"
 
 #include <cmath>
 #include <vulcan/core/Constants.hpp>
@@ -319,124 +319,7 @@ TEST(IntegratorFactory, RK45ConfigApplied) {
 }
 
 // =============================================================================
-// Simulator Integration Tests
-// =============================================================================
-
-TEST(SimulatorIntegrator, DefaultIsRK4) {
-    Simulator<double> sim;
-
-    // Integrator should be valid from construction
-    EXPECT_NE(sim.GetIntegrator(), nullptr);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK4);
-    EXPECT_EQ(sim.GetIntegrator()->Name(), "RK4");
-}
-
-TEST(SimulatorIntegrator, SetByEnum) {
-    Simulator<double> sim;
-
-    sim.SetIntegrator(IntegratorType::RK2);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK2);
-
-    sim.SetIntegrator(IntegratorType::RK4);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK4);
-}
-
-TEST(SimulatorIntegrator, SetByString) {
-    Simulator<double> sim;
-
-    sim.SetIntegrator("euler");
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::Euler);
-
-    sim.SetIntegrator("RK45");
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK45);
-}
-
-TEST(SimulatorIntegrator, SetByConfig) {
-    Simulator<double> sim;
-
-    auto config = IntegratorConfig<double>::RK45Adaptive(1e-10, 1e-10);
-    sim.SetIntegrator(config);
-
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK45);
-    EXPECT_DOUBLE_EQ(sim.GetIntegratorConfig().abs_tol, 1e-10);
-}
-
-TEST(SimulatorIntegrator, SetByUniquePtr) {
-    Simulator<double> sim;
-
-    sim.SetIntegrator(std::make_unique<EulerIntegrator<double>>());
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::Euler);
-    EXPECT_EQ(sim.GetIntegrator()->Name(), "Euler");
-}
-
-TEST(SimulatorIntegrator, FreeFallWithRK4) {
-    Simulator<double> sim;
-    sim.AddComponent(std::make_unique<StatefulComponent<double>>("TestComponent"));
-    sim.SetIntegrator(std::make_unique<RK4Integrator<double>>());
-
-    sim.Provision();
-    sim.Stage();
-
-    // Verify initial state
-    EXPECT_EQ(sim.GetTotalStateSize(), 3u);
-
-    // Integrate for 1 second
-    double dt = 0.01;
-    for (int i = 0; i < 100; ++i) {
-        sim.Step(dt);
-    }
-
-    // Check final time
-    double t = sim.Time();
-    EXPECT_NEAR(t, 1.0, 1e-10);
-}
-
-TEST(SimulatorIntegrator, RuntimeSwitching) {
-    Simulator<double> sim;
-    sim.AddComponent(std::make_unique<StatefulComponent<double>>("TestComponent"));
-    sim.Provision();
-    sim.Stage();
-
-    // Start with Euler
-    sim.SetIntegrator(IntegratorType::Euler);
-    sim.Step(0.01);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::Euler);
-
-    // Switch to RK4 mid-simulation
-    sim.SetIntegrator(IntegratorType::RK4);
-    sim.Step(0.01);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK4);
-
-    // Switch to RK45
-    sim.SetIntegrator(IntegratorType::RK45);
-    sim.Step(0.01);
-    EXPECT_EQ(sim.GetIntegratorType(), IntegratorType::RK45);
-}
-
-TEST(SimulatorIntegrator, AllMethodsProduceResults) {
-    // Verify all integrators work end-to-end
-    std::vector<IntegratorType> methods = {IntegratorType::Euler, IntegratorType::RK2,
-                                           IntegratorType::RK4, IntegratorType::RK45};
-
-    for (auto method : methods) {
-        Simulator<double> sim;
-        sim.AddComponent(std::make_unique<StatefulComponent<double>>("TestComponent"));
-        sim.SetIntegrator(method);
-        sim.Provision();
-        sim.Stage();
-
-        // Run 10 steps
-        for (int i = 0; i < 10; ++i) {
-            sim.Step(0.01);
-        }
-
-        // Should have advanced time
-        EXPECT_GT(sim.Time(), 0.0) << "Failed for " << to_string(method);
-    }
-}
-
-// =============================================================================
-// Symbolic Mode Tests
+// Symbolic Mode Tests (Integrators only - Simulator tests removed)
 // =============================================================================
 
 TEST(IntegratorSymbolic, RK4Compiles) {
@@ -477,20 +360,6 @@ TEST(IntegratorSymbolic, EulerCompiles) {
     auto res = step_fn.eval(1.0, 0.0, 0.01);
 
     EXPECT_EQ(res.rows(), 1);
-}
-
-TEST(IntegratorSymbolic, SimulatorWithMX) {
-    using MX = janus::SymbolicScalar;
-
-    Simulator<MX> sim;
-    sim.AddComponent(std::make_unique<StatefulComponent<MX>>("TestComponent"));
-    sim.SetIntegrator(std::make_unique<RK4Integrator<MX>>());
-
-    sim.Provision();
-    sim.Stage();
-
-    // Should compile and run symbolic step
-    EXPECT_NO_THROW(sim.Step(MX{0.01}));
 }
 
 TEST(IntegratorSymbolic, RK2Compiles) {
@@ -534,3 +403,8 @@ TEST(IntegratorSymbolic, FactoryCreatesMX) {
     EXPECT_EQ(rk45->Name(), "RK45");
     EXPECT_TRUE(rk45->IsAdaptive());
 }
+
+// =============================================================================
+// NOTE: Simulator<T> integration tests removed - Simulator is no longer templated.
+// Integrator is now managed internally via IntegrationManager.
+// =============================================================================

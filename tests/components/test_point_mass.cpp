@@ -3,6 +3,7 @@
  * @brief Unit tests for PointMass3DOF and PointMassGravity components
  *
  * Part of Phase 2.3: First Real Component
+ * Updated for Phase 4.0.7 non-templated Simulator API.
  */
 
 #include <gtest/gtest.h>
@@ -13,6 +14,7 @@
 #include <icarus/core/Types.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
+#include <icarus/signal/SignalRouter.hpp>
 #include <icarus/sim/Simulator.hpp>
 
 #include <vulcan/core/Constants.hpp>
@@ -127,11 +129,12 @@ TEST(PointMassGravity, GravitationalParameter) {
 
 // =============================================================================
 // Integration Tests (Simulator with both components)
+// Updated for Phase 4.0.7 API - uses AddRoutes() instead of SetWiring()
 // =============================================================================
 
 TEST(PointMassIntegration, FreeFallConstantGravity) {
     // Create simulator
-    Simulator<double> sim;
+    Simulator sim;
 
     // Create components
     auto pm = std::make_unique<PointMass3DOF<double>>(1.0, "PointMass3DOF");
@@ -152,18 +155,21 @@ TEST(PointMassIntegration, FreeFallConstantGravity) {
     sim.AddComponent(std::move(grav));
     sim.AddComponent(std::move(pm));
 
-    // Run lifecycle
-    sim.Provision();
+    // Wire components using AddRoutes (replaces SetWiring)
+    std::vector<signal::SignalRoute> routes = {
+        // Gravity reads position from PointMass3DOF
+        {"Gravity.position.x", "PointMass3DOF.position.x"},
+        {"Gravity.position.y", "PointMass3DOF.position.y"},
+        {"Gravity.position.z", "PointMass3DOF.position.z"},
+        {"Gravity.mass", "PointMass3DOF.mass"},
+        // PointMass3DOF reads force from Gravity
+        {"PointMass3DOF.force.x", "Gravity.force.x"},
+        {"PointMass3DOF.force.y", "Gravity.force.y"},
+        {"PointMass3DOF.force.z", "Gravity.force.z"},
+    };
+    sim.AddRoutes(routes);
 
-    // Wire components together (after Provision, before Stage)
-    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
-                              {"position.y", "PointMass3DOF.position.y"},
-                              {"position.z", "PointMass3DOF.position.z"},
-                              {"mass", "PointMass3DOF.mass"}});
-    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
-                                    {"force.y", "Gravity.force.y"},
-                                    {"force.z", "Gravity.force.z"}});
-
+    // Stage runs Provision internally, then stages components
     sim.Stage();
 
     // Simulate for 2 seconds
@@ -199,7 +205,7 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
     // over a partial orbit. For a closed orbit, mechanical energy
     // E = KE + PE = ½mv² - μm/r should remain constant.
 
-    Simulator<double> sim;
+    Simulator sim;
 
     // Circular orbit at 400 km altitude (ISS-like)
     double altitude = 400e3; // m
@@ -225,17 +231,17 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
     sim.AddComponent(std::move(grav));
     sim.AddComponent(std::move(pm));
 
-    // Run lifecycle
-    sim.Provision();
-
-    // Wire components together (after Provision, before Stage)
-    sim.SetWiring("Gravity", {{"position.x", "PointMass3DOF.position.x"},
-                              {"position.y", "PointMass3DOF.position.y"},
-                              {"position.z", "PointMass3DOF.position.z"},
-                              {"mass", "PointMass3DOF.mass"}});
-    sim.SetWiring("PointMass3DOF", {{"force.x", "Gravity.force.x"},
-                                    {"force.y", "Gravity.force.y"},
-                                    {"force.z", "Gravity.force.z"}});
+    // Wire components using AddRoutes
+    std::vector<signal::SignalRoute> routes = {
+        {"Gravity.position.x", "PointMass3DOF.position.x"},
+        {"Gravity.position.y", "PointMass3DOF.position.y"},
+        {"Gravity.position.z", "PointMass3DOF.position.z"},
+        {"Gravity.mass", "PointMass3DOF.mass"},
+        {"PointMass3DOF.force.x", "Gravity.force.x"},
+        {"PointMass3DOF.force.y", "Gravity.force.y"},
+        {"PointMass3DOF.force.z", "Gravity.force.z"},
+    };
+    sim.AddRoutes(routes);
 
     sim.Stage();
 

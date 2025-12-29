@@ -26,25 +26,6 @@ function(icarus_add_example NAME DIR)
 endfunction()
 
 # =============================================================================
-# Intro Example (minimal, no config)
+# Examples will be added here as the new API is stabilized
 # =============================================================================
-add_executable(hello_world intro/hello_world.cpp)
-target_link_libraries(hello_world PRIVATE icarus)
-
-add_executable(orbital_demo intro/orbital_demo.cpp)
-target_link_libraries(orbital_demo PRIVATE icarus)
-target_include_directories(orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-add_executable(formation_flight_demo intro/formation_flight_demo.cpp)
-target_link_libraries(formation_flight_demo PRIVATE icarus)
-target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-# =============================================================================
-# Symbolic Mode Example (Phase 3)
-# =============================================================================
-add_executable(symbolic_orbital_demo symbolic/symbolic_orbital_demo.cpp)
-target_link_libraries(symbolic_orbital_demo PRIVATE icarus)
-
-add_executable(reentry_dynamics_demo symbolic/reentry_dynamics_demo.cpp)
-target_link_libraries(reentry_dynamics_demo PRIVATE icarus)
-target_include_directories(reentry_dynamics_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+# TODO: Add examples using the new Simulator API
