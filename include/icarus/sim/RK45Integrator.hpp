@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <icarus/core/Error.hpp>
 #include <icarus/sim/Integrator.hpp>
 #include <janus/math/Arithmetic.hpp>
 #include <janus/math/IntegratorStep.hpp>

@@ -98,3 +98,13 @@ icarus_add_test(test_config_structs
 icarus_add_test(test_simulation_loader
     io/test_simulation_loader.cpp
 )
+
+# Phase 4.0.7: Scheduler tests
+icarus_add_test(test_scheduler
+    sim/test_scheduler.cpp
+)
+
+# Phase 4.0.7: Internal managers tests
+icarus_add_test(test_managers
+    sim/test_managers.cpp
+)

@@ -17,8 +17,10 @@
 #include <icarus/signal/SignalRouter.hpp>
 #include <icarus/sim/IntegratorTypes.hpp>
 
+#include <cmath>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -265,19 +267,75 @@ struct SchedulerConfig {
         return max_rate > 0.0 ? max_rate : 400.0; // Default fallback
     }
 
-    /// Validate configuration
+    /// Validate configuration (local validation, before global rate is known)
     [[nodiscard]] std::vector<std::string> Validate() const {
         std::vector<std::string> errors;
+
         if (groups.empty()) {
             errors.push_back("No scheduler groups defined");
         }
+
+        std::unordered_set<std::string> seen_components;
+        std::unordered_set<std::string> seen_group_names;
+
         for (const auto &group : groups) {
+            // Check for duplicate group names
+            if (seen_group_names.count(group.name)) {
+                errors.push_back("Duplicate group name: " + group.name);
+            }
+            seen_group_names.insert(group.name);
+
+            // Check rate is positive
             if (group.rate_hz <= 0.0) {
                 errors.push_back("Group '" + group.name +
                                  "' has invalid rate: " + std::to_string(group.rate_hz));
             }
+
+            // Check for duplicate component assignments
+            for (const auto &member : group.members) {
+                if (seen_components.count(member.component)) {
+                    errors.push_back("Component '" + member.component +
+                                     "' assigned to multiple groups");
+                }
+                seen_components.insert(member.component);
+            }
         }
+
         return errors;
+    }
+
+    /// Validate rates against global simulation rate (called after rate derivation)
+    [[nodiscard]] std::vector<std::string> ValidateGlobalTiming(double sim_rate_hz) const {
+        std::vector<std::string> errors;
+
+        for (const auto &group : groups) {
+            // Group rate cannot exceed simulation rate
+            if (group.rate_hz > sim_rate_hz) {
+                errors.push_back("Group '" + group.name + "' rate " +
+                                 std::to_string(group.rate_hz) + " Hz exceeds simulation rate " +
+                                 std::to_string(sim_rate_hz) + " Hz");
+            }
+
+            // Group rate must be integer divisor of simulation rate
+            double ratio = sim_rate_hz / group.rate_hz;
+            if (std::abs(ratio - std::round(ratio)) > 1e-9) {
+                errors.push_back("Group '" + group.name + "' rate " +
+                                 std::to_string(group.rate_hz) +
+                                 " Hz is not an integer divisor of simulation rate " +
+                                 std::to_string(sim_rate_hz) + " Hz");
+            }
+        }
+
+        return errors;
+    }
+
+    /// Compute frame divisors for all groups given simulation rate
+    void ComputeFrameDivisors(double sim_rate_hz) {
+        group_frame_divisors.clear();
+        for (const auto &group : groups) {
+            int divisor = static_cast<int>(std::round(sim_rate_hz / group.rate_hz));
+            group_frame_divisors[group.name] = divisor;
+        }
     }
 };
 
