@@ -8,6 +8,8 @@
 
 This document defines all C++ configuration structs used in the Phase 4.0.7 refactor.
 
+**Note:** Configuration structs are NOT templated. The `Simulator` class (not templated) uses these configs. Scalar-dependent values use `double`.
+
 ---
 
 ## SimulatorConfig (Master)
@@ -20,8 +22,9 @@ namespace icarus {
  *
  * Loaded from simulation.yaml master binding file.
  * All sub-configs can be inline or referenced via includes.
+ *
+ * NOT templated - uses double for numeric values.
  */
-template <typename Scalar>
 struct SimulatorConfig {
     // =========================================================================
     // Identity
@@ -33,9 +36,9 @@ struct SimulatorConfig {
     // =========================================================================
     // Time
     // =========================================================================
-    Scalar t_start = Scalar{0};
-    Scalar t_end = Scalar{100};
-    Scalar dt = Scalar{0.01};  // Note: may be auto-derived from scheduler
+    double t_start = 0.0;
+    double t_end = 100.0;
+    double dt = 0.01;  // Note: may be auto-derived from scheduler
 
     // Reference epoch for time-varying models (atmosphere, gravity, etc.)
     // Components that need absolute time can read this
@@ -54,17 +57,17 @@ struct SimulatorConfig {
     // =========================================================================
     // Scheduler (unified from all entities)
     // =========================================================================
-    SchedulerConfig<Scalar> scheduler;
+    SchedulerConfig scheduler;
 
     // =========================================================================
     // Staging (Trim + Linearization + Symbolics)
     // =========================================================================
-    StageConfig<Scalar> staging;
+    StageConfig staging;
 
     // =========================================================================
     // Integrator
     // =========================================================================
-    IntegratorConfig<Scalar> integrator = IntegratorConfig<Scalar>::RK4Default();
+    IntegratorConfig integrator = IntegratorConfig::RK4Default();
 
     // =========================================================================
     // Logging
@@ -113,8 +116,8 @@ namespace icarus {
  * @brief Trim optimization configuration
  *
  * Defines how the simulator finds equilibrium/trim conditions during Stage().
+ * Uses symbolic mode internally (janus::NewtonSolver or janus::Opti/IPOPT).
  */
-template <typename Scalar>
 struct TrimConfig {
     bool enabled = false;                    // Whether to run trim optimization
 
@@ -125,15 +128,15 @@ struct TrimConfig {
     std::vector<std::string> control_signals;   // e.g., ["throttle", "elevator"]
 
     // Optimization settings
-    Scalar tolerance = Scalar{1e-6};
+    double tolerance = 1e-6;
     int max_iterations = 100;
-    std::string method = "newton";           // "newton", "gradient", "simplex"
+    std::string method = "newton";           // "newton" or "ipopt"
 
     // Initial guesses for controls (optional)
-    std::unordered_map<std::string, Scalar> initial_guesses;
+    std::unordered_map<std::string, double> initial_guesses;
 
     // Control bounds (optional)
-    std::unordered_map<std::string, std::pair<Scalar, Scalar>> control_bounds;
+    std::unordered_map<std::string, std::pair<double, double>> control_bounds;
 };
 
 } // namespace icarus
@@ -201,17 +204,17 @@ namespace icarus {
 /**
  * @brief Staging configuration
  *
- * Configures the Stage() phase: trim optimization, linearization, symbolic generation.
+ * Configures the Stage() phase: wiring validation, trim, linearization, symbolic generation.
+ * Symbolic mode is used internally - user doesn't need to manage it.
  */
-template <typename Scalar>
 struct StageConfig {
     // =========================================================================
-    // Trim Configuration
+    // Trim Configuration (Future)
     // =========================================================================
-    TrimConfig<Scalar> trim;
+    TrimConfig trim;
 
     // =========================================================================
-    // Linearization Configuration
+    // Linearization Configuration (Future)
     // =========================================================================
     LinearizationConfig linearization;
 
@@ -275,7 +278,6 @@ struct TopologyConfig {
  * Every component belongs to exactly one group.
  * Simulation dt is auto-derived from the fastest group across all entities.
  */
-template <typename Scalar>
 struct SchedulerConfig {
     std::vector<SchedulerGroupConfig> groups;
     TopologyConfig topology;
@@ -307,15 +309,14 @@ enum class IntegratorType {
     // ... others
 };
 
-template <typename Scalar>
 struct IntegratorConfig {
     IntegratorType type = IntegratorType::RK4;
 
     // For adaptive integrators
-    Scalar abs_tol = Scalar{1e-6};
-    Scalar rel_tol = Scalar{1e-3};
-    Scalar dt_min = Scalar{1e-10};
-    Scalar dt_max = Scalar{1.0};
+    double abs_tol = 1e-6;
+    double rel_tol = 1e-3;
+    double dt_min = 1e-10;
+    double dt_max = 1.0;
 
     // Factory methods
     static IntegratorConfig RK4Default() {
@@ -325,8 +326,8 @@ struct IntegratorConfig {
     static IntegratorConfig RK45Default() {
         return IntegratorConfig{
             .type = IntegratorType::RK45,
-            .abs_tol = Scalar{1e-6},
-            .rel_tol = Scalar{1e-3}
+            .abs_tol = 1e-6,
+            .rel_tol = 1e-3
         };
     }
 };
@@ -468,30 +469,41 @@ struct EntitySystemConfig {
 
 ## ComponentConfig
 
-Already defined in Phase 4.0.1, included here for reference:
+Defined in [phase4_0_config_infrastructure.md](phase4_0_config_infrastructure.md). Summarized here for reference:
 
 ```cpp
 namespace icarus {
 
 /**
  * @brief Component configuration from YAML
+ *
+ * Components access values via typed accessors:
+ *   cfg.Require<T>(key)  - throws if missing
+ *   cfg.Get<T>(key, default) - returns default if missing
+ *   cfg.Has<T>(key) - checks existence
  */
 struct ComponentConfig {
+    // Identity
     std::string type;           // Component type name (for factory)
     std::string name;           // Instance name
-    std::string entity;         // Entity this component belongs to
+    std::string entity;         // Entity prefix ("" = global component)
 
     // Optional external config file
     std::string config_file;
 
-    // Inline parameter overrides
+    // Raw storage (populated by loader, accessed via typed accessors)
     std::unordered_map<std::string, double> scalars;
-    std::unordered_map<std::string, int> integers;
-    std::unordered_map<std::string, std::string> strings;
     std::unordered_map<std::string, std::vector<double>> vectors;
+    std::unordered_map<std::string, std::vector<double>> arrays;
+    std::unordered_map<std::string, std::string> strings;
+    std::unordered_map<std::string, int64_t> integers;
+    std::unordered_map<std::string, bool> booleans;
+
+    // List-based config (for aggregators, etc.)
+    std::vector<std::string> sources;
 
     /**
-     * @brief Get fully qualified name (entity.name)
+     * @brief Get fully qualified name (entity.name or just name if global)
      */
     std::string FullName() const {
         return entity.empty() ? name : entity + "." + name;
@@ -502,11 +514,18 @@ struct ComponentConfig {
      */
     void Merge(const ComponentConfig& other);
 
+    // Typed accessors (template specializations in .cpp)
+    template <typename T> T Require(const std::string& key) const;
+    template <typename T> T Get(const std::string& key, const T& default_value) const;
+    template <typename T> bool Has(const std::string& key) const;
+
     static ComponentConfig FromFile(const std::string& yaml_path);
 };
 
 } // namespace icarus
 ```
+
+**Note:** Signal ports (`bp.declare_input<T>()`, `bp.declare_output<T>()`) are NOT part of ComponentConfig. They are structural declarations made during `Provision()` and are wired by the SignalRouter, not overridden via config.
 
 ---
 

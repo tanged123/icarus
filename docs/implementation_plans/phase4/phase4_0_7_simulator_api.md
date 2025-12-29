@@ -4,6 +4,32 @@
 
 ---
 
+## Critical Design Decision: Single Simulator Class
+
+**The user-facing `Simulator` class is NOT templated on Scalar.**
+
+```cpp
+// User sees ONE class
+class Simulator {
+    // Stage() uses symbolic mode internally for trim, linearization, graph gen
+    // Step() uses numeric mode for deterministic frame-by-frame execution
+};
+
+// NOT this:
+// Simulator<double> num_sim;
+// Simulator<SymbolicScalar> sym_sim;  // ❌ No duplication
+```
+
+**Rationale:**
+- Users shouldn't need to understand symbolic vs numeric mode
+- Symbolic capabilities are implementation details used during `Stage()`
+- Numeric execution happens in `Step()`
+- Components are still templated internally, but the Simulator facade hides this
+
+**Implementation Note:** Internally, the Simulator may maintain both numeric and symbolic component instances, or use type erasure. The user doesn't care.
+
+---
+
 ## Problem Statement
 
 The current `Simulator<Scalar>` class has grown into a "god object" with 50+ public methods spanning:
@@ -178,10 +204,17 @@ namespace icarus {
 /**
  * @brief Top-level simulation coordinator
  *
+ * NOT templated on Scalar - user sees one class.
+ * Symbolic mode is used internally during Stage() for:
+ *   - Trim optimization
+ *   - Linearization
+ *   - Symbolic graph generation
+ * Numeric mode is used during Step() for deterministic execution.
+ *
  * Provides a clean 4-operation external interface:
  * - FromConfig() / constructor - Initialize simulation
- * - Stage() - Prepare for execution (wire signals, apply ICs)
- * - Step() - Advance simulation
+ * - Stage() - Prepare for execution (trim, linearization, validation)
+ * - Step() - Advance simulation (numeric)
  * - ~Simulator() - Cleanup (RAII)
  *
  * Additional functionality is grouped into:
@@ -189,7 +222,6 @@ namespace icarus {
  * - Control methods (runtime modification)
  * - Expert methods (advanced users)
  */
-template <typename Scalar>
 class Simulator {
 public:
     // =========================================================================
@@ -202,17 +234,18 @@ public:
      * This is the primary entry point. Loads component configs and routes
      * from YAML, creates components, provisions them.
      *
+     * Single-file mode: Everything can be inline in one YAML.
+     * Multi-file mode: Use includes for organization (optional).
+     *
      * @param config_path Path to simulation YAML configuration
-     * @param routes_path Optional path to signal routes YAML
      * @return Configured Simulator ready for Stage()
      */
-    [[nodiscard]] static Simulator FromConfig(const std::string& config_path,
-                                               const std::string& routes_path = "");
+    [[nodiscard]] static Simulator FromConfig(const std::string& config_path);
 
     /**
      * @brief Create simulator from configuration struct
      */
-    [[nodiscard]] static Simulator FromConfig(const SimulatorConfig<Scalar>& config);
+    [[nodiscard]] static Simulator FromConfig(const SimulatorConfig& config);
 
     /**
      * @brief Default constructor for programmatic setup
@@ -225,10 +258,10 @@ public:
      * @brief Stage the simulation
      *
      * "Staging" prepares the vehicle for launch:
-     * - Runs trim optimization to find equilibrium state (if configured)
-     * - Generates symbolic dynamics graph (if symbolic mode)
-     * - Generates symbolic Jacobian (if configured)
-     * - Exports symbolic functions (if output dir specified)
+     * - Validates all signal wiring
+     * - Runs trim optimization (if configured) - uses symbolic mode internally
+     * - Computes linearization (if configured) - uses symbolic mode internally
+     * - Generates symbolic dynamics graph (if configured)
      *
      * Must be called after FromConfig() (which calls Provision internally).
      * Must be called before Step().
@@ -236,16 +269,17 @@ public:
      * @param config Optional staging config override
      */
     void Stage();
-    void Stage(const StageConfig<Scalar>& config);
+    void Stage(const StageConfig& config);
 
     /**
-     * @brief Execute one simulation step
+     * @brief Execute one simulation step (numeric mode)
      *
      * Advances time by dt using the configured integrator.
+     * This is deterministic frame-by-frame numeric execution.
      *
      * @param dt Timestep (uses nominal dt if not specified)
      */
-    void Step(Scalar dt);
+    void Step(double dt);
     void Step();  // Uses nominal dt
 
     /**
@@ -263,7 +297,7 @@ public:
     // QUERY INTERFACE (Read-only)
     // =========================================================================
 
-    [[nodiscard]] Scalar Time() const;
+    [[nodiscard]] double Time() const;
     [[nodiscard]] Phase GetPhase() const;
     [[nodiscard]] bool IsInitialized() const;
 
@@ -282,9 +316,9 @@ public:
     void Reset();
 
     void SetInputSource(const std::string& signal_name,
-                        std::function<Scalar(const std::string&)> callback);
+                        std::function<double(const std::string&)> callback);
     void SetOutputObserver(const std::string& signal_name,
-                           std::function<void(const std::string&, const Scalar&)> callback);
+                           std::function<void(const std::string&, double)> callback);
     void ClearInputSource(const std::string& signal_name);
     void ClearOutputObserver(const std::string& signal_name);
 
@@ -292,70 +326,161 @@ public:
     // EXPERT INTERFACE (Advanced users)
     // =========================================================================
 
-    [[nodiscard]] const Backplane<Scalar>& GetBackplane() const;
-    [[nodiscard]] JanusVector<Scalar> GetState() const;
-    void SetState(const JanusVector<Scalar>& X);
-    const JanusVector<Scalar>& ComputeDerivatives(Scalar t);
-    AdaptiveStepResult<Scalar> AdaptiveStep(Scalar dt_request);
+    [[nodiscard]] Eigen::VectorXd GetState() const;
+    void SetState(const Eigen::VectorXd& X);
+    Eigen::VectorXd ComputeDerivatives(double t);
+    AdaptiveStepResult AdaptiveStep(double dt_request);
 
-    template <typename S = Scalar,
-              typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-    [[nodiscard]] janus::Function GenerateGraph();
+    /**
+     * @brief Get symbolic dynamics graph
+     *
+     * Available after Stage() if symbolics.enabled = true.
+     * Returns the dynamics function f(t, x) -> x_dot as a CasADi function.
+     */
+    [[nodiscard]] janus::Function GetDynamicsGraph() const;
 
-    template <typename S = Scalar,
-              typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-    [[nodiscard]] janus::Function GenerateJacobian();
+    /**
+     * @brief Get symbolic Jacobian
+     *
+     * Available after Stage() if symbolics.generate_jacobian = true.
+     */
+    [[nodiscard]] janus::Function GetJacobian() const;
+
+    /**
+     * @brief Get linearized state-space model
+     *
+     * Available after Stage() if linearization.enabled = true.
+     */
+    [[nodiscard]] LinearModel GetLinearModel() const;
 
     // =========================================================================
     // PROGRAMMATIC SETUP (Alternative to FromConfig)
     // =========================================================================
 
-    void AddComponent(std::unique_ptr<Component<Scalar>> component);
-    void AddComponent(std::unique_ptr<Component<Scalar>> component,
-                      const ComponentConfig& config);
-    void Configure(const SimulatorConfig<Scalar>& config);
+    void AddComponent(const ComponentConfig& config);
+    void Configure(const SimulatorConfig& config);
     void AddRoutes(const std::vector<signal::SignalRoute>& routes);
 
 private:
     // Internal state
-    SimulatorConfig<Scalar> config_;
-    std::vector<std::unique_ptr<Component<Scalar>>> components_;
-    std::unordered_map<Component<Scalar>*, ComponentConfig> component_configs_;
+    SimulatorConfig config_;
 
-    SignalRegistry<Scalar> registry_;
-    Backplane<Scalar> backplane_{registry_};
-    signal::SignalRouter<Scalar> router_;
+    // Numeric components (for Step execution)
+    std::vector<std::unique_ptr<Component<double>>> numeric_components_;
+    SignalRegistry<double> numeric_registry_;
+    Backplane<double> numeric_backplane_{numeric_registry_};
 
-    StateManager<Scalar> state_manager_;
-    IntegrationManager<Scalar> integration_manager_;
+    // Symbolic components (for Stage analysis) - lazily created
+    std::vector<std::unique_ptr<Component<SymbolicScalar>>> symbolic_components_;
+    SignalRegistry<SymbolicScalar> symbolic_registry_;
+    Backplane<SymbolicScalar> symbolic_backplane_{symbolic_registry_};
+    bool symbolic_initialized_ = false;
+
+    signal::SignalRouter router_;
+    StateManager state_manager_;
+    IntegrationManager integration_manager_;
     MissionLogger logger_;
 
-    Scalar time_{};
+    double time_ = 0.0;
     Phase phase_ = Phase::Uninitialized;
 
+    // Results from Stage() - available after staging
+    std::optional<janus::Function> dynamics_graph_;
+    std::optional<janus::Function> jacobian_;
+    std::optional<LinearModel> linear_model_;
+
     // External callbacks
-    std::unordered_map<std::string, std::function<Scalar(const std::string&)>> input_sources_;
-    std::unordered_map<std::string, std::function<void(const std::string&, const Scalar&)>> output_observers_;
+    std::unordered_map<std::string, std::function<double(const std::string&)>> input_sources_;
+    std::unordered_map<std::string, std::function<void(const std::string&, double)>> output_observers_;
 
     // Internal methods - Provision phase
-    void ProvisionComponents();
+    void ProvisionNumericComponents();
+    void ProvisionSymbolicComponents();  // Called lazily during Stage if needed
     void ApplyRouting();
     void AllocateAndBindState();
     void ApplyInitialConditions();
     void ValidateWiring();
 
-    // Internal methods - Stage phase
-    void RunTrimOptimization();
-    void GenerateSymbolicGraphs();
-    void ExportSymbolicFunctions();
+    // Internal methods - Stage phase (uses symbolic components internally)
+    void RunTrimOptimization();      // Uses symbolic mode
+    void ComputeLinearization();     // Uses symbolic mode
+    void GenerateSymbolicGraphs();   // Uses symbolic mode
 
-    // Internal methods - Step phase
+    // Internal methods - Step phase (uses numeric components)
     void InvokeInputSources();
     void InvokeOutputObservers();
 };
 
 } // namespace icarus
 ```
+
+---
+
+## Error Handling Strategy
+
+Configuration and runtime errors must be **actionable**. Users should know:
+1. **What** went wrong
+2. **Where** in the config (file + line if applicable)
+3. **How** to fix it (suggestions)
+
+### Configuration Errors
+
+```cpp
+// Example error format
+throw ConfigError(
+    "Unknown component type 'PointMasGravity'",
+    config_path,
+    line_number,
+    "Did you mean 'PointMassGravity'?"
+);
+
+// Output:
+// Error: Unknown component type 'PointMasGravity'
+//   at: simulation.yaml:15
+//   hint: Did you mean 'PointMassGravity'?
+```
+
+### Signal Wiring Errors
+
+```cpp
+// Example: unwired input
+throw WiringError(
+    "Input 'Dynamics.gravity_accel' is not wired",
+    "Available outputs matching 'gravity': ['Gravity.accel', 'Gravity.force']"
+);
+
+// Output:
+// Error: Input 'Dynamics.gravity_accel' is not wired
+//   hint: Available outputs matching 'gravity': ['Gravity.accel', 'Gravity.force']
+```
+
+### Runtime Errors
+
+```cpp
+// Example: component failure
+throw ComponentError(
+    "Atmosphere model returned NaN for density",
+    "Component: Leader.Aero",
+    "Time: 42.5s",
+    "Position: [6.871e6, 0, 1e9]"  // Clearly invalid altitude
+);
+```
+
+### Validation Levels
+
+| Phase | Validation | Error Type |
+|:------|:-----------|:-----------|
+| `FromConfig()` | YAML syntax, component types, required fields | `ConfigError` |
+| `Provision()` | Signal port existence, route validity | `WiringError` |
+| `Stage()` | All inputs wired, trim convergence | `StageError` |
+| `Step()` | NaN detection, bounds checking | `RuntimeError` |
+
+### Integration with Vulcan
+
+Vulcan's YAML loader provides basic syntax error handling. Icarus builds on top:
+- Type checking (expected scalar, got array)
+- Schema validation (required fields)
+- Cross-reference validation (component X references non-existent Y)
 
 ---
 

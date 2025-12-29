@@ -363,6 +363,8 @@ coordination:
 
 ## SchedulerConfig Struct
 
+> **Note:** Config structs are NOT templated. They use `double` for numeric values.
+
 ```cpp
 namespace icarus {
 
@@ -410,8 +412,9 @@ struct TopologyConfig {
  * Every component belongs to exactly one group.
  * Groups define rate_hz and priority.
  * Simulation dt is auto-derived from the fastest group across all entities.
+ *
+ * NOT templated - config structs use double for numeric values.
  */
-template <typename Scalar>
 struct SchedulerConfig {
     // All scheduler groups for this entity
     // No "master rate" - each group specifies its own rate
@@ -496,7 +499,7 @@ struct SchedulerConfig {
 
 ```cpp
 // Build scheduler config programmatically
-SchedulerConfig<double> sched;
+SchedulerConfig sched;
 
 // Define groups with their rates and priorities
 // Groups sorted by priority, members sorted by their priority
@@ -555,10 +558,10 @@ if (!errors.empty()) {
 The scheduler is configured during `FromConfig()` and used during `Step()`:
 
 ```cpp
-template <typename Scalar>
+// Simulator is NOT templated - user sees one class
 class Simulator {
 private:
-    Scheduler<Scalar> scheduler_;
+    Scheduler scheduler_;
     double sim_rate_hz_;
     int frame_count_ = 0;
 
@@ -578,8 +581,8 @@ private:
         scheduler_.Configure(config_.scheduler, sim_rate_hz_);
     }
 
-    void Step(Scalar dt) {
-        Scalar dt_global = Scalar{1.0 / sim_rate_hz_};
+    void Step(double dt) {
+        double dt_global = 1.0 / sim_rate_hz_;
 
         // Execute each entity
         for (auto& entity : entities_) {
@@ -590,7 +593,7 @@ private:
         frame_count_++;
     }
 
-    void ExecuteEntity(Entity& entity, Scalar t, Scalar dt_global, int frame_count) {
+    void ExecuteEntity(Entity& entity, double t, double dt_global, int frame_count) {
         // Sort groups by priority
         auto& groups = entity.scheduler.groups;
         std::sort(groups.begin(), groups.end(),
@@ -601,7 +604,7 @@ private:
 
             // Only run if this group's frame aligns
             if (frame_count % divisor == 0) {
-                Scalar dt_group = dt_global * Scalar{divisor};
+                double dt_group = dt_global * divisor;
 
                 // Sort members by priority
                 auto members = group.members;
@@ -609,6 +612,7 @@ private:
                     [](const auto& a, const auto& b) { return a.priority < b.priority; });
 
                 for (const auto& member : members) {
+                    // Components are templated internally
                     auto* comp = GetComponent(entity.name + "." + member.component);
                     comp->PreStep(t, dt_group);
                     comp->Step(t, dt_group);
@@ -631,6 +635,9 @@ private:
 - [ ] Compute frame divisors for each group: `sim_rate_hz / group.rate_hz`
 
 ### Scheduler Core
+
+> **Note:** `SchedulerConfig` is NOT templated - it uses `double` for numeric values.
+
 - [ ] `SchedulerConfig` with group-based model (no master_list)
 - [ ] `SchedulerGroupConfig` with rate_hz, priority, and members
 - [ ] `GroupMember` with component name and priority
@@ -640,4 +647,6 @@ private:
 - [ ] Each component passes group's dt (not global dt)
 - [ ] Validation: no duplicate group names, no component in multiple groups
 - [ ] Logging of execution order
-- [ ] ~~Automatic topology-based ordering~~ (Future TODO)
+
+### Deferred
+- [ ] *(Future)* Automatic topology-based ordering

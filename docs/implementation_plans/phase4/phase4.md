@@ -46,8 +46,8 @@ Phase 4 enables **quantity aggregation** where multiple components contribute fo
 ### 4.1 Signal Backplane Extensions
 
 - [ ] **4.1.1** Add `MassProperties<Scalar>` support to `Backplane`
-  - [ ] `register_output<vulcan::mass::MassProperties<Scalar>>`
-  - [ ] `register_input<vulcan::mass::MassProperties<Scalar>>`
+  - [ ] `declare_output<vulcan::mass::MassProperties<Scalar>>`
+  - [ ] `declare_input<vulcan::mass::MassProperties<Scalar>>`
   - [ ] Update `InputHandle` to work with composite types
 - [ ] **4.1.2** Add `Mat3<Scalar>` inertia tensor support
   - [ ] Already supported for 3x3 matrices, verify works for inertia
@@ -290,7 +290,7 @@ We use **standard signals with conventions**, not special registration APIs:
 
 | Approach | Special Registration | Signal Conventions ✓ |
 |:---------|:--------------------|:---------------------|
-| APIs | `register_force_source()` | `register_output()` (standard) |
+| APIs | `register_force_source()` | `declare_output()` (standard) |
 | Discovery | Auto-discovery by type | Explicit wiring in config |
 | Coupling | Implicit | Explicit |
 | Complexity | Two parallel systems | One unified system |
@@ -436,6 +436,8 @@ tests/
 
 ### Pattern 1: Lifecycle Structure
 
+See [phase4_0_config_infrastructure.md](phase4_0_config_infrastructure.md) for the authoritative component interface.
+
 ```cpp
 template <typename Scalar>
 class ExampleComponent : public Component<Scalar> {
@@ -444,24 +446,22 @@ public:
         : Component<Scalar>(name, entity) {}
 
     void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // 1. Register outputs
-        bp.register_output_vec3("force", &force_, "N", "Force in body frame");
+        // 1. Request config values (from YAML, possibly overridden)
+        Cd_ = cfg.Get<double>("Cd", 0.5);
+        model_ = cfg.Get<int>("model", 0);
 
-        // 2. Register inputs
-        bp.register_input_vec3("position", &position_, "m", "Position");
+        // 2. Declare outputs (what this component produces)
+        bp.declare_output<Vec3<Scalar>>("force", &force_, "N", "Force in body frame");
 
-        // 3. Register parameters (optimizable)
-        bp.register_param("Cd", &Cd_, 0.5, "", "Drag coefficient");
+        // 3. Declare inputs (what this component consumes)
+        bp.declare_input<Vec3<Scalar>>("position", &position_, "m", "Position");
 
-        // 4. Register config (discrete)
-        bp.register_config("model", &model_int_, 0, "Model selection");
+        // NOTE: No wiring here - SignalRouter handles all connections
     }
 
     void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
-        // Wire inputs from config
-        for (const auto& [input, source] : cfg.wiring) {
-            bp.wire_input(input, source);
-        }
+        // Apply initial conditions, bind state, etc.
+        // NOTE: No wiring here - SignalRouter has already connected signals
     }
 
     void Step(Scalar t, Scalar dt) override {
@@ -470,6 +470,12 @@ public:
         // ... physics ...
         force_ = computed_force;
     }
+
+private:
+    double Cd_ = 0.5;
+    int model_ = 0;
+    InputHandle<Vec3<Scalar>> position_;
+    Vec3<Scalar> force_;
 };
 ```
 

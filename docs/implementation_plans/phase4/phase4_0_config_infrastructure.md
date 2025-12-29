@@ -319,10 +319,10 @@ void Provision(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
     gimbal_limit_ = cfg.Get<Scalar>("gimbal_limit", 0.0);
 
     // =========================================================================
-    // Signal Registration
+    // Signal Declaration
     // =========================================================================
 
-    bp.register_output_vec3("force", &force_, "N", "Thrust force");
+    bp.declare_output<Vec3<Scalar>>("force", &force_, "N", "Thrust force");
     // ...
 }
 ```
