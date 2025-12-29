@@ -1,31 +1,15 @@
-# Helper function to create example executables with config directory
-# Each example is its own subdirectory with main.cpp and config/
-function(icarus_add_example NAME DIR)
-  add_executable(${NAME} ${DIR}/main.cpp)
-  target_link_libraries(${NAME} PRIVATE icarus)
+# Icarus Examples
+# Phase 4.0.7: Updated for new Simulator API
 
-  # Copy config directory to build output for runtime access
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/config)
-    add_custom_command(
-      TARGET ${NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/config
-        $<TARGET_FILE_DIR:${NAME}>/config
-    )
-  endif()
-
-  # Copy data directory if present
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/data)
-    add_custom_command(
-      TARGET ${NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/data
-        $<TARGET_FILE_DIR:${NAME}>/data
-    )
-  endif()
+# Helper function to add examples
+function(icarus_add_example NAME)
+    add_executable(${NAME} ${ARGN})
+    target_link_libraries(${NAME} PRIVATE icarus)
+    target_include_directories(${NAME} PRIVATE ${PROJECT_SOURCE_DIR}/components)
 endfunction()
 
-# =============================================================================
-# Examples will be added here as the new API is stabilized
-# =============================================================================
-# TODO: Add examples using the new Simulator API
+# Point Mass Free-Fall Demo
+# Demonstrates: programmatic setup, AddRoutes, Stage/Step lifecycle
+icarus_add_example(point_mass_freefall
+    point_mass_freefall.cpp
+)

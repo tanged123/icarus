@@ -108,3 +108,9 @@ icarus_add_test(test_scheduler
 icarus_add_test(test_managers
     sim/test_managers.cpp
 )
+
+# Phase 4.0.7ai: YAML Integration tests (FromConfig → Stage → Step)
+icarus_add_test(test_yaml_integration
+    sim/test_yaml_integration.cpp
+)
+target_include_directories(test_yaml_integration PRIVATE ${PROJECT_SOURCE_DIR}/components)

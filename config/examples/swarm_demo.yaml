@@ -1,0 +1,135 @@
+# Icarus Swarm Configuration Example
+# Drone Formation Demo
+#
+# Demonstrates:
+# - Swarm expansion (one template → many instances)
+# - Entity overrides for individuation
+# - Cross-entity signal routing
+
+simulation:
+  name: "Drone Swarm Demo"
+  version: "1.0.0"
+  description: |
+    Simple drone swarm starting from different positions.
+    Demonstrates swarm configuration and entity expansion.
+
+time:
+  start: 0.0
+  end: 30.0
+  dt: 0.01
+
+# =============================================================================
+# Swarm Definition
+# =============================================================================
+
+swarms:
+  # Generate 5 drones: Drone_000 through Drone_004
+  - name_prefix: Drone
+    count: 5
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+          scalars:
+            mass: 2.5        # 2.5 kg drone
+          vectors:
+            initial_position: [0.0, 0.0, 10.0]   # Default starting position
+            initial_velocity: [0.0, 0.0, 0.0]
+
+        - type: PointMassGravity
+          name: Gravity
+          scalars:
+            model: constant
+            g0: 9.81
+
+      routes:
+        - input: Gravity.position.x
+          output: EOM.position.x
+        - input: Gravity.position.y
+          output: EOM.position.y
+        - input: Gravity.position.z
+          output: EOM.position.z
+        - input: Gravity.mass
+          output: EOM.mass
+        - input: EOM.force.x
+          output: Gravity.force.x
+        - input: EOM.force.y
+          output: Gravity.force.y
+        - input: EOM.force.z
+          output: Gravity.force.z
+
+# =============================================================================
+# Override individual drone positions for spread start
+# =============================================================================
+# NOTE: Per-instance overrides are specified in the entities section
+
+entities:
+  # Override starting positions to form a V-formation
+  - name: Drone_000_override
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+    overrides:
+      EOM:
+        vectors:
+          initial_position: [0.0, 0.0, 10.0]    # Lead drone
+
+  - name: Drone_001_override
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+    overrides:
+      EOM:
+        vectors:
+          initial_position: [-5.0, -5.0, 10.0]  # Left wing
+
+  - name: Drone_002_override
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+    overrides:
+      EOM:
+        vectors:
+          initial_position: [5.0, -5.0, 10.0]   # Right wing
+
+  - name: Drone_003_override
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+    overrides:
+      EOM:
+        vectors:
+          initial_position: [-10.0, -10.0, 10.0] # Far left
+
+  - name: Drone_004_override
+    entity:
+      components:
+        - type: PointMass3DOF
+          name: EOM
+    overrides:
+      EOM:
+        vectors:
+          initial_position: [10.0, -10.0, 10.0]  # Far right
+
+# =============================================================================
+# Scheduler
+# =============================================================================
+
+scheduler:
+  groups:
+    - name: environment
+      rate_hz: 100
+      priority: 1
+      members:
+        - component: Gravity
+          priority: 1
+    - name: dynamics
+      rate_hz: 100
+      priority: 2
+      members:
+        - component: EOM
+          priority: 1
