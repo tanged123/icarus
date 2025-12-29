@@ -325,6 +325,7 @@ struct SimulatorConfig {
     std::string name = "Simulation";
     std::string version = icarus::Version();
     std::string description;
+    std::string source_file; ///< Path to source YAML file (set by loader)
 
     // =========================================================================
     // Time
@@ -379,11 +380,9 @@ struct SimulatorConfig {
     /// Create default config
     [[nodiscard]] static SimulatorConfig Default() { return SimulatorConfig{}; }
 
-    /// Load from master binding file (stub - returns default)
-    [[nodiscard]] static SimulatorConfig FromFile(const std::string & /*path*/) {
-        // TODO: Implement YAML loading with include resolution
-        return Default();
-    }
+    /// Load from master binding file
+    /// @note Implementation in SimulationLoader.hpp to avoid circular include
+    [[nodiscard]] static SimulatorConfig FromFile(const std::string &path);
 
     /// Load from master + explicit routes file (stub - returns default)
     [[nodiscard]] static SimulatorConfig FromFiles(const std::string & /*master_path*/,

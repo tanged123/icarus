@@ -93,3 +93,8 @@ icarus_add_test(test_signal_router
 icarus_add_test(test_config_structs
     sim/test_config_structs.cpp
 )
+
+# Phase 4.0.7: SimulationLoader tests
+icarus_add_test(test_simulation_loader
+    io/test_simulation_loader.cpp
+)

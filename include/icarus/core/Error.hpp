@@ -136,6 +136,7 @@ class SignalNotFoundError : public SignalError {
  * @brief Configuration error
  *
  * Thrown when config parsing or validation fails.
+ * Supports optional file path, line number, and hint context.
  */
 class ConfigError : public Error {
   public:
@@ -143,6 +144,35 @@ class ConfigError : public Error {
 
     ConfigError(const std::string &component, const std::string &key)
         : Error("Config: " + component + " missing required key '" + key + "'") {}
+
+    /// Constructor with file/line context (for YAML loader)
+    ConfigError(const std::string &message, const std::string &file, int line,
+                const std::string &hint = "")
+        : Error(FormatMessage(message, file, line, hint)), file_(file), line_(line), hint_(hint) {}
+
+    [[nodiscard]] const std::string &file() const { return file_; }
+    [[nodiscard]] int line() const { return line_; }
+    [[nodiscard]] const std::string &hint() const { return hint_; }
+
+  private:
+    static std::string FormatMessage(const std::string &msg, const std::string &file, int line,
+                                     const std::string &hint) {
+        std::string result = "Config: " + msg;
+        if (!file.empty()) {
+            result += "\n  at: " + file;
+            if (line >= 0) {
+                result += ":" + std::to_string(line);
+            }
+        }
+        if (!hint.empty()) {
+            result += "\n  hint: " + hint;
+        }
+        return result;
+    }
+
+    std::string file_;
+    int line_ = -1;
+    std::string hint_;
 };
 
 /**

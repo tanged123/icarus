@@ -6,6 +6,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <icarus/io/SimulationLoader.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 
 namespace icarus {
@@ -213,12 +214,12 @@ TEST(SimulatorConfigTest, ValidatePropagatesSubErrors) {
     EXPECT_GE(errors.size(), 1u);
 }
 
-TEST(SimulatorConfigTest, FromFileReturnsDefault) {
-    auto cfg = SimulatorConfig::FromFile("nonexistent.yaml");
-    EXPECT_EQ(cfg.name, "Simulation");
+TEST(SimulatorConfigTest, FromFileThrowsOnMissingFile) {
+    EXPECT_THROW(SimulatorConfig::FromFile("nonexistent.yaml"), ConfigError);
 }
 
 TEST(SimulatorConfigTest, FromFilesReturnsDefault) {
+    // FromFiles is still a stub - returns default
     auto cfg = SimulatorConfig::FromFiles("master.yaml", "routes.yaml");
     EXPECT_EQ(cfg.name, "Simulation");
 }
