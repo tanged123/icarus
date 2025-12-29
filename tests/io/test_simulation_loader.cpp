@@ -176,5 +176,95 @@ components:
     EXPECT_THROW(SimulationLoader::Parse(yaml), std::exception);
 }
 
+// =============================================================================
+// Entity Tests
+// =============================================================================
+
+TEST(SimulationLoaderTest, ParseInlineEntity) {
+    const char *yaml = R"(
+entities:
+  - name: Leader
+    entity:
+      name: Rocket
+      components:
+        - type: PointMass
+          name: EOM
+          scalars:
+            mass: 1000.0
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.components.size(), 1u);
+    // Component should have entity prefix
+    EXPECT_EQ(cfg.components[0].entity, "Leader");
+    EXPECT_EQ(cfg.components[0].type, "PointMass");
+    EXPECT_EQ(cfg.components[0].name, "EOM");
+}
+
+TEST(SimulationLoaderTest, EntityRoutesExpandedWithPrefix) {
+    const char *yaml = R"(
+entities:
+  - name: MyEntity
+    entity:
+      name: Test
+      components:
+        - type: A
+          name: CompA
+        - type: B
+          name: CompB
+      routes:
+        - input: CompA.in
+          output: CompB.out
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.routes.size(), 1u);
+    // Routes should have entity prefix
+    EXPECT_EQ(cfg.routes[0].input_path, "MyEntity.CompA.in");
+    EXPECT_EQ(cfg.routes[0].output_path, "MyEntity.CompB.out");
+}
+
+TEST(SimulationLoaderTest, EntityOverridesMerged) {
+    const char *yaml = R"(
+entities:
+  - name: Instance1
+    entity:
+      components:
+        - type: Dynamics
+          name: EOM
+          scalars:
+            mass: 500.0
+            drag: 0.1
+    overrides:
+      EOM:
+        scalars:
+          mass: 1000.0
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.components.size(), 1u);
+    // Overridden value
+    EXPECT_DOUBLE_EQ(cfg.components[0].scalars.at("mass"), 1000.0);
+    // Non-overridden value preserved
+    EXPECT_DOUBLE_EQ(cfg.components[0].scalars.at("drag"), 0.1);
+}
+
+TEST(SimulationLoaderTest, MultipleEntityInstances) {
+    const char *yaml = R"(
+entities:
+  - name: Leader
+    entity:
+      components:
+        - type: Rocket
+          name: EOM
+  - name: Follower
+    entity:
+      components:
+        - type: Rocket
+          name: EOM
+)";
+    auto cfg = SimulationLoader::Parse(yaml);
+    ASSERT_EQ(cfg.components.size(), 2u);
+    EXPECT_EQ(cfg.components[0].entity, "Leader");
+    EXPECT_EQ(cfg.components[1].entity, "Follower");
+}
+
 } // namespace
 } // namespace icarus::io

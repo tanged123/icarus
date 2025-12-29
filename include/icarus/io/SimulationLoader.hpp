@@ -138,10 +138,10 @@ class SimulationLoader {
             ParseComponentList(cfg.components, root["components"]);
         }
 
-        // TODO: Entity expansion for multi-file mode
-        // if (has_entities) {
-        //     ParseEntities(cfg, root["entities"]);
-        // }
+        // Entity expansion for multi-file mode
+        if (has_entities) {
+            ParseEntities(cfg, root["entities"], source_path);
+        }
 
         // Parse routes
         if (root.Has("routes")) {
@@ -420,6 +420,192 @@ class SimulationLoader {
         output.telemetry_format =
             node.Get<std::string>("telemetry_format", output.telemetry_format);
         output.timing_report = node.Get<bool>("timing_report", output.timing_report);
+    }
+
+    // =========================================================================
+    // Entity Parsing and Expansion
+    // =========================================================================
+
+    /**
+     * @brief Parse entities section and expand to flat components
+     */
+    static void ParseEntities(SimulatorConfig &cfg, const vulcan::io::YamlNode &node,
+                              const std::string &source_path) {
+        node.ForEach([&](const vulcan::io::YamlNode &entity_node) {
+            // Parse entity instance
+            EntityInstance instance;
+            instance.name = entity_node.Require<std::string>("name");
+
+            // Load template (inline or from file via !include)
+            if (entity_node.Has("template")) {
+                // Template is either a YamlNode (from !include) or needs to be loaded
+                auto template_node = entity_node["template"];
+                instance.entity_template = LoadEntityTemplate(template_node);
+            } else if (entity_node.Has("entity")) {
+                // Inline entity definition
+                instance.entity_template = LoadEntityTemplate(entity_node);
+            } else {
+                throw icarus::ConfigError("Entity instance must have 'template' or inline 'entity'",
+                                          source_path);
+            }
+
+            // Parse overrides
+            if (entity_node.Has("overrides")) {
+                entity_node["overrides"].ForEachEntry(
+                    [&](const std::string &comp_name, const vulcan::io::YamlNode &override_node) {
+                        instance.overrides[comp_name] = ParseComponentOverride(override_node);
+                    });
+            }
+
+            // Expand this entity into flat components and routes
+            ExpandEntity(cfg, instance);
+        });
+    }
+
+    /**
+     * @brief Load entity template from YAML node
+     */
+    static EntityTemplate LoadEntityTemplate(const vulcan::io::YamlNode &node) {
+        // Handle both "entity:" wrapper and direct template
+        if (node.Has("entity")) {
+            return ParseEntityTemplateContent(node["entity"]);
+        }
+        return ParseEntityTemplateContent(node);
+    }
+
+    /**
+     * @brief Parse entity template content
+     */
+    static EntityTemplate ParseEntityTemplateContent(const vulcan::io::YamlNode &content) {
+        EntityTemplate tmpl;
+
+        tmpl.name = content.Get<std::string>("name", "");
+        tmpl.description = content.Get<std::string>("description", "");
+
+        // Parse components
+        if (content.Has("components")) {
+            ParseComponentList(tmpl.components, content["components"]);
+        }
+
+        // Parse internal routes
+        if (content.Has("routes")) {
+            ParseRoutes(tmpl.routes, content["routes"]);
+        }
+
+        // Parse scheduler
+        if (content.Has("scheduler")) {
+            ParseScheduler(tmpl.scheduler, content["scheduler"]);
+        }
+
+        // Parse staging
+        if (content.Has("staging")) {
+            ParseStaging(tmpl.staging, content["staging"]);
+        }
+
+        return tmpl;
+    }
+
+    /**
+     * @brief Parse component override (partial ComponentConfig)
+     */
+    static ComponentConfig ParseComponentOverride(const vulcan::io::YamlNode &node) {
+        ComponentConfig cfg;
+
+        // Only parse the override fields that are present
+        if (node.Has("scalars")) {
+            node["scalars"].ForEachEntry(
+                [&](const std::string &key, const vulcan::io::YamlNode &val) {
+                    cfg.scalars[key] = val.As<double>();
+                });
+        }
+
+        if (node.Has("vectors")) {
+            node["vectors"].ForEachEntry(
+                [&](const std::string &key, const vulcan::io::YamlNode &val) {
+                    cfg.vectors[key] = val.ToVector<double>();
+                });
+        }
+
+        if (node.Has("strings")) {
+            node["strings"].ForEachEntry(
+                [&](const std::string &key, const vulcan::io::YamlNode &val) {
+                    cfg.strings[key] = val.As<std::string>();
+                });
+        }
+
+        if (node.Has("integers")) {
+            node["integers"].ForEachEntry(
+                [&](const std::string &key, const vulcan::io::YamlNode &val) {
+                    cfg.integers[key] = val.As<int64_t>();
+                });
+        }
+
+        if (node.Has("booleans")) {
+            node["booleans"].ForEachEntry(
+                [&](const std::string &key, const vulcan::io::YamlNode &val) {
+                    cfg.booleans[key] = val.As<bool>();
+                });
+        }
+
+        return cfg;
+    }
+
+    /**
+     * @brief Expand entity instance into flat components and routes
+     */
+    static void ExpandEntity(SimulatorConfig &cfg, const EntityInstance &instance) {
+        const auto &tmpl = instance.entity_template;
+
+        // Expand components with entity prefix
+        for (auto comp_cfg : tmpl.components) {
+            // Apply overrides if present
+            if (instance.overrides.count(comp_cfg.name)) {
+                comp_cfg = MergeConfigs(comp_cfg, instance.overrides.at(comp_cfg.name));
+            }
+
+            // Set entity prefix
+            comp_cfg.entity = instance.name;
+
+            cfg.components.push_back(comp_cfg);
+        }
+
+        // Expand internal routes (relative -> absolute)
+        for (auto route : tmpl.routes) {
+            route.input_path = instance.name + "." + route.input_path;
+            route.output_path = instance.name + "." + route.output_path;
+            cfg.routes.push_back(route);
+        }
+
+        // Merge scheduler groups (prefix with entity name)
+        for (auto group : tmpl.scheduler.groups) {
+            group.name = instance.name + "." + group.name;
+            for (auto &member : group.members) {
+                member.component = instance.name + "." + member.component;
+            }
+            cfg.scheduler.groups.push_back(group);
+        }
+    }
+
+    /**
+     * @brief Merge override config into base config
+     */
+    static ComponentConfig MergeConfigs(const ComponentConfig &base,
+                                        const ComponentConfig &overrides) {
+        ComponentConfig merged = base;
+
+        // Overrides replace at the key level
+        for (const auto &[k, v] : overrides.scalars)
+            merged.scalars[k] = v;
+        for (const auto &[k, v] : overrides.vectors)
+            merged.vectors[k] = v;
+        for (const auto &[k, v] : overrides.strings)
+            merged.strings[k] = v;
+        for (const auto &[k, v] : overrides.integers)
+            merged.integers[k] = v;
+        for (const auto &[k, v] : overrides.booleans)
+            merged.booleans[k] = v;
+
+        return merged;
     }
 
     // =========================================================================

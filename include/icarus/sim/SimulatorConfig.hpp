@@ -307,6 +307,53 @@ struct OutputConfig {
 };
 
 // =============================================================================
+// EntityTemplate
+// =============================================================================
+
+/**
+ * @brief Entity template loaded from YAML
+ *
+ * Self-contained unit defining components, internal routes, scheduler, and staging.
+ * Can be instantiated multiple times with different names and overrides.
+ */
+struct EntityTemplate {
+    std::string name;        ///< Template name (e.g., "Rocket")
+    std::string description; ///< Optional description
+
+    /// Components within this entity
+    std::vector<ComponentConfig> components;
+
+    /// Internal routes (relative names, expanded with entity prefix)
+    std::vector<signal::SignalRoute> routes;
+
+    /// Internal scheduler configuration
+    SchedulerConfig scheduler;
+
+    /// Internal staging configuration
+    StageConfig staging;
+};
+
+// =============================================================================
+// EntityInstance
+// =============================================================================
+
+/**
+ * @brief Entity instance (template + name + overrides)
+ *
+ * References a template and provides instance-specific configuration.
+ */
+struct EntityInstance {
+    /// Template (either inline or loaded from file via !include)
+    EntityTemplate entity_template;
+
+    /// Instance name (becomes entity prefix in signals)
+    std::string name;
+
+    /// Component name -> config overrides
+    std::unordered_map<std::string, ComponentConfig> overrides;
+};
+
+// =============================================================================
 // SimulatorConfig
 // =============================================================================
 

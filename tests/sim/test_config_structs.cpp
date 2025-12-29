@@ -215,7 +215,7 @@ TEST(SimulatorConfigTest, ValidatePropagatesSubErrors) {
 }
 
 TEST(SimulatorConfigTest, FromFileThrowsOnMissingFile) {
-    EXPECT_THROW(SimulatorConfig::FromFile("nonexistent.yaml"), ConfigError);
+    EXPECT_THROW((void)SimulatorConfig::FromFile("nonexistent.yaml"), ConfigError);
 }
 
 TEST(SimulatorConfigTest, FromFilesReturnsDefault) {
