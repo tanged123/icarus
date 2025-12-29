@@ -20,19 +20,40 @@ namespace icarus {
 namespace signal {
 
 /**
- * @brief A single signal route with optional gain
+ * @brief A single signal route with optional transformations
  *
  * Routes connect a component's input port to another component's output.
- * The optional gain factor allows unit conversion or scaling.
+ * Optional gain, offset, and delay allow unit conversion, bias, and transport delay.
  */
 struct SignalRoute {
     std::string input_path;  ///< Full path: Entity.Component.signal (destination)
     std::string output_path; ///< Full path: Entity.Component.signal (source)
-    double gain = 1.0;       ///< Scale factor applied on read
+
+    // Optional transformations
+    double gain = 1.0;   ///< Scale factor applied on read
+    double offset = 0.0; ///< Bias added after gain
+    double delay = 0.0;  ///< Transport delay in seconds
 
     SignalRoute() = default;
-    SignalRoute(std::string input, std::string output, double g = 1.0)
-        : input_path(std::move(input)), output_path(std::move(output)), gain(g) {}
+    SignalRoute(std::string input, std::string output, double g = 1.0, double o = 0.0,
+                double d = 0.0)
+        : input_path(std::move(input)), output_path(std::move(output)), gain(g), offset(o),
+          delay(d) {}
+
+    /// Validate route paths
+    [[nodiscard]] std::vector<std::string> Validate() const {
+        std::vector<std::string> errors;
+        if (input_path.empty()) {
+            errors.push_back("SignalRoute: input_path is empty");
+        }
+        if (output_path.empty()) {
+            errors.push_back("SignalRoute: output_path is empty");
+        }
+        if (delay < 0.0) {
+            errors.push_back("SignalRoute: delay cannot be negative");
+        }
+        return errors;
+    }
 };
 
 /**

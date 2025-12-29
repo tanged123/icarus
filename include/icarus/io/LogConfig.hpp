@@ -10,6 +10,7 @@
 #include <icarus/io/Console.hpp>
 
 #include <string>
+#include <vector>
 
 namespace icarus {
 
@@ -31,6 +32,11 @@ struct LogConfig {
     // Features
     bool profiling_enabled = false;
     bool quiet_mode = false; ///< Suppress all but errors
+
+    // Telemetry recording
+    bool telemetry_enabled = false;
+    std::string telemetry_path;
+    std::vector<std::string> telemetry_signals; ///< Which signals to record
 
     /// Create default config
     [[nodiscard]] static LogConfig Default() {

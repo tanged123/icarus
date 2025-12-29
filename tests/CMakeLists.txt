@@ -88,3 +88,8 @@ icarus_add_test(test_component_config
 icarus_add_test(test_signal_router
     signal/test_signal_router.cpp
 )
+
+# Phase 4.0.7: Configuration structs tests
+icarus_add_test(test_config_structs
+    sim/test_config_structs.cpp
+)
