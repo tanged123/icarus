@@ -66,7 +66,8 @@ class SymbolicTracer {
      */
     explicit SymbolicTracer(Simulator<SymbolicScalar> &sim) : sim_(sim) {
         if (!sim_.IsInitialized()) {
-            throw LifecycleError("SymbolicTracer requires a Staged simulator");
+            throw LifecycleError(LifecyclePhase::Stage,
+                                 "SymbolicTracer requires a Staged simulator");
         }
     }
 

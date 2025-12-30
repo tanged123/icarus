@@ -15,6 +15,7 @@
 #include <icarus/core/Component.hpp>
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/ComponentFactory.hpp>
+#include <icarus/core/ErrorLogging.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/MissionLogger.hpp>
@@ -411,7 +412,7 @@ inline void Simulator::AddRoutes(const std::vector<signal::SignalRoute> &routes)
 
 inline void Simulator::Provision() {
     if (phase_ != Phase::Uninitialized) {
-        throw LifecycleError("Provision() can only be called once");
+        throw LifecycleError(LifecyclePhase::Provision, "can only be called once");
     }
 
     // Provision each component
@@ -419,7 +420,13 @@ inline void Simulator::Provision() {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
 
-        comp->Provision(backplane_);
+        try {
+            comp->Provision(backplane_);
+        } catch (const Error &e) {
+            backplane_.clear_context();
+            LogError(e, 0.0, comp->FullName());
+            throw;
+        }
         comp->MarkProvisioned();
 
         outputs_[comp.get()] = backplane_.registered_outputs();
@@ -465,7 +472,7 @@ inline void Simulator::Stage() {
     }
 
     if (phase_ != Phase::Provisioned) {
-        throw LifecycleError("Stage() requires components to be added first");
+        throw LifecycleError(LifecyclePhase::Stage, "requires components to be added first");
     }
 
     // Begin Stage phase logging
@@ -486,7 +493,13 @@ inline void Simulator::Stage() {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
 
-        comp->Stage(backplane_);
+        try {
+            comp->Stage(backplane_);
+        } catch (const Error &e) {
+            backplane_.clear_context();
+            LogError(e, 0.0, comp->FullName());
+            throw;
+        }
         comp->MarkStaged();
 
         inputs_[comp.get()] = backplane_.resolved_inputs();
@@ -520,7 +533,7 @@ inline void Simulator::Stage(const StageConfig &config) {
 
 inline void Simulator::Step(double dt) {
     if (phase_ != Phase::Staged && phase_ != Phase::Running) {
-        throw LifecycleError("Step() requires prior Stage()");
+        throw LifecycleError(LifecyclePhase::Step, "requires prior Stage()");
     }
 
     // Auto-log RUN phase on first step
@@ -536,44 +549,55 @@ inline void Simulator::Step(double dt) {
     // Get active groups for this frame
     auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
 
+    // Helper to execute component method with error handling
+    auto exec_component = [this](auto &comp, auto method, double t, double step_dt) {
+        try {
+            logger_.BeginComponentTiming(comp->Name());
+            (comp.get()->*method)(t, step_dt);
+            logger_.EndComponentTiming();
+        } catch (const Error &e) {
+            logger_.EndComponentTiming();
+            LogError(e, t, comp->FullName());
+            throw;
+        }
+    };
+
     // If no state, just call components directly
     if (state_manager_.TotalSize() == 0) {
         for (auto &comp : components_) {
-            logger_.BeginComponentTiming(comp->Name());
-            comp->PreStep(time_, dt);
-            logger_.EndComponentTiming();
+            exec_component(comp, &Component<double>::PreStep, time_, dt);
         }
         for (auto &comp : components_) {
-            logger_.BeginComponentTiming(comp->Name());
-            comp->Step(time_, dt);
-            logger_.EndComponentTiming();
+            exec_component(comp, &Component<double>::Step, time_, dt);
         }
         for (auto &comp : components_) {
-            logger_.BeginComponentTiming(comp->Name());
-            comp->PostStep(time_, dt);
-            logger_.EndComponentTiming();
+            exec_component(comp, &Component<double>::PostStep, time_, dt);
         }
     } else {
         // Create derivative function for integrator
-        auto deriv_func = [this](double t, const JanusVector<double> &x) -> JanusVector<double> {
+        auto deriv_func =
+            [this, &exec_component](double t, const JanusVector<double> &x) -> JanusVector<double> {
             state_manager_.SetState(x);
             state_manager_.ZeroDerivatives();
 
             for (auto &comp : components_) {
-                logger_.BeginComponentTiming(comp->Name());
-                comp->PreStep(t, config_.dt);
-                comp->Step(t, config_.dt);
-                comp->PostStep(t, config_.dt);
-                logger_.EndComponentTiming();
+                exec_component(comp, &Component<double>::PreStep, t, config_.dt);
+                exec_component(comp, &Component<double>::Step, t, config_.dt);
+                exec_component(comp, &Component<double>::PostStep, t, config_.dt);
             }
 
             return state_manager_.GetDerivatives();
         };
 
         // Integrate
-        JanusVector<double> X = state_manager_.GetState();
-        JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, time_, dt);
-        state_manager_.SetState(X_new);
+        try {
+            JanusVector<double> X = state_manager_.GetState();
+            JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, time_, dt);
+            state_manager_.SetState(X_new);
+        } catch (const Error &e) {
+            LogError(e, time_, "Integrator");
+            throw;
+        }
     }
 
     time_ += dt;
@@ -592,7 +616,7 @@ inline void Simulator::Step() { Step(config_.dt); }
 
 inline void Simulator::Reset() {
     if (phase_ < Phase::Staged) {
-        throw LifecycleError("Reset() requires prior Stage()");
+        throw LifecycleError(LifecyclePhase::Reset, "requires prior Stage()");
     }
 
     time_ = 0.0;
@@ -608,7 +632,13 @@ inline void Simulator::Reset() {
     // Re-run Stage on components
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
-        comp->Stage(backplane_);
+        try {
+            comp->Stage(backplane_);
+        } catch (const Error &e) {
+            backplane_.clear_context();
+            LogError(e, 0.0, comp->FullName());
+            throw;
+        }
         backplane_.clear_context();
     }
 
@@ -641,14 +671,25 @@ inline Eigen::VectorXd Simulator::ComputeDerivatives(double t) {
     state_manager_.ZeroDerivatives();
 
     double dt = config_.dt;
+
+    // Helper to execute with error handling
+    auto exec = [this, t](auto &comp, auto method, double step_dt) {
+        try {
+            (comp.get()->*method)(t, step_dt);
+        } catch (const Error &e) {
+            LogError(e, t, comp->FullName());
+            throw;
+        }
+    };
+
     for (auto &comp : components_) {
-        comp->PreStep(t, dt);
+        exec(comp, &Component<double>::PreStep, dt);
     }
     for (auto &comp : components_) {
-        comp->Step(t, dt);
+        exec(comp, &Component<double>::Step, dt);
     }
     for (auto &comp : components_) {
-        comp->PostStep(t, dt);
+        exec(comp, &Component<double>::PostStep, dt);
     }
 
     return state_manager_.GetDerivatives();
@@ -656,7 +697,7 @@ inline Eigen::VectorXd Simulator::ComputeDerivatives(double t) {
 
 inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     if (phase_ != Phase::Staged && phase_ != Phase::Running) {
-        throw LifecycleError("AdaptiveStep() requires prior Stage()");
+        throw LifecycleError(LifecyclePhase::Step, "AdaptiveStep() requires prior Stage()");
     }
     phase_ = Phase::Running;
 
@@ -666,7 +707,13 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     };
 
     JanusVector<double> X = state_manager_.GetState();
-    auto result = integration_manager_.AdaptiveStep(deriv_func, X, time_, dt_request);
+    AdaptiveStepResult<double> result;
+    try {
+        result = integration_manager_.AdaptiveStep(deriv_func, X, time_, dt_request);
+    } catch (const Error &e) {
+        LogError(e, time_, "Integrator");
+        throw;
+    }
 
     if (result.accepted) {
         state_manager_.SetState(result.state);

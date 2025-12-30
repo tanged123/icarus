@@ -96,13 +96,9 @@ class ErrorHandler {
     }
 
     /// Report an exception, extracting info automatically
-    ErrorPolicy Report(const Error &exception, double sim_time = 0.0) {
-        SimulationError error;
-        error.severity = Severity::ERROR;
-        error.message = exception.what();
-        error.component = "unknown";
-        error.time = sim_time;
-        return Report(error);
+    ErrorPolicy Report(const Error &exception, double sim_time = 0.0,
+                       const std::string &component = "") {
+        return Report(exception.toSimulationError(sim_time, component));
     }
 
     /// Report a fatal error and trigger crash
@@ -202,12 +198,7 @@ class ErrorScope {
         try {
             return func();
         } catch (const Error &e) {
-            SimulationError error;
-            error.severity = Severity::ERROR;
-            error.message = e.what();
-            error.component = component_;
-            error.time = sim_time_;
-            handler_.Report(error);
+            handler_.Report(e, sim_time_, component_);
             throw; // Re-throw after reporting
         }
     }

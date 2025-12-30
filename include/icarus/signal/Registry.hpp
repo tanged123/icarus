@@ -97,7 +97,7 @@ template <typename Scalar> class SignalRegistry {
     void register_output_vec3(const std::string &name, Vec3<S> *data_ptr,
                               const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for Vec3 signal '" + name + "'");
+            throw SignalError::NullPointer(name, "Vec3 output");
         }
         // Register three scalar signals pointing to Vec3 elements
         register_signal_impl<S>(name + ".x", &((*data_ptr)(0)), unit, description + " (x)",
@@ -117,7 +117,7 @@ template <typename Scalar> class SignalRegistry {
     void register_output_quat(const std::string &name, Vec4<S> *data_ptr,
                               const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for Quat signal '" + name + "'");
+            throw SignalError::NullPointer(name, "Quat output");
         }
         register_signal_impl<S>(name + ".w", &((*data_ptr)(0)), unit, description + " (w)",
                                 SignalLifecycle::Dynamic);
@@ -272,7 +272,7 @@ template <typename Scalar> class SignalRegistry {
     [[nodiscard]] const Scalar &GetByName(const std::string &name) const {
         const SignalDescriptor &desc = signals_[Resolve(name)];
         if (desc.data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
         return *static_cast<const Scalar *>(desc.data_ptr);
     }
@@ -283,7 +283,7 @@ template <typename Scalar> class SignalRegistry {
     void SetByName(const std::string &name, const Scalar &value) {
         const SignalDescriptor &desc = signals_[Resolve(name)];
         if (desc.data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
         *static_cast<Scalar *>(desc.data_ptr) = value;
     }
@@ -311,7 +311,12 @@ template <typename Scalar> class SignalRegistry {
      */
     [[nodiscard]] std::vector<const SignalDescriptor *> query(const std::string &pattern) const {
         std::vector<const SignalDescriptor *> results;
-        std::regex re(pattern);
+        std::regex re;
+        try {
+            re = std::regex(pattern);
+        } catch (const std::regex_error &e) {
+            throw SignalError("Invalid regex pattern '" + pattern + "': " + e.what());
+        }
         for (const auto &desc : signals_) {
             if (std::regex_search(desc.name, re)) {
                 results.push_back(&desc);
@@ -340,7 +345,7 @@ template <typename Scalar> class SignalRegistry {
     void register_signal_impl(const std::string &name, T *data_ptr, const std::string &unit,
                               const std::string &description, SignalLifecycle lifecycle) {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
 
         if (name_to_index_.contains(name)) {
@@ -433,7 +438,7 @@ template <typename Scalar> class SignalRegistry {
     void register_input(const std::string &name, InputHandle<T> *handle,
                         const std::string &units = "", const std::string &description = "") {
         if (handle == nullptr) {
-            throw SignalError("Null handle for input '" + name + "'");
+            throw SignalError::NullPointer(name, "input handle");
         }
 
         if (inputs_.contains(name)) {
@@ -476,7 +481,7 @@ template <typename Scalar> class SignalRegistry {
     void register_param(const std::string &name, Scalar *storage, Scalar initial_value,
                         const std::string &units = "", const std::string &description = "") {
         if (storage == nullptr) {
-            throw SignalError("Null storage for param '" + name + "'");
+            throw SignalError::NullPointer(name, "param");
         }
 
         if (params_.contains(name)) {
@@ -538,10 +543,16 @@ template <typename Scalar> class SignalRegistry {
             throw WiringError("Input not found: '" + input_name + "'");
         }
 
+        // Verify type matches what was registered (prevents undefined behavior)
+        const std::string expected_type = typeid(T).name();
+        if (it->second.info.semantic != expected_type) {
+            throw SignalError::TypeMismatch(input_name, it->second.info.semantic, expected_type);
+        }
+
         // Resolve the source signal
         auto source_handle = resolve<T>(source_name);
 
-        // Wire the input
+        // Wire the input - safe cast after type verification
         auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
         handle->wire(source_handle.ptr(), source_name);
         it->second.info.wired_to = source_name;
@@ -817,7 +828,7 @@ template <typename Scalar> class SignalRegistry {
     void register_config_impl(const std::string &name, T *storage, T initial_value,
                               const std::string &type_name, const std::string &description) {
         if (storage == nullptr) {
-            throw SignalError("Null storage for config '" + name + "'");
+            throw SignalError::NullPointer(name, "config");
         }
 
         if (config_.contains(name)) {
