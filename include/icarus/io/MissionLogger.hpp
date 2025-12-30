@@ -93,11 +93,31 @@ class MissionLogger {
 
     // === Lifecycle Logging ===
 
-    /// Log simulation startup (splash screen)
+    /// Log simulation startup (splash screen) - uses Icarus engine version
     void LogStartup() {
-        std::string splash = Banner::GetSplashScreen(build_type_, version_);
+        std::string splash = Banner::GetSplashScreen(build_type_, icarus::Version());
         console_.WriteLine(splash);
         WriteToFile(splash);
+    }
+
+    /// Log simulation configuration info (from YAML)
+    void LogSimulationConfig(const std::string &name, const std::string &version,
+                             const std::string &description = "") {
+        std::ostringstream oss;
+        oss << "[SIM] Simulation: " << name << " (v" << version << ")";
+        Log(LogLevel::Info, oss.str());
+
+        if (!description.empty()) {
+            // Log first line of description
+            std::string first_line = description;
+            auto pos = first_line.find('\n');
+            if (pos != std::string::npos) {
+                first_line = first_line.substr(0, pos);
+            }
+            if (!first_line.empty()) {
+                Log(LogLevel::Debug, "         " + first_line);
+            }
+        }
     }
 
     /// Begin a lifecycle phase
@@ -136,9 +156,12 @@ class MissionLogger {
     /// Log the Flight Manifest (Data Dictionary)
     void LogManifest(const DataDictionary &dict) {
         FlightManifest manifest(console_);
-        manifest.SetVersion(version_);
+        manifest.SetVersion(icarus::Version());
         manifest.SetOutputPath(GetDictionaryPath());
         manifest.Generate(dict);
+
+        // Also write summary to log file
+        WriteToFile(manifest.GenerateSummary(dict));
     }
 
     /// Log mission debrief (shutdown statistics)
@@ -405,7 +428,7 @@ class MissionLogger {
     void Log(LogLevel level, const std::string &message) {
         console_.Log(level, message);
         if (log_file_.is_open() && level >= file_level_) {
-            log_file_ << StripAnsi(message) << "\n";
+            log_file_ << LevelPrefix(level) << " " << StripAnsi(message) << "\n";
             log_file_.flush();
         }
     }
@@ -414,7 +437,7 @@ class MissionLogger {
         std::string formatted = FormatTime(sim_time) + " " + message;
         console_.Log(level, formatted);
         if (log_file_.is_open() && level >= file_level_) {
-            log_file_ << StripAnsi(formatted) << "\n";
+            log_file_ << LevelPrefix(level) << " " << StripAnsi(formatted) << "\n";
             log_file_.flush();
         }
     }
@@ -498,6 +521,26 @@ class MissionLogger {
             log_file_ << StripAnsi(message) << "\n";
             log_file_.flush();
         }
+    }
+
+    [[nodiscard]] static std::string LevelPrefix(LogLevel level) {
+        switch (level) {
+        case LogLevel::Trace:
+            return "[TRC]";
+        case LogLevel::Debug:
+            return "[DBG]";
+        case LogLevel::Info:
+            return "[INF]";
+        case LogLevel::Event:
+            return "[EVT]";
+        case LogLevel::Warning:
+            return "[WRN]";
+        case LogLevel::Error:
+            return "[ERR]";
+        case LogLevel::Fatal:
+            return "[FTL]";
+        }
+        return "[???]";
     }
 
     [[nodiscard]] static std::string StripAnsi(const std::string &s) {

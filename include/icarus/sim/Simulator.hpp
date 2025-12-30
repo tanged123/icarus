@@ -311,8 +311,11 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
     auto sim = std::make_unique<Simulator>();
     sim->Configure(config);
 
-    // Log startup banner
+    // Log startup banner (Icarus engine version)
     sim->logger_.LogStartup();
+
+    // Log simulation configuration (from YAML)
+    sim->logger_.LogSimulationConfig(config.name, config.version, config.description);
 
     // Begin Provision phase
     sim->logger_.BeginPhase(SimPhase::Provision);

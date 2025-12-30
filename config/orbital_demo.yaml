@@ -16,12 +16,12 @@ simulation:
 # =============================================================================
 
 logging:
-  console_level: info       # trace, debug, info, warning, error
+  console_level: debug       # trace, debug, info, warning, error
   file_enabled: true      # Set to true to write log file
   file_path: "orbital_demo.log"
   file_level: debug
   progress_enabled: true
-  profiling_enabled: false
+  profiling_enabled: true
 
 # =============================================================================
 # Time Configuration
