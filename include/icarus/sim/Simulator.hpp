@@ -76,7 +76,7 @@ class Simulator {
     Simulator();
 
     /// Destructor
-    ~Simulator() = default;
+    ~Simulator();
 
     // Non-copyable, non-movable (Backplane holds reference to registry_)
     Simulator(const Simulator &) = delete;
@@ -299,12 +299,25 @@ class Simulator {
 // INLINE IMPLEMENTATIONS
 // =============================================================================
 
+inline Simulator::~Simulator() {
+    // If we ever ran, log the debrief on destruction (RAII)
+    if (phase_ == Phase::Running) {
+        logger_.BeginPhase(SimPhase::Shutdown);
+        auto wall_time = std::chrono::duration<double>(logger_.WallElapsed()).count();
+        logger_.LogDebrief(time_, wall_time);
+    }
+}
+
 inline Simulator::Simulator() : backplane_(registry_) { integration_manager_.ConfigureDefault(); }
 
 inline std::unique_ptr<Simulator> Simulator::FromConfig(const std::string &config_path) {
     // Load YAML configuration
     SimulatorConfig config = io::SimulationLoader::Load(config_path);
-    return FromConfig(config);
+    auto sim = FromConfig(config);
+    if (sim) {
+        sim->logger_.LogConfigFile(config_path);
+    }
+    return sim;
 }
 
 inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &config) {
@@ -316,6 +329,10 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
 
     // Log simulation configuration (from YAML)
     sim->logger_.LogSimulationConfig(config.name, config.version, config.description);
+
+    // Log time and integrator settings
+    sim->logger_.LogTimeConfig(config.t_start, config.t_end, config.dt);
+    sim->logger_.LogIntegrator(config.integrator.type);
 
     // Begin Provision phase
     sim->logger_.BeginPhase(SimPhase::Provision);
@@ -511,7 +528,13 @@ inline void Simulator::Step(double dt) {
     if (phase_ != Phase::Staged && phase_ != Phase::Running) {
         throw LifecycleError("Step() requires prior Stage()");
     }
-    phase_ = Phase::Running;
+
+    // Auto-log RUN phase on first step
+    if (phase_ == Phase::Staged) {
+        phase_ = Phase::Running;
+        logger_.BeginPhase(SimPhase::Run);
+        logger_.LogRunStart(time_, config_.t_end, config_.dt);
+    }
 
     // Invoke input sources
     InvokeInputSources();
@@ -522,13 +545,19 @@ inline void Simulator::Step(double dt) {
     // If no state, just call components directly
     if (state_manager_.TotalSize() == 0) {
         for (auto &comp : components_) {
+            logger_.BeginComponentTiming(comp->Name());
             comp->PreStep(time_, dt);
+            logger_.EndComponentTiming();
         }
         for (auto &comp : components_) {
+            logger_.BeginComponentTiming(comp->Name());
             comp->Step(time_, dt);
+            logger_.EndComponentTiming();
         }
         for (auto &comp : components_) {
+            logger_.BeginComponentTiming(comp->Name());
             comp->PostStep(time_, dt);
+            logger_.EndComponentTiming();
         }
     } else {
         // Create derivative function for integrator
@@ -537,13 +566,11 @@ inline void Simulator::Step(double dt) {
             state_manager_.ZeroDerivatives();
 
             for (auto &comp : components_) {
+                logger_.BeginComponentTiming(comp->Name());
                 comp->PreStep(t, config_.dt);
-            }
-            for (auto &comp : components_) {
                 comp->Step(t, config_.dt);
-            }
-            for (auto &comp : components_) {
                 comp->PostStep(t, config_.dt);
+                logger_.EndComponentTiming();
             }
 
             return state_manager_.GetDerivatives();
@@ -557,6 +584,11 @@ inline void Simulator::Step(double dt) {
 
     time_ += dt;
     frame_count_++;
+
+    // Periodic progress logging (e.g., every 100 frames)
+    if (logger_.IsProgressEnabled() && (frame_count_ % 100 == 0)) {
+        logger_.LogRunProgress(time_, config_.t_end);
+    };
 
     // Invoke output observers
     InvokeOutputObservers();

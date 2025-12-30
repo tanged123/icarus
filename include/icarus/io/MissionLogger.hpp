@@ -80,6 +80,11 @@ class MissionLogger {
     /// Check if profiling is enabled
     [[nodiscard]] bool IsProfilingEnabled() const { return profiling_enabled_; }
 
+    /// Get total wall time elapsed since startup
+    [[nodiscard]] std::chrono::nanoseconds WallElapsed() const {
+        return Clock::now() - startup_time_;
+    }
+
     /// Set log file path (closes existing if open)
     void SetLogFile(const std::string &path) {
         if (log_file_.is_open()) {
@@ -119,6 +124,25 @@ class MissionLogger {
             }
         }
     }
+
+    /// Log configuration file path
+    void LogConfigFile(const std::string &path) { Log(LogLevel::Info, "[CFG] Config: " + path); }
+
+    /// Log time configuration
+    void LogTimeConfig(double t_start, double t_end, double dt) {
+        std::ostringstream oss;
+        oss << "[CFG] Time: start=" << std::fixed << std::setprecision(1) << t_start
+            << "s, end=" << t_end << "s, dt=" << std::setprecision(4) << dt << "s";
+        Log(LogLevel::Info, oss.str());
+    }
+
+    /// Log integrator type
+    void LogIntegrator(const std::string &type) {
+        Log(LogLevel::Debug, "[CFG] Integrator: " + type);
+    }
+
+    /// Log integrator type (enum version)
+    void LogIntegrator(IntegratorType type) { LogIntegrator(to_string(type)); }
 
     /// Begin a lifecycle phase
     void BeginPhase(SimPhase phase) {
@@ -164,11 +188,35 @@ class MissionLogger {
         WriteToFile(manifest.GenerateSummary(dict));
     }
 
+    /// Log simulation run start (entering RUN phase)
+    void LogRunStart(double t_start, double t_end, double dt) {
+        run_start_wall_time_ = Clock::now();
+        std::ostringstream oss;
+        oss << "[SYS] Starting simulation (t=" << std::fixed << std::setprecision(3) << t_start
+            << " → " << std::setprecision(1) << t_end << " s, dt=" << std::setprecision(4) << dt
+            << " s)";
+        LogTimed(LogLevel::Info, t_start, oss.str());
+    }
+
+    /// Log periodic run progress
+    void LogRunProgress(double sim_time, double t_end) {
+        double progress = (t_end > 0) ? (sim_time / t_end) * 100.0 : 0.0;
+        auto wall_elapsed =
+            std::chrono::duration<double>(Clock::now() - run_start_wall_time_).count();
+        double rtf = (wall_elapsed > 0) ? sim_time / wall_elapsed : 0.0;
+
+        std::ostringstream oss;
+        oss << "[RUN] Progress: " << std::fixed << std::setprecision(1) << progress << "% ("
+            << std::setprecision(1) << sim_time << "/" << t_end
+            << " s, RTF: " << std::setprecision(1) << rtf << "x)";
+        LogTimed(LogLevel::Trace, sim_time, oss.str());
+    }
+
     /// Log mission debrief (shutdown statistics)
     void LogDebrief(double sim_time, double wall_time) {
         MissionDebrief debrief(console_);
         debrief.SetExitStatus(ExitStatus::EndConditionMet);
-        debrief.SetExitReason("End condition met (t >= t_max)");
+        debrief.SetExitReason("Reached end of simulation time");
         debrief.SetTiming(sim_time, wall_time);
 
         if (profiling_enabled_) {
@@ -459,6 +507,7 @@ class MissionLogger {
     // Timing
     TimePoint startup_time_;
     TimePoint phase_start_time_;
+    TimePoint run_start_wall_time_;
     SimPhase current_phase_ = SimPhase::Init;
 
     // Progress display
