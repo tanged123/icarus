@@ -13,3 +13,10 @@ endfunction()
 icarus_add_example(point_mass_freefall
     point_mass_freefall.cpp
 )
+
+# Configuration-Driven Demo
+# Demonstrates: YAML config loading with SimulationLoader::Load()
+icarus_add_example(config_driven_demo
+    config_driven_demo.cpp
+)
+
