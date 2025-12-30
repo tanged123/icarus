@@ -21,6 +21,21 @@
 
 namespace icarus {
 
+namespace detail {
+/// Helper to write content to a file with error handling
+template <typename WriteFunc>
+inline void WriteToFile(const std::string &path, WriteFunc write_content) {
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        throw IOError("Failed to open file for writing: '" + path + "': " + std::strerror(errno));
+    }
+    write_content(file);
+    if (file.fail()) {
+        throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
+    }
+}
+} // namespace detail
+
 /**
  * @brief Complete catalog of simulation interface
  *
@@ -139,19 +154,7 @@ struct DataDictionary {
         out << YAML::EndSeq;
         out << YAML::EndMap;
 
-        std::ofstream file(path);
-        if (!file.is_open()) {
-            throw IOError("Failed to open file for writing: '" + path +
-                          "': " + std::strerror(errno));
-        }
-
-        file << out.c_str();
-
-        if (file.fail()) {
-            throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
-        }
-
-        file.close();
+        detail::WriteToFile(path, [&](std::ofstream &file) { file << out.c_str(); });
     }
 
     /**
@@ -202,19 +205,7 @@ struct DataDictionary {
             j["components"].push_back(jcomp);
         }
 
-        std::ofstream file(path);
-        if (!file.is_open()) {
-            throw IOError("Failed to open file for writing: '" + path +
-                          "': " + std::strerror(errno));
-        }
-
-        file << j.dump(2);
-
-        if (file.fail()) {
-            throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
-        }
-
-        file.close();
+        detail::WriteToFile(path, [&](std::ofstream &file) { file << j.dump(2); });
     }
 };
 

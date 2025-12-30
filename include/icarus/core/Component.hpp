@@ -138,12 +138,7 @@ template <typename Scalar> class Component {
     /**
      * @brief Full qualified name: entity.component (or just component)
      */
-    [[nodiscard]] std::string FullName() const {
-        std::string entity = Entity();
-        if (entity.empty())
-            return Name();
-        return entity + "." + Name();
-    }
+    [[nodiscard]] std::string FullName() const { return MakeFullPath(Entity(), Name()); }
 
     /**
      * @brief Declared inputs (for documentation/dependency graph)

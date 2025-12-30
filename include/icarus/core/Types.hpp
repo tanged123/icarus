@@ -9,6 +9,7 @@
  */
 
 #include <cstdint>
+#include <string>
 
 // Re-export Janus types for dual-backend support
 #include <janus/core/JanusTypes.hpp>
@@ -115,6 +116,22 @@ constexpr int VersionPatch() { return ICARUS_VERSION_PATCH; }
 /// Version string (derived from components)
 constexpr const char *Version() {
     return ICARUS_VERSION_STR(ICARUS_VERSION_MAJOR, ICARUS_VERSION_MINOR, ICARUS_VERSION_PATCH);
+}
+
+// =============================================================================
+// Naming Utilities
+// =============================================================================
+
+/**
+ * @brief Build a full path from entity and name
+ *
+ * Returns "entity.name" if entity is non-empty, otherwise just "name".
+ * Used consistently across Component, ComponentConfig, and logging.
+ */
+inline std::string MakeFullPath(const std::string &entity, const std::string &name) {
+    if (entity.empty())
+        return name;
+    return entity + "." + name;
 }
 
 } // namespace icarus

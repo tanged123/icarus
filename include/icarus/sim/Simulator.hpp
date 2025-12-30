@@ -398,10 +398,10 @@ inline void Simulator::AddComponent(std::unique_ptr<Component<double>> component
     components_.push_back(std::move(component));
 }
 
-inline void Simulator::AddComponent(const ComponentConfig & /*config*/) {
-    // TODO: Implement ComponentFactory
-    throw std::runtime_error("ComponentFactory not yet implemented. Use AddComponent(unique_ptr) "
-                             "for programmatic setup.");
+inline void Simulator::AddComponent(const ComponentConfig &config) {
+    auto &factory = ComponentFactory<double>::Instance();
+    auto component = factory.Create(config);
+    components_.push_back(std::move(component));
 }
 
 inline void Simulator::AddRoutes(const std::vector<signal::SignalRoute> &routes) {

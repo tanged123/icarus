@@ -8,6 +8,7 @@
  * Captures full context for each log message: entity, component, timestamp, level.
  */
 
+#include <icarus/core/Types.hpp>
 #include <icarus/io/Console.hpp>
 
 #include <chrono>
@@ -34,12 +35,7 @@ struct LogContext {
     std::string type;      ///< Component type (e.g., "LiquidEngine")
 
     /// Full path: "entity.component" or just "component" if no entity
-    [[nodiscard]] std::string FullPath() const {
-        if (entity.empty()) {
-            return component;
-        }
-        return entity + "." + component;
-    }
+    [[nodiscard]] std::string FullPath() const { return MakeFullPath(entity, component); }
 
     /// Check if context is set
     [[nodiscard]] bool IsSet() const { return !component.empty(); }

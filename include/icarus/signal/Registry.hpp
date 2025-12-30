@@ -205,9 +205,15 @@ template <typename Scalar> class SignalRegistry {
     // =========================================================================
     // Legacy API (Backward Compatibility)
     // =========================================================================
+    // @deprecated Use register_output<T>() and resolve<T>() instead.
+    // These methods are retained only for test compatibility.
+    // The legacy API uses registry-managed storage (values_ deque) rather than
+    // component-owned pointers, which is less efficient and type-unsafe.
+    // =========================================================================
 
     /**
      * @brief Register a new signal output (legacy API)
+     * @deprecated Use register_output<T>() instead for pointer-based registration
      *
      * Called during Provision phase to declare a signal.
      * Creates internal storage managed by the registry.
@@ -237,6 +243,7 @@ template <typename Scalar> class SignalRegistry {
 
     /**
      * @brief Resolve a signal by name (legacy API)
+     * @deprecated Use resolve<T>() for type-safe handle-based access
      *
      * @param name Full signal path
      * @return Index for fast access during Step
@@ -258,11 +265,13 @@ template <typename Scalar> class SignalRegistry {
 
     /**
      * @brief Get signal value by index (hot path, legacy)
+     * @deprecated Use SignalHandle<T> for direct pointer access
      */
     [[nodiscard]] const Scalar &Get(SignalIndex index) const { return values_[index]; }
 
     /**
      * @brief Set signal value by index (hot path, legacy)
+     * @deprecated Use SignalHandle<T> for direct pointer access
      */
     void Set(SignalIndex index, const Scalar &value) { values_[index] = value; }
 

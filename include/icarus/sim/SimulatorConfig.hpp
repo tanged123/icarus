@@ -250,10 +250,10 @@ struct SchedulerConfig {
         return cfg;
     }
 
-    /// Load from YAML file (stub - returns default)
+    /// Load from YAML file
+    /// @note Use SimulationLoader::Load() for full config loading
     [[nodiscard]] static SchedulerConfig FromFile(const std::string & /*yaml_path*/) {
-        // TODO: Implement YAML loading
-        return Default();
+        throw NotImplementedError("SchedulerConfig::FromFile - use SimulationLoader::Load()");
     }
 
     /// Get maximum rate across all groups
@@ -545,11 +545,11 @@ struct SimulatorConfig {
     /// @note Implementation in SimulationLoader.hpp to avoid circular include
     [[nodiscard]] static SimulatorConfig FromFile(const std::string &path);
 
-    /// Load from master + explicit routes file (stub - returns default)
+    /// Load from master + explicit routes file
+    /// @note Use SimulationLoader::Load() which handles routes in the main config
     [[nodiscard]] static SimulatorConfig FromFiles(const std::string & /*master_path*/,
                                                    const std::string & /*routes_path*/) {
-        // TODO: Implement YAML loading
-        return Default();
+        throw NotImplementedError("SimulatorConfig::FromFiles - use SimulationLoader::Load()");
     }
 
     /// Validate configuration consistency

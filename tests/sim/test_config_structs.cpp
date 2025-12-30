@@ -151,9 +151,9 @@ TEST(SchedulerConfigTest, ValidateRejectsInvalidRate) {
     EXPECT_TRUE(errors[0].find("invalid rate") != std::string::npos);
 }
 
-TEST(SchedulerConfigTest, FromFileReturnsDefault) {
-    auto cfg = SchedulerConfig::FromFile("nonexistent.yaml");
-    EXPECT_EQ(cfg.groups.size(), 1u); // Returns default
+TEST(SchedulerConfigTest, FromFileThrowsNotImplemented) {
+    // FromFile is not implemented - use SimulationLoader::Load() instead
+    EXPECT_THROW((void)SchedulerConfig::FromFile("nonexistent.yaml"), NotImplementedError);
 }
 
 // =============================================================================
@@ -218,10 +218,10 @@ TEST(SimulatorConfigTest, FromFileThrowsOnMissingFile) {
     EXPECT_THROW((void)SimulatorConfig::FromFile("nonexistent.yaml"), ConfigError);
 }
 
-TEST(SimulatorConfigTest, FromFilesReturnsDefault) {
-    // FromFiles is still a stub - returns default
-    auto cfg = SimulatorConfig::FromFiles("master.yaml", "routes.yaml");
-    EXPECT_EQ(cfg.name, "Simulation");
+TEST(SimulatorConfigTest, FromFilesThrowsNotImplemented) {
+    // FromFiles is not implemented - use SimulationLoader::Load() instead
+    EXPECT_THROW((void)SimulatorConfig::FromFiles("master.yaml", "routes.yaml"),
+                 NotImplementedError);
 }
 
 // =============================================================================

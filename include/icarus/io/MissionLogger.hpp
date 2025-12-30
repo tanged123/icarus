@@ -28,9 +28,18 @@
 namespace icarus {
 
 /**
- * @brief Simulation lifecycle phases for logging
+ * @brief Simulation phase names for logging banners
+ *
+ * These are string constants used with MissionLogger::BeginPhase().
+ * Separate from the Phase enum in Types.hpp which tracks simulation state.
  */
-enum class SimPhase { Init, Provision, Stage, Run, Shutdown };
+namespace SimPhase {
+constexpr const char *Init = "INIT";
+constexpr const char *Provision = "PROVISION";
+constexpr const char *Stage = "STAGE";
+constexpr const char *Run = "RUN";
+constexpr const char *Shutdown = "SHUTDOWN";
+} // namespace SimPhase
 
 /**
  * @brief Mission Logger - Flight Recorder style logging
@@ -145,11 +154,11 @@ class MissionLogger {
     void LogIntegrator(IntegratorType type) { LogIntegrator(to_string(type)); }
 
     /// Begin a lifecycle phase
-    void BeginPhase(SimPhase phase) {
+    void BeginPhase(const char *phase) {
         current_phase_ = phase;
         phase_start_time_ = Clock::now();
 
-        std::string header = Banner::GetPhaseHeader(PhaseToString(phase));
+        std::string header = Banner::GetPhaseHeader(phase);
         console_.WriteLine(header);
         WriteToFile(header);
     }
@@ -158,8 +167,7 @@ class MissionLogger {
     void EndPhase(double sim_time = 0.0) {
         auto elapsed = std::chrono::duration<double>(Clock::now() - phase_start_time_).count();
         std::ostringstream oss;
-        oss << "[SYS] " << PhaseToString(current_phase_) << " phase complete ("
-            << FormatDuration(elapsed) << ")";
+        oss << "[SYS] " << current_phase_ << " phase complete (" << FormatDuration(elapsed) << ")";
         LogTimed(LogLevel::Info, sim_time, oss.str());
     }
 
@@ -508,7 +516,7 @@ class MissionLogger {
     TimePoint startup_time_;
     TimePoint phase_start_time_;
     TimePoint run_start_wall_time_;
-    SimPhase current_phase_ = SimPhase::Init;
+    std::string current_phase_ = SimPhase::Init;
 
     // Progress display
     bool progress_enabled_ = true;
@@ -547,22 +555,6 @@ class MissionLogger {
             oss << std::fixed << std::setprecision(2) << seconds << "s";
         }
         return oss.str();
-    }
-
-    [[nodiscard]] static std::string PhaseToString(SimPhase phase) {
-        switch (phase) {
-        case SimPhase::Init:
-            return "INIT";
-        case SimPhase::Provision:
-            return "PROVISION";
-        case SimPhase::Stage:
-            return "STAGE";
-        case SimPhase::Run:
-            return "RUN";
-        case SimPhase::Shutdown:
-            return "SHUTDOWN";
-        }
-        return "UNKNOWN";
     }
 
     void WriteToFile(const std::string &message) {

@@ -89,11 +89,7 @@ struct ComponentConfig {
     /**
      * @brief Get the full component path: entity.name (or just name if no entity)
      */
-    [[nodiscard]] std::string FullPath() const {
-        if (entity.empty())
-            return name;
-        return entity + "." + name;
-    }
+    [[nodiscard]] std::string FullPath() const { return MakeFullPath(entity, name); }
 };
 
 // =============================================================================
