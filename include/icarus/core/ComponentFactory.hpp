@@ -164,14 +164,14 @@ template <typename Scalar> class ComponentFactory {
 /**
  * @brief Register component with custom type name
  *
- * Usage:
+ * Usage (at namespace scope, inside the component's namespace):
  * @code
- * ICARUS_REGISTER_COMPONENT_AS(MyLongClassName, "ShortName")
+ * ICARUS_REGISTER_COMPONENT_AS(PointMass3DOF, "PointMass3DOF")
  * @endcode
  */
-#define ICARUS_REGISTER_COMPONENT_AS(ComponentType, TypeName)                                      \
+#define ICARUS_REGISTER_COMPONENT_IMPL2(ComponentType, TypeName, Counter)                          \
     namespace {                                                                                    \
-    static bool _reg_double_##ComponentType = []() {                                               \
+    static const bool _icarus_reg_##Counter = []() {                                               \
         ::icarus::ComponentFactory<double>::Instance().Register(                                   \
             TypeName, [](const ::icarus::ComponentConfig &config) {                                \
                 auto comp = std::make_unique<ComponentType<double>>(config.name, config.entity);   \
@@ -181,6 +181,12 @@ template <typename Scalar> class ComponentFactory {
         return true;                                                                               \
     }();                                                                                           \
     }
+
+#define ICARUS_REGISTER_COMPONENT_IMPL(ComponentType, TypeName, Counter)                           \
+    ICARUS_REGISTER_COMPONENT_IMPL2(ComponentType, TypeName, Counter)
+
+#define ICARUS_REGISTER_COMPONENT_AS(ComponentType, TypeName)                                      \
+    ICARUS_REGISTER_COMPONENT_IMPL(ComponentType, TypeName, __COUNTER__)
 
 /**
  * @brief Register component with custom creator function

@@ -25,30 +25,9 @@
 using namespace icarus;
 namespace fs = std::filesystem;
 
-// Register component types with the factory
-namespace {
-void RegisterComponents() {
-    auto &factory = ComponentFactory<double>::Instance();
-    if (factory.NumRegistered() > 0)
-        return; // Already registered
-
-    factory.Register("PointMass3DOF", [](const ComponentConfig &cfg) {
-        auto comp = std::make_unique<components::PointMass3DOF<double>>(cfg.name, cfg.entity);
-        comp->SetConfig(cfg);
-        return comp;
-    });
-
-    factory.Register("PointMassGravity", [](const ComponentConfig &cfg) {
-        auto comp = std::make_unique<components::PointMassGravity<double>>(cfg.name, cfg.entity);
-        comp->SetConfig(cfg);
-        return comp;
-    });
-}
-} // namespace
+// Components are auto-registered via icarus_components library (registration.cpp)
 
 int main(int argc, char *argv[]) {
-    // Register components before loading config
-    RegisterComponents();
 
     // Config path - default or command line
     std::string config_path = "config/orbital_demo.yaml";
