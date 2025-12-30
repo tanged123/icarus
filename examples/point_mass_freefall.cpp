@@ -38,10 +38,11 @@ int main() {
 
     // Create components
     auto grav = std::make_unique<PointMassGravity<double>>("Gravity");
-    auto pm = std::make_unique<PointMass3DOF<double>>(1.0, "PointMass");
+    auto pm = std::make_unique<PointMass3DOF<double>>("PointMass");
 
-    // Configure gravity model
+    // Configure gravity model and mass
     grav->SetModel(PointMassGravity<double>::Model::Constant);
+    pm->SetMass(1.0);
 
     // Initial conditions: start at 100m, at rest
     const double z0 = 100.0;

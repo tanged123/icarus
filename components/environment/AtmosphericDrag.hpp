@@ -57,7 +57,7 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
     // Lifecycle
     // =========================================================================
 
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // === Outputs ===
         bp.template register_output_vec3<Scalar>("force", &force_, "N", "Drag force");
         bp.template register_output<Scalar>("altitude", &altitude_, "m", "Altitude above surface");
@@ -78,8 +78,8 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
         bp.register_param("reference_area", &area_, area_);
     }
 
-    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
-        // Wiring handled by SignalRouter externally
+    void Stage(Backplane<Scalar> &) override {
+        // Config loading could be added here if needed
     }
 
     void Step(Scalar t, Scalar dt) override {

@@ -177,16 +177,13 @@ TEST(DummyComponent, Lifecycle) {
 
     // Provision
     bp.set_context(comp.Entity(), comp.Name());
-    ComponentConfig config;
-    config.name = comp.Name();
-    config.entity = comp.Entity();
-    comp.Provision(bp, config);
+    comp.Provision(bp);
 
     EXPECT_TRUE(registry.HasSignal("Test.Counter.counter"));
     EXPECT_TRUE(registry.HasSignal("Test.Counter.time"));
 
     // Stage
-    comp.Stage(bp, config);
+    comp.Stage(bp);
 
     EXPECT_DOUBLE_EQ(comp.counter(), 0.0);
     EXPECT_DOUBLE_EQ(comp.last_time(), 0.0);
@@ -279,10 +276,8 @@ TEST(ComponentSymbolic, DummyLifecycle) {
     DummyComponent<SymbolicScalar> comp("SymCounter");
 
     bp.set_context(comp.Entity(), comp.Name());
-    ComponentConfig config;
-    config.name = comp.Name();
-    comp.Provision(bp, config);
-    comp.Stage(bp, config);
+    comp.Provision(bp);
+    comp.Stage(bp);
 
     EXPECT_TRUE(registry.HasSignal("SymCounter.counter"));
     EXPECT_TRUE(registry.HasSignal("SymCounter.time"));

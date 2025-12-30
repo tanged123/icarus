@@ -23,17 +23,14 @@ template <typename Scalar> class DummyComponent : public Component<Scalar> {
     explicit DummyComponent(std::string name = "Dummy", std::string entity = "")
         : name_(std::move(name)), entity_(std::move(entity)) {}
 
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig & /*config*/) override {
+    void Provision(Backplane<Scalar> &bp) override {
         bp.register_output("counter", &counter_, "", "Step counter");
         bp.register_output("time", &last_time_, "s", "Last step time");
     }
 
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig & /*config*/) override {
+    void Stage(Backplane<Scalar> &) override {
         counter_ = Scalar{0};
         last_time_ = Scalar{0};
-
-        // Unused parameter - bp passed for input resolution (none needed here)
-        (void)bp;
     }
 
     void Step(Scalar t, Scalar /*dt*/) override {

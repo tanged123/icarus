@@ -51,47 +51,10 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     static constexpr std::size_t kVelOffset = 3;
 
     /**
-     * @brief Construct with mass and optional name/entity
+     * @brief Construct with name and entity
      */
-    explicit PointMass3DOF(Scalar mass = Scalar{1.0}, std::string name = "PointMass3DOF",
-                           std::string entity = "")
-        : mass_(mass), name_(std::move(name)), entity_(std::move(entity)) {}
-
-    /**
-     * @brief Construct from ComponentConfig (for factory instantiation)
-     *
-     * Reads from config:
-     * - scalars["mass"]: Point mass (default 1.0)
-     * - vectors["initial_position"]: Initial position [x, y, z]
-     * - vectors["initial_velocity"]: Initial velocity [vx, vy, vz]
-     */
-    explicit PointMass3DOF(const ComponentConfig &config)
-        : name_(config.name), entity_(config.entity) {
-        // Mass from scalars
-        if (config.scalars.count("mass")) {
-            mass_ = static_cast<Scalar>(config.scalars.at("mass"));
-        }
-
-        // Initial position from vectors
-        if (config.vectors.count("initial_position")) {
-            const auto &pos = config.vectors.at("initial_position");
-            if (pos.size() >= 3) {
-                ic_position_ =
-                    Vec3<Scalar>{static_cast<Scalar>(pos[0]), static_cast<Scalar>(pos[1]),
-                                 static_cast<Scalar>(pos[2])};
-            }
-        }
-
-        // Initial velocity from vectors
-        if (config.vectors.count("initial_velocity")) {
-            const auto &vel = config.vectors.at("initial_velocity");
-            if (vel.size() >= 3) {
-                ic_velocity_ =
-                    Vec3<Scalar>{static_cast<Scalar>(vel[0]), static_cast<Scalar>(vel[1]),
-                                 static_cast<Scalar>(vel[2])};
-            }
-        }
-    }
+    explicit PointMass3DOF(std::string name = "PointMass3DOF", std::string entity = "")
+        : name_(std::move(name)), entity_(std::move(entity)) {}
 
     // =========================================================================
     // Component Identity
@@ -110,7 +73,7 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     /**
      * @brief Register outputs, inputs, and parameters
      */
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // === Outputs ===
         // Position (in inertial frame: ECI for orbital, local for validation)
         bp.template register_output_vec3<Scalar>("position", &position_, "m", "Position");
@@ -131,13 +94,38 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     }
 
     /**
-     * @brief Stage phase - resolve dependencies
+     * @brief Stage phase - load config and apply initial conditions
      *
-     * Wiring is now handled externally by SignalRouter, not in Stage().
-     * This method is kept for lifecycle compatibility.
+     * Reads from config (only if explicitly set):
+     * - scalars["mass"]: Point mass
+     * - vectors["initial_position"]: Initial position [x, y, z]
+     * - vectors["initial_velocity"]: Initial velocity [vx, vy, vz]
+     *
+     * For programmatic setup, use SetMass(), SetInitialPosition(), etc.
+     * before calling Stage() - these values won't be overwritten if
+     * not present in config.
      */
-    void Stage(Backplane<Scalar> &, const ComponentConfig &) override {
-        // Wiring handled by SignalRouter externally
+    void Stage(Backplane<Scalar> &) override {
+        const auto &config = this->GetConfig();
+
+        // Only override mass if explicitly set in config
+        if (config.template Has<double>("mass")) {
+            mass_ = static_cast<Scalar>(config.template Get<double>("mass", 1.0));
+        }
+
+        // Only override position if explicitly set in config
+        if (config.template Has<Vec3<double>>("initial_position")) {
+            auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
+            ic_position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
+                                        static_cast<Scalar>(pos(2))};
+        }
+
+        // Only override velocity if explicitly set in config
+        if (config.template Has<Vec3<double>>("initial_velocity")) {
+            auto vel = config.template Get<Vec3<double>>("initial_velocity", Vec3<double>::Zero());
+            ic_velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
+                                        static_cast<Scalar>(vel(2))};
+        }
     }
 
     /**

@@ -262,7 +262,6 @@ class Simulator {
 
     // Components
     std::vector<std::unique_ptr<Component<double>>> components_;
-    std::unordered_map<Component<double> *, ComponentConfig> component_configs_;
 
     // Signal system
     SignalRegistry<double> registry_;
@@ -420,12 +419,7 @@ inline void Simulator::Provision() {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
 
-        ComponentConfig config;
-        config.name = comp->Name();
-        config.entity = comp->Entity();
-        component_configs_[comp.get()] = config;
-
-        comp->Provision(backplane_, config);
+        comp->Provision(backplane_);
         comp->MarkProvisioned();
 
         outputs_[comp.get()] = backplane_.registered_outputs();
@@ -487,12 +481,12 @@ inline void Simulator::Stage() {
     // Log scheduler execution order (Debug level)
     scheduler_.LogExecutionOrder(&logger_);
 
-    // Stage each component (input wiring)
+    // Stage each component (config loading, input wiring)
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
 
-        comp->Stage(backplane_, component_configs_[comp.get()]);
+        comp->Stage(backplane_);
         comp->MarkStaged();
 
         inputs_[comp.get()] = backplane_.resolved_inputs();
@@ -614,7 +608,7 @@ inline void Simulator::Reset() {
     // Re-run Stage on components
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
-        comp->Stage(backplane_, component_configs_[comp.get()]);
+        comp->Stage(backplane_);
         backplane_.clear_context();
     }
 

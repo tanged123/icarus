@@ -137,8 +137,11 @@ template <typename Scalar> class ComponentFactory {
 /**
  * @brief Register a component type with the factory
  *
- * The component class must have a constructor that accepts ComponentConfig:
- *   ComponentType(const ComponentConfig& config)
+ * The component class must have a constructor that accepts (name, entity):
+ *   ComponentType(std::string name, std::string entity)
+ *
+ * The factory will call SetConfig() after construction. Components read
+ * their configuration in Stage() via GetConfig().
  *
  * Usage in component header or cpp file (namespace scope):
  * @code
@@ -150,7 +153,9 @@ template <typename Scalar> class ComponentFactory {
     static bool _reg_double_##ComponentType = []() {                                               \
         ::icarus::ComponentFactory<double>::Instance().Register(                                   \
             #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
-                return std::make_unique<ComponentType<double>>(config);                            \
+                auto comp = std::make_unique<ComponentType<double>>(config.name, config.entity);   \
+                comp->SetConfig(config);                                                           \
+                return comp;                                                                       \
             });                                                                                    \
         return true;                                                                               \
     }();                                                                                           \
@@ -169,7 +174,9 @@ template <typename Scalar> class ComponentFactory {
     static bool _reg_double_##ComponentType = []() {                                               \
         ::icarus::ComponentFactory<double>::Instance().Register(                                   \
             TypeName, [](const ::icarus::ComponentConfig &config) {                                \
-                return std::make_unique<ComponentType<double>>(config);                            \
+                auto comp = std::make_unique<ComponentType<double>>(config.name, config.entity);   \
+                comp->SetConfig(config);                                                           \
+                return comp;                                                                       \
             });                                                                                    \
         return true;                                                                               \
     }();                                                                                           \
@@ -179,15 +186,14 @@ template <typename Scalar> class ComponentFactory {
  * @brief Register component with custom creator function
  *
  * Use when component needs special construction logic.
+ * The creator lambda is responsible for calling SetConfig() on the component.
  *
  * Usage:
  * @code
  * ICARUS_REGISTER_COMPONENT_WITH_CREATOR("CustomType",
  *     [](const ComponentConfig& cfg) {
- *         auto comp = std::make_unique<CustomComponent<double>>(cfg.name);
- *         if (cfg.scalars.count("mass")) {
- *             comp->SetMass(cfg.scalars.at("mass"));
- *         }
+ *         auto comp = std::make_unique<CustomComponent<double>>(cfg.name, cfg.entity);
+ *         comp->SetConfig(cfg);
  *         return comp;
  *     })
  * @endcode

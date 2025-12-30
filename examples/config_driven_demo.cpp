@@ -33,11 +33,15 @@ void RegisterComponents() {
         return; // Already registered
 
     factory.Register("PointMass3DOF", [](const ComponentConfig &cfg) {
-        return std::make_unique<components::PointMass3DOF<double>>(cfg);
+        auto comp = std::make_unique<components::PointMass3DOF<double>>(cfg.name, cfg.entity);
+        comp->SetConfig(cfg);
+        return comp;
     });
 
     factory.Register("PointMassGravity", [](const ComponentConfig &cfg) {
-        return std::make_unique<components::PointMassGravity<double>>(cfg);
+        auto comp = std::make_unique<components::PointMassGravity<double>>(cfg.name, cfg.entity);
+        comp->SetConfig(cfg);
+        return comp;
     });
 }
 } // namespace

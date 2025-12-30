@@ -29,20 +29,21 @@ using namespace icarus::components;
 // =============================================================================
 
 TEST(PointMass3DOF, StateSize) {
-    PointMass3DOF<double> pm(1.0);
+    PointMass3DOF<double> pm;
     EXPECT_EQ(pm.StateSize(), 6);
     EXPECT_TRUE(pm.HasState());
 }
 
 TEST(PointMass3DOF, Identity) {
-    PointMass3DOF<double> pm(1.0, "TestMass", "Vehicle");
+    PointMass3DOF<double> pm("TestMass", "Vehicle");
     EXPECT_EQ(pm.Name(), "TestMass");
     EXPECT_EQ(pm.Entity(), "Vehicle");
     EXPECT_EQ(pm.TypeName(), "PointMass3DOF");
 }
 
 TEST(PointMass3DOF, MassProperty) {
-    PointMass3DOF<double> pm(42.0);
+    PointMass3DOF<double> pm;
+    pm.SetMass(42.0);
     EXPECT_DOUBLE_EQ(pm.GetMass(), 42.0);
 
     pm.SetMass(100.0);
@@ -50,7 +51,7 @@ TEST(PointMass3DOF, MassProperty) {
 }
 
 TEST(PointMass3DOF, InitialConditions) {
-    PointMass3DOF<double> pm(1.0);
+    PointMass3DOF<double> pm;
     pm.SetInitialPosition(1.0, 2.0, 3.0);
     pm.SetInitialVelocity(4.0, 5.0, 6.0);
 
@@ -68,7 +69,7 @@ TEST(PointMass3DOF, InitialConditions) {
 }
 
 TEST(PointMass3DOF, InitialConditionsVec3) {
-    PointMass3DOF<double> pm(1.0);
+    PointMass3DOF<double> pm;
     pm.SetInitialPosition(Vec3<double>{1.0, 2.0, 3.0});
     pm.SetInitialVelocity(Vec3<double>{4.0, 5.0, 6.0});
 
@@ -81,7 +82,7 @@ TEST(PointMass3DOF, InitialConditionsVec3) {
 }
 
 TEST(PointMass3DOF, StateSizeMismatchThrows) {
-    PointMass3DOF<double> pm(1.0);
+    PointMass3DOF<double> pm;
     double state[4];
     double state_dot[4];
 
@@ -137,10 +138,11 @@ TEST(PointMassIntegration, FreeFallConstantGravity) {
     Simulator sim;
 
     // Create components
-    auto pm = std::make_unique<PointMass3DOF<double>>(1.0, "PointMass3DOF");
+    auto pm = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
     auto grav = std::make_unique<PointMassGravity<double>>("Gravity");
 
-    // Set constant gravity model for analytical validation
+    // Set mass and constant gravity model for analytical validation
+    pm->SetMass(1.0);
     grav->SetModel(PointMassGravity<double>::Model::Constant);
 
     // Initial conditions: start at z=100m, at rest
@@ -217,7 +219,8 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
 
     // Create components
     double mass = 1000.0; // kg (typical small satellite)
-    auto pm = std::make_unique<PointMass3DOF<double>>(mass, "PointMass3DOF");
+    auto pm = std::make_unique<PointMass3DOF<double>>("PointMass3DOF");
+    pm->SetMass(mass);
     auto grav = std::make_unique<PointMassGravity<double>>("Gravity");
 
     // Use point-mass gravity model (central force)

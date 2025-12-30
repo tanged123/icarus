@@ -53,22 +53,21 @@ template <typename Scalar> class Component {
     /**
      * @brief Provision phase - called once at application launch
      *
-     * Heavy lifting: allocate memory, register signals, parse config.
+     * Heavy lifting: allocate memory, register signals.
      *
      * @param bp Backplane for registering outputs
-     * @param config Component configuration
      */
-    virtual void Provision(Backplane<Scalar> &bp, const ComponentConfig &config) = 0;
+    virtual void Provision(Backplane<Scalar> &bp) = 0;
 
     /**
      * @brief Stage phase - called at start of each run/episode
      *
-     * Wire inputs, apply initial conditions, prepare for t=0.
+     * Load parameters from config (via GetConfig()), apply initial conditions,
+     * prepare for t=0. This is where default values and config loading happens.
      *
      * @param bp Backplane for resolving inputs
-     * @param config Component configuration (for input wiring paths)
      */
-    virtual void Stage(Backplane<Scalar> &bp, const ComponentConfig &config) = 0;
+    virtual void Stage(Backplane<Scalar> &bp) = 0;
 
     /**
      * @brief Step phase - called every time step (hot path!)
@@ -228,6 +227,22 @@ template <typename Scalar> class Component {
      */
     [[nodiscard]] bool IsStaged() const { return staged_; }
 
+    // =========================================================================
+    // Configuration Access
+    // =========================================================================
+
+    /**
+     * @brief Set component configuration (called by factory after construction)
+     */
+    void SetConfig(ComponentConfig config) { config_ = std::move(config); }
+
+    /**
+     * @brief Get component configuration
+     *
+     * Use in Stage() to read parameters, initial conditions, etc.
+     */
+    [[nodiscard]] const ComponentConfig &GetConfig() const { return config_; }
+
   protected:
     // Called by Simulator to track lifecycle state
     void MarkProvisioned() { provisioned_ = true; }
@@ -239,6 +254,7 @@ template <typename Scalar> class Component {
     friend class Simulator; // Non-templated Simulator (Phase 4.0.7)
 
   private:
+    ComponentConfig config_;
     bool provisioned_ = false;
     bool staged_ = false;
 };
