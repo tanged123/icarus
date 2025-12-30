@@ -57,6 +57,26 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
                               Model model = Model::Constant)
         : name_(std::move(name)), entity_(std::move(entity)), model_int_(static_cast<int>(model)) {}
 
+    /**
+     * @brief Construct from ComponentConfig (for factory instantiation)
+     *
+     * Reads from config:
+     * - scalars["mu"]: Gravitational parameter (default Earth)
+     * - scalars["model"]: Gravity model (0=Constant, 1=PointMass, default 0)
+     */
+    explicit PointMassGravity(const ComponentConfig &config)
+        : name_(config.name), entity_(config.entity) {
+        // Gravitational parameter from scalars
+        if (config.scalars.count("mu")) {
+            mu_ = config.scalars.at("mu");
+        }
+
+        // Model selection from scalars
+        if (config.scalars.count("model")) {
+            model_int_ = static_cast<int>(config.scalars.at("model"));
+        }
+    }
+
     // =========================================================================
     // Component Identity
     // =========================================================================

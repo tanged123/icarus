@@ -4,8 +4,11 @@
  * @file ComponentFactory.hpp
  * @brief Factory for creating components from configuration
  *
- * Part of Phase 4.0: Configuration Infrastructure.
+ * Part of Phase 4.0.7: Configuration Infrastructure.
  * Provides a singleton factory with component registration.
+ *
+ * Updated to pass full ComponentConfig to creators, enabling components
+ * to read their scalars, vectors, and other configuration values.
  */
 
 #include <icarus/core/Component.hpp>
@@ -16,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace icarus {
 
@@ -27,21 +31,24 @@ namespace icarus {
  *
  * Example usage:
  * @code
+ * // In component file - register with factory
+ * ICARUS_REGISTER_COMPONENT(PointMass3DOF)
+ *
+ * // In Simulator - create from config
  * auto& factory = ComponentFactory<double>::Instance();
- * auto component = factory.Create(config);
+ * auto component = factory.Create(config);  // config has type, name, scalars, etc.
  * @endcode
  */
 template <typename Scalar> class ComponentFactory {
   public:
-    /// Creator function type: takes name and entity, returns component
-    using Creator = std::function<std::unique_ptr<Component<Scalar>>(const std::string &name,
-                                                                     const std::string &entity)>;
+    /// Creator function type: takes full ComponentConfig, returns component
+    using Creator = std::function<std::unique_ptr<Component<Scalar>>(const ComponentConfig &)>;
 
     /**
-     * @brief Register a component type
+     * @brief Register a component type with custom creator
      *
      * @param type_name Type name used in config files
-     * @param creator Function that creates the component
+     * @param creator Function that creates the component from config
      */
     void Register(const std::string &type_name, Creator creator) {
         creators_[type_name] = std::move(creator);
@@ -50,16 +57,24 @@ template <typename Scalar> class ComponentFactory {
     /**
      * @brief Create a component from config
      *
+     * The creator receives the full ComponentConfig including:
+     * - name: Component instance name
+     * - entity: Entity namespace (if any)
+     * - scalars: Scalar parameter values
+     * - vectors: Vector parameter values
+     * - strings: String parameter values
+     *
      * @param config Component configuration
      * @return Unique pointer to created component
      * @throws ConfigError if type is not registered
      */
-    std::unique_ptr<Component<Scalar>> Create(const ComponentConfig &config) {
+    [[nodiscard]] std::unique_ptr<Component<Scalar>> Create(const ComponentConfig &config) {
         auto it = creators_.find(config.type);
         if (it == creators_.end()) {
-            throw ConfigError("Unknown component type: '" + config.type + "'");
+            throw ConfigError("Unknown component type: '" + config.type +
+                              "'. Registered types: " + ListTypesString());
         }
-        return it->second(config.name, config.entity);
+        return it->second(config);
     }
 
     /**
@@ -82,6 +97,11 @@ template <typename Scalar> class ComponentFactory {
     }
 
     /**
+     * @brief Get number of registered types
+     */
+    [[nodiscard]] std::size_t NumRegistered() const { return creators_.size(); }
+
+    /**
      * @brief Get singleton instance
      */
     static ComponentFactory &Instance() {
@@ -89,27 +109,48 @@ template <typename Scalar> class ComponentFactory {
         return instance;
     }
 
+    /**
+     * @brief Clear all registrations (for testing)
+     */
+    void Clear() { creators_.clear(); }
+
   private:
     ComponentFactory() = default;
+
+    [[nodiscard]] std::string ListTypesString() const {
+        std::string result;
+        for (const auto &pair : creators_) {
+            if (!result.empty())
+                result += ", ";
+            result += pair.first;
+        }
+        return result.empty() ? "(none)" : result;
+    }
+
     std::unordered_map<std::string, Creator> creators_;
 };
 
+// =============================================================================
+// Registration Macros
+// =============================================================================
+
 /**
- * @brief Helper macro for component registration
+ * @brief Register a component type with the factory
  *
- * Usage in component header or cpp file:
+ * The component class must have a constructor that accepts ComponentConfig:
+ *   ComponentType(const ComponentConfig& config)
+ *
+ * Usage in component header or cpp file (namespace scope):
  * @code
- * ICARUS_REGISTER_COMPONENT(MassAggregator)
+ * ICARUS_REGISTER_COMPONENT(PointMass3DOF)
  * @endcode
- *
- * This registers the component for both double and symbolic backends.
  */
 #define ICARUS_REGISTER_COMPONENT(ComponentType)                                                   \
     namespace {                                                                                    \
     static bool _reg_double_##ComponentType = []() {                                               \
         ::icarus::ComponentFactory<double>::Instance().Register(                                   \
-            #ComponentType, [](const std::string &name, const std::string &entity) {               \
-                return std::make_unique<ComponentType<double>>(name, entity);                      \
+            #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
+                return std::make_unique<ComponentType<double>>(config);                            \
             });                                                                                    \
         return true;                                                                               \
     }();                                                                                           \
@@ -120,16 +161,41 @@ template <typename Scalar> class ComponentFactory {
  *
  * Usage:
  * @code
- * ICARUS_REGISTER_COMPONENT_AS(MyCustomComponent, "CustomName")
+ * ICARUS_REGISTER_COMPONENT_AS(MyLongClassName, "ShortName")
  * @endcode
  */
 #define ICARUS_REGISTER_COMPONENT_AS(ComponentType, TypeName)                                      \
     namespace {                                                                                    \
     static bool _reg_double_##ComponentType = []() {                                               \
         ::icarus::ComponentFactory<double>::Instance().Register(                                   \
-            TypeName, [](const std::string &name, const std::string &entity) {                     \
-                return std::make_unique<ComponentType<double>>(name, entity);                      \
+            TypeName, [](const ::icarus::ComponentConfig &config) {                                \
+                return std::make_unique<ComponentType<double>>(config);                            \
             });                                                                                    \
+        return true;                                                                               \
+    }();                                                                                           \
+    }
+
+/**
+ * @brief Register component with custom creator function
+ *
+ * Use when component needs special construction logic.
+ *
+ * Usage:
+ * @code
+ * ICARUS_REGISTER_COMPONENT_WITH_CREATOR("CustomType",
+ *     [](const ComponentConfig& cfg) {
+ *         auto comp = std::make_unique<CustomComponent<double>>(cfg.name);
+ *         if (cfg.scalars.count("mass")) {
+ *             comp->SetMass(cfg.scalars.at("mass"));
+ *         }
+ *         return comp;
+ *     })
+ * @endcode
+ */
+#define ICARUS_REGISTER_COMPONENT_WITH_CREATOR(TypeName, CreatorLambda)                            \
+    namespace {                                                                                    \
+    static bool _reg_creator_##__LINE__ = []() {                                                   \
+        ::icarus::ComponentFactory<double>::Instance().Register(TypeName, CreatorLambda);          \
         return true;                                                                               \
     }();                                                                                           \
     }

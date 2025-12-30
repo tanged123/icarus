@@ -14,6 +14,7 @@
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/FlightManifest.hpp>
 #include <icarus/io/MissionDebrief.hpp>
+#include <icarus/sim/SimulatorConfig.hpp>
 
 #include <chrono>
 #include <fstream>
@@ -217,6 +218,37 @@ class MissionLogger {
             std::ostringstream oss;
             oss << "         " << (i + 1) << ". " << component_order[i];
             Log(LogLevel::Debug, oss.str());
+        }
+    }
+
+    /// Log scheduler execution order with groups and rates (Debug level)
+    void LogSchedulerOrder(double sim_rate_hz, const std::vector<SchedulerGroupConfig> &groups,
+                           const std::unordered_map<std::string, int> &divisors) {
+        std::ostringstream header;
+        header << "[SCH] Scheduler (sim rate: " << sim_rate_hz << " Hz)";
+        Log(LogLevel::Debug, header.str());
+
+        for (std::size_t i = 0; i < groups.size(); ++i) {
+            const auto &group = groups[i];
+            auto it = divisors.find(group.name);
+            int divisor = (it != divisors.end()) ? it->second : 1;
+            double group_dt = 1.0 / group.rate_hz;
+
+            std::ostringstream oss;
+            bool is_last = (i == groups.size() - 1);
+            oss << "         " << (is_last ? "└─" : "├─") << " [" << group.name << "] "
+                << group.rate_hz << " Hz (÷" << divisor << ", dt=" << std::fixed
+                << std::setprecision(6) << group_dt << "s)";
+            Log(LogLevel::Debug, oss.str());
+
+            for (std::size_t j = 0; j < group.members.size(); ++j) {
+                const auto &member = group.members[j];
+                std::ostringstream mem_oss;
+                bool mem_last = (j == group.members.size() - 1);
+                mem_oss << "         " << (is_last ? "   " : "│  ") << (mem_last ? "└─" : "├─")
+                        << " " << member.component;
+                Log(LogLevel::Debug, mem_oss.str());
+            }
         }
     }
 

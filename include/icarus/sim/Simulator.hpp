@@ -14,9 +14,11 @@
 #include <functional>
 #include <icarus/core/Component.hpp>
 #include <icarus/core/ComponentConfig.hpp>
+#include <icarus/core/ComponentFactory.hpp>
 #include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/MissionLogger.hpp>
+#include <icarus/io/SimulationLoader.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/SignalRouter.hpp>
@@ -108,6 +110,15 @@ class Simulator {
     // =========================================================================
     // QUERY INTERFACE (Read-only)
     // =========================================================================
+
+    /// Get simulation name (from config)
+    [[nodiscard]] const std::string &Name() const { return config_.name; }
+
+    /// Get configured timestep
+    [[nodiscard]] double Dt() const { return config_.dt; }
+
+    /// Get configured end time
+    [[nodiscard]] double EndTime() const { return config_.t_end; }
 
     /// Get current simulation time
     [[nodiscard]] double Time() const { return time_; }
@@ -291,19 +302,65 @@ class Simulator {
 inline Simulator::Simulator() : backplane_(registry_) { integration_manager_.ConfigureDefault(); }
 
 inline std::unique_ptr<Simulator> Simulator::FromConfig(const std::string &config_path) {
-    SimulatorConfig config = SimulatorConfig::FromFile(config_path);
+    // Load YAML configuration
+    SimulatorConfig config = io::SimulationLoader::Load(config_path);
     return FromConfig(config);
 }
 
 inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &config) {
     auto sim = std::make_unique<Simulator>();
     sim->Configure(config);
+
+    // Log startup banner
+    sim->logger_.LogStartup();
+
+    // Begin Provision phase
+    sim->logger_.BeginPhase(SimPhase::Provision);
+
+    // Create components from factory
+    auto &factory = ComponentFactory<double>::Instance();
+    std::size_t comp_count = config.components.size();
+    for (std::size_t i = 0; i < comp_count; ++i) {
+        const auto &comp_cfg = config.components[i];
+        auto component = factory.Create(comp_cfg);
+
+        // Log component addition
+        bool is_last = (i == comp_count - 1);
+        sim->logger_.LogComponentAdd(comp_cfg.name, comp_cfg.type, "YAML", is_last);
+
+        sim->AddComponent(std::move(component));
+    }
+
+    // Add routes from config
+    sim->AddRoutes(config.routes);
+
+    // Provision all components
     sim->Provision();
+
+    // Log state allocation
+    sim->logger_.LogStateAllocation(sim->state_manager_.TotalSize());
+
+    // Generate and log manifest (signal dictionary)
+    auto dict = sim->GetDataDictionary();
+    sim->logger_.LogManifest(dict);
+
+    sim->logger_.EndPhase();
+
     return sim;
 }
 
 inline void Simulator::Configure(const SimulatorConfig &config) {
     config_ = config;
+
+    // Configure logger from YAML settings
+    if (!config_.logging.file_path.empty() && config_.logging.file_enabled) {
+        logger_.SetLogFile(config_.logging.file_path);
+    }
+    logger_.SetConsoleLevel(config_.logging.console_level);
+    logger_.SetFileLevel(config_.logging.file_level);
+    logger_.SetProgressEnabled(config_.logging.progress_enabled);
+    logger_.SetProfilingEnabled(config_.logging.profiling_enabled);
+    logger_.SetVersion(config_.version);
 
     // Configure integrator
     integration_manager_.Configure(config_.integrator.type);
@@ -397,6 +454,19 @@ inline void Simulator::Stage() {
         throw LifecycleError("Stage() requires components to be added first");
     }
 
+    // Begin Stage phase logging
+    logger_.BeginPhase(SimPhase::Stage);
+
+    // Log wiring info (Debug level)
+    for (const auto &route : router_.GetRoutes()) {
+        std::string from = route.output_path;
+        std::string to = route.input_path;
+        logger_.LogWiring(from, to);
+    }
+
+    // Log scheduler execution order (Debug level)
+    scheduler_.LogExecutionOrder(&logger_);
+
     // Stage each component (input wiring)
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
@@ -422,6 +492,8 @@ inline void Simulator::Stage() {
     if (config_.staging.trim.enabled) {
         // TODO: Implement trim optimization
     }
+
+    logger_.EndPhase();
 
     phase_ = Phase::Staged;
     time_ = 0.0;

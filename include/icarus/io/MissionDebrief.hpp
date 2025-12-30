@@ -166,7 +166,7 @@ class MissionDebrief {
 
         AsciiTable table;
         table.AddColumn("COMPONENT", 20);
-        table.AddColumn("AVG (μs)", 12, AsciiTable::Align::Right);
+        table.AddColumn("AVG (μs) ", 12, AsciiTable::Align::Right);
         table.AddColumn("% LOAD", 8, AsciiTable::Align::Right);
 
         for (const auto &stat : sorted) {

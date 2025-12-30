@@ -57,6 +57,42 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
                            std::string entity = "")
         : mass_(mass), name_(std::move(name)), entity_(std::move(entity)) {}
 
+    /**
+     * @brief Construct from ComponentConfig (for factory instantiation)
+     *
+     * Reads from config:
+     * - scalars["mass"]: Point mass (default 1.0)
+     * - vectors["initial_position"]: Initial position [x, y, z]
+     * - vectors["initial_velocity"]: Initial velocity [vx, vy, vz]
+     */
+    explicit PointMass3DOF(const ComponentConfig &config)
+        : name_(config.name), entity_(config.entity) {
+        // Mass from scalars
+        if (config.scalars.count("mass")) {
+            mass_ = static_cast<Scalar>(config.scalars.at("mass"));
+        }
+
+        // Initial position from vectors
+        if (config.vectors.count("initial_position")) {
+            const auto &pos = config.vectors.at("initial_position");
+            if (pos.size() >= 3) {
+                ic_position_ =
+                    Vec3<Scalar>{static_cast<Scalar>(pos[0]), static_cast<Scalar>(pos[1]),
+                                 static_cast<Scalar>(pos[2])};
+            }
+        }
+
+        // Initial velocity from vectors
+        if (config.vectors.count("initial_velocity")) {
+            const auto &vel = config.vectors.at("initial_velocity");
+            if (vel.size() >= 3) {
+                ic_velocity_ =
+                    Vec3<Scalar>{static_cast<Scalar>(vel[0]), static_cast<Scalar>(vel[1]),
+                                 static_cast<Scalar>(vel[2])};
+            }
+        }
+    }
+
     // =========================================================================
     // Component Identity
     // =========================================================================

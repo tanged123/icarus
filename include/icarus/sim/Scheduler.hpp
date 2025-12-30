@@ -8,6 +8,7 @@
  * Implements multi-rate execution with frame divisors.
  */
 
+#include <icarus/io/MissionLogger.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 
 #include <algorithm>
@@ -58,10 +59,8 @@ class Scheduler {
         // Compute frame divisors
         config_.ComputeFrameDivisors(sim_rate_hz);
 
-        // Build execution order for logging
-        if (config_.topology.log_order) {
-            LogExecutionOrder();
-        }
+        // Note: LogExecutionOrder() is called by Simulator after Configure
+        // with proper logger from config
     }
 
     /**
@@ -143,27 +142,32 @@ class Scheduler {
     /// Get the config
     [[nodiscard]] const SchedulerConfig &GetConfig() const { return config_; }
 
-  private:
-    void LogExecutionOrder() const {
-        std::ostringstream oss;
-        oss << "Scheduler execution order (sim rate: " << sim_rate_hz_ << " Hz):\n";
+    /// Log execution order to logger or stdout
+    void LogExecutionOrder(MissionLogger *logger = nullptr) const {
+        if (logger != nullptr) {
+            // Use structured MissionLogger output
+            logger->LogSchedulerOrder(sim_rate_hz_, config_.groups, config_.group_frame_divisors);
+        } else {
+            // Fallback to stdout
+            std::ostringstream oss;
+            oss << "Scheduler execution order (sim rate: " << sim_rate_hz_ << " Hz):\n";
 
-        for (const auto &group : config_.groups) {
-            auto it = config_.group_frame_divisors.find(group.name);
-            int divisor = (it != config_.group_frame_divisors.end()) ? it->second : 1;
-            double group_dt = 1.0 / group.rate_hz;
+            for (const auto &group : config_.groups) {
+                auto it = config_.group_frame_divisors.find(group.name);
+                int divisor = (it != config_.group_frame_divisors.end()) ? it->second : 1;
+                double group_dt = 1.0 / group.rate_hz;
 
-            oss << "  Group '" << group.name << "' (priority " << group.priority << ", "
-                << group.rate_hz << " Hz, divisor " << divisor << ", dt=" << std::fixed
-                << std::setprecision(6) << group_dt << "s):\n";
+                oss << "  Group '" << group.name << "' (priority " << group.priority << ", "
+                    << group.rate_hz << " Hz, divisor " << divisor << ", dt=" << std::fixed
+                    << std::setprecision(6) << group_dt << "s):\n";
 
-            for (const auto &member : group.members) {
-                oss << "    - " << member.component << " (priority " << member.priority << ")\n";
+                for (const auto &member : group.members) {
+                    oss << "    - " << member.component << " (priority " << member.priority
+                        << ")\n";
+                }
             }
+            std::cout << oss.str();
         }
-
-        // TODO: Replace with proper logging once LogService is integrated
-        std::cout << oss.str();
     }
 
     SchedulerConfig config_;
