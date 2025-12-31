@@ -49,9 +49,6 @@
 #include <icarus/io/data/Playback.hpp>
 #include <icarus/io/data/Recorder.hpp>
 
-// Symbolic (Phase 3) - disabled pending Phase 4.0.7 update
-// #include <icarus/staging/SymbolicTracer.hpp>
-
 // Utilities
 #include <icarus/io/ScalarFormat.hpp>
 

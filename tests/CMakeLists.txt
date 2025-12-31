@@ -51,12 +51,6 @@ icarus_add_test(test_logging
     io/test_logging.cpp
 )
 
-# SymbolicTracer tests (Phase 3.3)
-icarus_add_test(test_symbolic_tracer
-    symbolic/symbolic_tracer_test.cpp
-)
-target_include_directories(test_symbolic_tracer PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
 # Numeric/Symbolic comparison tests (Phase 3.4)
 icarus_add_test(test_numeric_symbolic_comparison
     symbolic/numeric_symbolic_comparison_test.cpp
