@@ -27,16 +27,13 @@
 
 // Simulation
 #include <icarus/sim/Scheduler.hpp>
+#include <icarus/sim/SimulationResults.hpp>
+#include <icarus/sim/Simulator.hpp>
 #include <icarus/sim/integrators/Integrator.hpp>
 #include <icarus/sim/integrators/IntegratorFactory.hpp>
 #include <icarus/sim/integrators/IntegratorTypes.hpp>
 #include <icarus/sim/integrators/RK45Integrator.hpp>
 #include <icarus/sim/integrators/RK4Integrator.hpp>
-// Note: SimulationBuilder and SimulationRunner disabled pending Phase 4.0.7 update
-// #include <icarus/sim/SimulationBuilder.hpp>
-#include <icarus/sim/SimulationResults.hpp>
-// #include <icarus/sim/SimulationRunner.hpp>
-#include <icarus/sim/Simulator.hpp>
 
 // I/O
 #include <icarus/io/data/DataDictionary.hpp>

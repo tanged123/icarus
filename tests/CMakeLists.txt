@@ -51,19 +51,6 @@ icarus_add_test(test_logging
     io/test_logging.cpp
 )
 
-# SimulationBuilder tests (Phase 3.1)
-icarus_add_test(test_simulation_builder
-    sim/simulation_builder_test.cpp
-)
-target_include_directories(test_simulation_builder PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-# Runner and Reset tests
-icarus_add_test(test_runner_and_reset
-    sim/runner_and_reset_test.cpp
-)
-target_include_directories(test_runner_and_reset PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-
 # SymbolicTracer tests (Phase 3.3)
 icarus_add_test(test_symbolic_tracer
     symbolic/symbolic_tracer_test.cpp
