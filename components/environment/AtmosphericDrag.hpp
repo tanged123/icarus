@@ -10,7 +10,7 @@
  */
 
 #include <icarus/core/Component.hpp>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
 #include <vulcan/atmosphere/ExponentialAtmosphere.hpp>
@@ -57,7 +57,7 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
     // Lifecycle
     // =========================================================================
 
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // === Outputs ===
         bp.template register_output_vec3<Scalar>("force", &force_, "N", "Drag force");
         bp.template register_output<Scalar>("altitude", &altitude_, "m", "Altitude above surface");
@@ -78,11 +78,8 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
         bp.register_param("reference_area", &area_, area_);
     }
 
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Apply wiring from configuration
-        for (const auto &[input, source] : cfg.wiring) {
-            bp.template wire_input<Scalar>(input, source);
-        }
+    void Stage(Backplane<Scalar> &) override {
+        // Config loading could be added here if needed
     }
 
     void Step(Scalar t, Scalar dt) override {

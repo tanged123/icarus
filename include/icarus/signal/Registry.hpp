@@ -9,9 +9,8 @@
  */
 
 #include <deque>
-#include <icarus/core/Config.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Signal.hpp>
@@ -97,7 +96,7 @@ template <typename Scalar> class SignalRegistry {
     void register_output_vec3(const std::string &name, Vec3<S> *data_ptr,
                               const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for Vec3 signal '" + name + "'");
+            throw SignalError::NullPointer(name, "Vec3 output");
         }
         // Register three scalar signals pointing to Vec3 elements
         register_signal_impl<S>(name + ".x", &((*data_ptr)(0)), unit, description + " (x)",
@@ -117,7 +116,7 @@ template <typename Scalar> class SignalRegistry {
     void register_output_quat(const std::string &name, Vec4<S> *data_ptr,
                               const std::string &unit = "", const std::string &description = "") {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for Quat signal '" + name + "'");
+            throw SignalError::NullPointer(name, "Quat output");
         }
         register_signal_impl<S>(name + ".w", &((*data_ptr)(0)), unit, description + " (w)",
                                 SignalLifecycle::Dynamic);
@@ -205,9 +204,15 @@ template <typename Scalar> class SignalRegistry {
     // =========================================================================
     // Legacy API (Backward Compatibility)
     // =========================================================================
+    // @deprecated Use register_output<T>() and resolve<T>() instead.
+    // These methods are retained only for test compatibility.
+    // The legacy API uses registry-managed storage (values_ deque) rather than
+    // component-owned pointers, which is less efficient and type-unsafe.
+    // =========================================================================
 
     /**
      * @brief Register a new signal output (legacy API)
+     * @deprecated Use register_output<T>() instead for pointer-based registration
      *
      * Called during Provision phase to declare a signal.
      * Creates internal storage managed by the registry.
@@ -237,6 +242,7 @@ template <typename Scalar> class SignalRegistry {
 
     /**
      * @brief Resolve a signal by name (legacy API)
+     * @deprecated Use resolve<T>() for type-safe handle-based access
      *
      * @param name Full signal path
      * @return Index for fast access during Step
@@ -258,11 +264,13 @@ template <typename Scalar> class SignalRegistry {
 
     /**
      * @brief Get signal value by index (hot path, legacy)
+     * @deprecated Use SignalHandle<T> for direct pointer access
      */
     [[nodiscard]] const Scalar &Get(SignalIndex index) const { return values_[index]; }
 
     /**
      * @brief Set signal value by index (hot path, legacy)
+     * @deprecated Use SignalHandle<T> for direct pointer access
      */
     void Set(SignalIndex index, const Scalar &value) { values_[index] = value; }
 
@@ -272,7 +280,7 @@ template <typename Scalar> class SignalRegistry {
     [[nodiscard]] const Scalar &GetByName(const std::string &name) const {
         const SignalDescriptor &desc = signals_[Resolve(name)];
         if (desc.data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
         return *static_cast<const Scalar *>(desc.data_ptr);
     }
@@ -283,7 +291,7 @@ template <typename Scalar> class SignalRegistry {
     void SetByName(const std::string &name, const Scalar &value) {
         const SignalDescriptor &desc = signals_[Resolve(name)];
         if (desc.data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
         *static_cast<Scalar *>(desc.data_ptr) = value;
     }
@@ -311,7 +319,12 @@ template <typename Scalar> class SignalRegistry {
      */
     [[nodiscard]] std::vector<const SignalDescriptor *> query(const std::string &pattern) const {
         std::vector<const SignalDescriptor *> results;
-        std::regex re(pattern);
+        std::regex re;
+        try {
+            re = std::regex(pattern);
+        } catch (const std::regex_error &e) {
+            throw SignalError("Invalid regex pattern '" + pattern + "': " + e.what());
+        }
         for (const auto &desc : signals_) {
             if (std::regex_search(desc.name, re)) {
                 results.push_back(&desc);
@@ -340,7 +353,7 @@ template <typename Scalar> class SignalRegistry {
     void register_signal_impl(const std::string &name, T *data_ptr, const std::string &unit,
                               const std::string &description, SignalLifecycle lifecycle) {
         if (data_ptr == nullptr) {
-            throw SignalError("Null data_ptr for signal '" + name + "'");
+            throw SignalError::NullPointer(name, "output");
         }
 
         if (name_to_index_.contains(name)) {
@@ -433,7 +446,7 @@ template <typename Scalar> class SignalRegistry {
     void register_input(const std::string &name, InputHandle<T> *handle,
                         const std::string &units = "", const std::string &description = "") {
         if (handle == nullptr) {
-            throw SignalError("Null handle for input '" + name + "'");
+            throw SignalError::NullPointer(name, "input handle");
         }
 
         if (inputs_.contains(name)) {
@@ -476,7 +489,7 @@ template <typename Scalar> class SignalRegistry {
     void register_param(const std::string &name, Scalar *storage, Scalar initial_value,
                         const std::string &units = "", const std::string &description = "") {
         if (storage == nullptr) {
-            throw SignalError("Null storage for param '" + name + "'");
+            throw SignalError::NullPointer(name, "param");
         }
 
         if (params_.contains(name)) {
@@ -538,10 +551,16 @@ template <typename Scalar> class SignalRegistry {
             throw WiringError("Input not found: '" + input_name + "'");
         }
 
+        // Verify type matches what was registered (prevents undefined behavior)
+        const std::string expected_type = typeid(T).name();
+        if (it->second.info.semantic != expected_type) {
+            throw SignalError::TypeMismatch(input_name, it->second.info.semantic, expected_type);
+        }
+
         // Resolve the source signal
         auto source_handle = resolve<T>(source_name);
 
-        // Wire the input
+        // Wire the input - safe cast after type verification
         auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
         handle->wire(source_handle.ptr(), source_name);
         it->second.info.wired_to = source_name;
@@ -739,12 +758,99 @@ template <typename Scalar> class SignalRegistry {
         return get_all_signal_names(); // Outputs = signals
     }
 
+    // =========================================================================
+    // Phase 4.0: API Additions for SignalRouter and Backplane
+    // =========================================================================
+
+    /**
+     * @brief Check if an output signal exists (PascalCase alias)
+     */
+    [[nodiscard]] bool HasOutput(const std::string &name) const { return HasSignal(name); }
+
+    /**
+     * @brief Check if an input port exists (PascalCase alias)
+     */
+    [[nodiscard]] bool HasInput(const std::string &name) const { return has_input(name); }
+
+    /**
+     * @brief Get all declared input paths (for SignalRouter validation)
+     */
+    [[nodiscard]] std::vector<std::string> GetAllInputPaths() const {
+        return get_all_input_names();
+    }
+
+    /**
+     * @brief Get all declared output paths (for SignalRouter validation)
+     */
+    [[nodiscard]] std::vector<std::string> GetAllOutputPaths() const {
+        return get_all_signal_names();
+    }
+
+    /**
+     * @brief Wire an input to a source signal with gain factor
+     *
+     * The gain is applied when reading the input value.
+     * gain = 1.0 means no scaling (pass-through).
+     *
+     * @param input_name Full name of the input port
+     * @param source_name Full name of the source signal
+     * @param gain Scale factor (default 1.0)
+     */
+    template <typename T>
+    void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
+                              double gain = 1.0) {
+        auto it = inputs_.find(input_name);
+        if (it == inputs_.end()) {
+            throw WiringError("Input not found: '" + input_name + "'");
+        }
+
+        // Verify type matches what was registered (prevents undefined behavior)
+        const std::string expected_type = typeid(T).name();
+        if (it->second.info.semantic != expected_type) {
+            throw SignalError::TypeMismatch(input_name, it->second.info.semantic, expected_type);
+        }
+
+        // Resolve the source signal
+        auto source_handle = resolve<T>(source_name);
+
+        // Wire the input with gain
+        auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
+        handle->wire_with_gain(source_handle.ptr(), source_name, gain);
+        it->second.info.wired_to = source_name;
+    }
+
+    /**
+     * @brief Wire an input with gain (type-erased version)
+     *
+     * Uses the input's registered type information to perform wiring.
+     * Only supports Scalar type - gain wiring is not applicable to vector types.
+     *
+     * @throws WiringError if input type is not Scalar
+     */
+    void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
+                              double gain = 1.0) {
+        auto it = inputs_.find(input_name);
+        if (it == inputs_.end()) {
+            throw WiringError("Input not found: '" + input_name + "'");
+        }
+
+        // Verify input is Scalar type - gain wiring only applies to scalars
+        const std::string &semantic_type = it->second.info.semantic;
+        if (semantic_type != typeid(Scalar).name()) {
+            throw WiringError(
+                "wire_input_with_gain only supports Scalar type, got: " + semantic_type +
+                " (input: '" + input_name + "'). Use wire_input for vector types.");
+        }
+
+        wire_input_with_gain<Scalar>(input_name, source_name, gain);
+    }
+
   private:
     template <typename T>
     void register_config_impl(const std::string &name, T *storage, T initial_value,
                               const std::string &type_name, const std::string &description) {
         if (storage == nullptr) {
-            throw SignalError("Null storage for config '" + name + "'");
+            throw SignalError::NullPointer(name, "config");
         }
 
         if (config_.contains(name)) {

@@ -1,50 +1,28 @@
-# Helper function to create example executables with config directory
-# Each example is its own subdirectory with main.cpp and config/
-function(icarus_add_example NAME DIR)
-  add_executable(${NAME} ${DIR}/main.cpp)
-  target_link_libraries(${NAME} PRIVATE icarus)
+# Icarus Examples
+# Phase 4.0.7: Updated for new Simulator API
 
-  # Copy config directory to build output for runtime access
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/config)
-    add_custom_command(
-      TARGET ${NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/config
-        $<TARGET_FILE_DIR:${NAME}>/config
+# Helper function to add examples
+function(icarus_add_example NAME)
+    add_executable(${NAME} ${ARGN})
+    # Link to icarus (headers) and icarus_components (for component factory registration)
+    # Use whole-archive to ensure static registration code is included even though
+    # there are no direct symbol references from the executable.
+    target_link_libraries(${NAME} PRIVATE icarus)
+    target_link_libraries(${NAME} PRIVATE
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>
     )
-  endif()
-
-  # Copy data directory if present
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/data)
-    add_custom_command(
-      TARGET ${NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/${DIR}/data
-        $<TARGET_FILE_DIR:${NAME}>/data
-    )
-  endif()
+    target_include_directories(${NAME} PRIVATE ${PROJECT_SOURCE_DIR}/components)
 endfunction()
 
-# =============================================================================
-# Intro Example (minimal, no config)
-# =============================================================================
-add_executable(hello_world intro/hello_world.cpp)
-target_link_libraries(hello_world PRIVATE icarus)
+# Point Mass Free-Fall Demo
+# Demonstrates: programmatic setup, AddRoutes, Stage/Step lifecycle
+icarus_add_example(point_mass_freefall
+    point_mass_freefall.cpp
+)
 
-add_executable(orbital_demo intro/orbital_demo.cpp)
-target_link_libraries(orbital_demo PRIVATE icarus)
-target_include_directories(orbital_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
+# Configuration-Driven Demo
+# Demonstrates: YAML config loading with SimulationLoader::Load()
+icarus_add_example(config_driven_demo
+    config_driven_demo.cpp
+)
 
-add_executable(formation_flight_demo intro/formation_flight_demo.cpp)
-target_link_libraries(formation_flight_demo PRIVATE icarus)
-target_include_directories(formation_flight_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)
-
-# =============================================================================
-# Symbolic Mode Example (Phase 3)
-# =============================================================================
-add_executable(symbolic_orbital_demo symbolic/symbolic_orbital_demo.cpp)
-target_link_libraries(symbolic_orbital_demo PRIVATE icarus)
-
-add_executable(reentry_dynamics_demo symbolic/reentry_dynamics_demo.cpp)
-target_link_libraries(reentry_dynamics_demo PRIVATE icarus)
-target_include_directories(reentry_dynamics_demo PRIVATE ${PROJECT_SOURCE_DIR}/components)

@@ -10,7 +10,7 @@
 
 #include <icarus/signal/Signal.hpp>
 
-#include <icarus/core/Config.hpp>
+#include <icarus/core/CoreTypes.hpp>
 
 #include <cassert>
 #include <string>

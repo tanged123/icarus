@@ -1,15 +1,18 @@
 # Component Models library
-# Note: Initially empty, add source files as components are implemented
-add_library(icarus_components INTERFACE)
+# Contains built-in components and factory registration
+
+add_library(icarus_components
+  registration.cpp
+)
 
 target_include_directories(icarus_components
-  INTERFACE
+  PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/icarus/components>
 )
 
 target_link_libraries(icarus_components
-  INTERFACE icarus_core
+  PUBLIC icarus
 )
 
 add_library(icarus::components ALIAS icarus_components)

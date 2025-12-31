@@ -101,7 +101,7 @@ inline const char *to_string(SignalKind kind) {
 } // namespace icarus
 
 // Include Icarus types for SymbolicScalar specialization
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 
 namespace icarus {
 

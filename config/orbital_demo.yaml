@@ -1,0 +1,146 @@
+# Icarus Simulation Configuration
+# Point Mass Orbital Demo Configuration
+#
+# This configuration file is loaded by config_driven_demo.cpp
+# to demonstrate the YAML → Simulator workflow.
+
+simulation:
+  name: "Orbital Point Mass Demo"
+  version: "1.0.0"
+  description: |
+    A point mass in circular orbit around Earth.
+    Demonstrates YAML configuration loading and orbit simulation.
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  console_level: debug       # trace, debug, info, warning, error
+  file_enabled: true      # Set to true to write log file
+  file_path: "orbital_demo.log"
+  file_level: trace
+  progress_enabled: true
+  profiling_enabled: true
+
+# =============================================================================
+# Time Configuration
+# =============================================================================
+
+time:
+  start: 0.0
+  end: 5400.0          # 90 minutes (one orbit period for LEO)
+  dt: 0.1              # 10 Hz timestep (better accuracy)
+
+# =============================================================================
+# Integrator Configuration
+# =============================================================================
+
+integrator:
+  type: RK4            # 4th-order Runge-Kutta
+
+# =============================================================================
+# Components (parsed for initialization, components created programmatically)
+# =============================================================================
+
+components:
+  # Point mass dynamics - Note: no entity prefix for programmatic creation
+  - type: PointMass3DOF
+    name: Satellite
+    scalars:
+      mass: 100.0       # 100 kg satellite
+    vectors:
+      initial_position: [6.871e6, 0.0, 0.0]     # 500 km altitude [m]
+      initial_velocity: [0.0, 7612.0, 0.0]      # Circular orbit velocity [m/s]
+
+  # Gravity model (point mass)
+  - type: PointMassGravity
+    name: EarthGravity
+    scalars:
+      mu: 3.986004418e14   # Earth GM [m³/s²]
+    integers:
+      model: 1             # 0=Constant, 1=PointMass (inverse-square law)
+
+# =============================================================================
+# Signal Routing (matches component.signal naming from programmatic setup)
+# =============================================================================
+
+routes:
+  # Gravity reads position from satellite
+  - input: EarthGravity.position.x
+    output: Satellite.position.x
+  - input: EarthGravity.position.y
+    output: Satellite.position.y
+  - input: EarthGravity.position.z
+    output: Satellite.position.z
+  - input: EarthGravity.mass
+    output: Satellite.mass
+
+  # Satellite reads force from gravity
+  - input: Satellite.force.x
+    output: EarthGravity.force.x
+  - input: Satellite.force.y
+    output: EarthGravity.force.y
+  - input: Satellite.force.z
+    output: EarthGravity.force.z
+
+# =============================================================================
+# Scheduler Configuration
+# =============================================================================
+
+scheduler:
+  groups:
+    - name: environment
+      rate_hz: 10.0     # Match timestep (10 Hz)
+      priority: 1
+      members:
+        - component: EarthGravity
+          priority: 1
+
+    - name: dynamics
+      rate_hz: 10.0     # Match timestep (10 Hz)
+      priority: 2
+      members:
+        - component: Satellite
+          priority: 1
+
+# =============================================================================
+# Staging Configuration (Trim, Linearization, Symbolics)
+# =============================================================================
+
+staging:
+  # Linearization: Extract state-space model (A, B, C, D) at initial operating point
+  linearization:
+    enabled: true
+    # State variables (must match state vector order from PointMass3DOF)
+    states:
+      - Satellite.position.x
+      - Satellite.position.y
+      - Satellite.position.z
+      - Satellite.velocity.x
+      - Satellite.velocity.y
+      - Satellite.velocity.z
+    # Inputs: none for pure gravity (no thrust control)
+    # inputs: []  # (omitted - defaults to empty)
+    # Outputs (observable signals)
+    outputs:
+      - Satellite.position.x
+      - Satellite.position.y
+      - Satellite.position.z
+    # Export options
+    export_matlab: false
+    export_numpy: false
+    export_json: false
+    output_dir: "./output"
+
+  # Trim: Not applicable for orbital mechanics (no equilibrium without thrust)
+  trim:
+    enabled: false
+
+  # Symbolics: Generate symbolic dynamics graph
+  symbolics:
+    enabled: true
+    generate_dynamics: true   # Generate f(t, x) -> xdot function
+    generate_jacobian: true   # Generate df/dx Jacobian
+    generate_step: true       # Generate RK4 step function
+    step_dt: 0.1              # Step size for discrete step function

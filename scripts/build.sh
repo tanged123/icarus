@@ -13,7 +13,28 @@ fi
 CLEAN=false
 BUILD_TYPE="${BUILD_TYPE:-Debug}"  # Default to Debug for local development
 
+# Default jobs: half of available cores, minimum 2
+# This prevents OOM on 32GB systems with heavy template code (CasADi/Janus)
+DEFAULT_JOBS=$(( $(nproc) / 2 ))
+[ "$DEFAULT_JOBS" -lt 2 ] && DEFAULT_JOBS=2
+JOBS="${JOBS:-$DEFAULT_JOBS}"
+
+# Argument parsing state
+NEXT_IS_JOBS=false
+
 for arg in "$@"; do
+    # If previous arg was -j/--jobs, this arg should be the job count
+    if [ "$NEXT_IS_JOBS" = true ]; then
+        if [[ "$arg" =~ ^[0-9]+$ ]]; then
+            JOBS="$arg"
+            NEXT_IS_JOBS=false
+            continue
+        else
+            echo "Error: --jobs/-j requires a numeric argument, got: '$arg'" >&2
+            exit 1
+        fi
+    fi
+
     case $arg in
         --clean)
             CLEAN=true
@@ -27,8 +48,31 @@ for arg in "$@"; do
         --relwithdebinfo)
             BUILD_TYPE="RelWithDebInfo"
             ;;
+        --jobs=*|-j=*)
+            JOBS="${arg#*=}"
+            ;;
+        --jobs|-j)
+            # Next argument will be the job count
+            NEXT_IS_JOBS=true
+            ;;
+        *)
+            echo "Warning: Unknown argument ignored: $arg" >&2
+            ;;
     esac
 done
+
+# Check if -j/--jobs was the last argument without a value
+if [ "$NEXT_IS_JOBS" = true ]; then
+    echo "Error: --jobs/-j requires a numeric argument" >&2
+    exit 1
+fi
+
+# Validate JOBS is numeric
+if ! [[ "$JOBS" =~ ^[0-9]+$ ]]; then
+    echo "Error: Invalid job count: '$JOBS' (must be numeric)" >&2
+    exit 1
+fi
+
 
 if [ "$CLEAN" = true ]; then
     echo "Clean build requested."
@@ -36,10 +80,10 @@ if [ "$CLEAN" = true ]; then
     "$SCRIPT_DIR/clean.sh"
 fi
 
-echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE"
+echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS)"
 
 # Create build directory if it doesn't exist or reconfigure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
-# Build the project
-ninja -C build
+# Build the project with limited parallelism to prevent OOM
+ninja -C build -j "$JOBS"

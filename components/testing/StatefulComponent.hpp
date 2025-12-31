@@ -27,12 +27,12 @@ template <typename Scalar> class StatefulComponent : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::size_t StateSize() const override { return state_size_; }
 
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig & /*config*/) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // Register output for observability
         bp.register_output("state_bound", &state_bound_);
     }
 
-    void Stage(Backplane<Scalar> & /*bp*/, const ComponentConfig & /*config*/) override {
+    void Stage(Backplane<Scalar> &) override {
         // Nothing beyond state binding
     }
 

@@ -8,9 +8,10 @@
  * InputHandles are registered at Provision and wired at Stage.
  */
 
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <string>
+#include <type_traits>
 
 namespace icarus {
 
@@ -31,21 +32,43 @@ template <typename T> class InputHandle {
     InputHandle() = default;
 
     /**
-     * @brief Get the current value from the wired source
+     * @brief Get the current value from the wired source (with gain applied)
+     *
+     * If a gain was set via wire_with_gain(), the source value is scaled.
+     * For Scalar types: returns source * gain
+     * For vector types: gain is not currently applied (use gain=1.0)
+     *
+     * @throws UnwiredInputError if not wired
+     * @return Value by value (scaled if gain != 1.0)
+     */
+    [[nodiscard]] T get() const {
+        if (!source_) {
+            throw UnwiredInputError(name_);
+        }
+        // Apply gain for scalar types; for vectors, gain should be 1.0
+        // (wire_input_with_gain only supports Scalar)
+        if constexpr (std::is_arithmetic_v<T>) {
+            return static_cast<T>(*source_ * gain_);
+        } else {
+            // For vector types, return as-is (gain should be 1.0)
+            return *source_;
+        }
+    }
+
+    /**
+     * @brief Dereference operator for convenience (without gain)
+     *
+     * Note: For direct source access without gain, use operator*.
+     * For scaled value, use get().
+     *
      * @throws UnwiredInputError if not wired
      */
-    [[nodiscard]] const T &get() const {
+    [[nodiscard]] const T &operator*() const {
         if (!source_) {
             throw UnwiredInputError(name_);
         }
         return *source_;
     }
-
-    /**
-     * @brief Dereference operator for convenience
-     * @throws UnwiredInputError if not wired
-     */
-    [[nodiscard]] const T &operator*() const { return get(); }
 
     /**
      * @brief Check if this input has been wired
@@ -91,12 +114,25 @@ template <typename T> class InputHandle {
     void wire(const T *source, const std::string &source_name) {
         source_ = source;
         wired_to_ = source_name;
+        gain_ = 1.0; // Default gain
+    }
+
+    /**
+     * @brief Wire with a gain factor (Phase 4.0)
+     *
+     * The gain is applied when reading the value via get().
+     */
+    void wire_with_gain(const T *source, const std::string &source_name, double gain) {
+        source_ = source;
+        wired_to_ = source_name;
+        gain_ = gain;
     }
 
     std::string name_;          // Local name (e.g., "throttle")
     std::string full_name_;     // Full name (e.g., "X15.Engine.throttle")
     std::string wired_to_;      // Source signal name
     const T *source_ = nullptr; // Pointer to source value
+    double gain_ = 1.0;         // Scale factor (Phase 4.0)
 
     // Metadata
     std::string units_;

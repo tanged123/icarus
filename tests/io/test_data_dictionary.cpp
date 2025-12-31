@@ -1,7 +1,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <icarus/core/Error.hpp>
-#include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
 
 TEST(DataDictionary, ToYAML_WriteError) {
     icarus::DataDictionary dd;

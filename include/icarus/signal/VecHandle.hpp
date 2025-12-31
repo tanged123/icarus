@@ -8,7 +8,7 @@
  * Provides Vec3Handle and Mat3Handle for convenient access to vector/matrix signals.
  */
 
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/signal/Handle.hpp>
 
 namespace icarus {

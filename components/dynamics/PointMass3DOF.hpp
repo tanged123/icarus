@@ -15,8 +15,8 @@
  */
 
 #include <icarus/core/Component.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
@@ -51,11 +51,10 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     static constexpr std::size_t kVelOffset = 3;
 
     /**
-     * @brief Construct with mass and optional name/entity
+     * @brief Construct with name and entity
      */
-    explicit PointMass3DOF(Scalar mass = Scalar{1.0}, std::string name = "PointMass3DOF",
-                           std::string entity = "")
-        : mass_(mass), name_(std::move(name)), entity_(std::move(entity)) {}
+    explicit PointMass3DOF(std::string name = "PointMass3DOF", std::string entity = "")
+        : name_(std::move(name)), entity_(std::move(entity)) {}
 
     // =========================================================================
     // Component Identity
@@ -74,7 +73,7 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     /**
      * @brief Register outputs, inputs, and parameters
      */
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // === Outputs ===
         // Position (in inertial frame: ECI for orbital, local for validation)
         bp.template register_output_vec3<Scalar>("position", &position_, "m", "Position");
@@ -95,14 +94,53 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     }
 
     /**
-     * @brief Stage phase - resolve dependencies
+     * @brief Stage phase - load config and apply initial conditions
      *
-     * Note: Wiring is defined externally (simulator config) and applied here.
+     * Reads from config (only if explicitly set):
+     * - scalars["mass"]: Point mass
+     * - vectors["initial_position"]: Initial position [x, y, z]
+     * - vectors["initial_velocity"]: Initial velocity [vx, vy, vz]
+     *
+     * For programmatic setup, use SetMass(), SetInitialPosition(), etc.
+     * before calling Stage() - these values won't be overwritten if
+     * not present in config.
+     *
+     * Also applies ICs to state vector if already bound (for Reset() support).
      */
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Apply wiring from configuration
-        for (const auto &[input, source] : cfg.wiring) {
-            bp.template wire_input<Scalar>(input, source);
+    void Stage(Backplane<Scalar> &) override {
+        const auto &config = this->GetConfig();
+
+        // Only override mass if explicitly set in config
+        if (config.template Has<double>("mass")) {
+            mass_ = static_cast<Scalar>(config.template Get<double>("mass", 1.0));
+        }
+
+        // Only override position if explicitly set in config
+        if (config.template Has<Vec3<double>>("initial_position")) {
+            auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
+            ic_position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
+                                        static_cast<Scalar>(pos(2))};
+        }
+
+        // Only override velocity if explicitly set in config
+        if (config.template Has<Vec3<double>>("initial_velocity")) {
+            auto vel = config.template Get<Vec3<double>>("initial_velocity", Vec3<double>::Zero());
+            ic_velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
+                                        static_cast<Scalar>(vel(2))};
+        }
+
+        // Apply ICs to state vector if already bound (for Reset() support)
+        if (state_pos_ != nullptr) {
+            state_pos_[0] = ic_position_(0);
+            state_pos_[1] = ic_position_(1);
+            state_pos_[2] = ic_position_(2);
+            state_vel_[0] = ic_velocity_(0);
+            state_vel_[1] = ic_velocity_(1);
+            state_vel_[2] = ic_velocity_(2);
+
+            // Also update output signals
+            position_ = ic_position_;
+            velocity_ = ic_velocity_;
         }
     }
 

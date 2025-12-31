@@ -16,7 +16,7 @@
  */
 
 #include <icarus/core/Component.hpp>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
@@ -51,11 +51,10 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     };
 
     /**
-     * @brief Construct with optional name and model
+     * @brief Construct with name and entity
      */
-    explicit PointMassGravity(std::string name = "Gravity", std::string entity = "",
-                              Model model = Model::Constant)
-        : name_(std::move(name)), entity_(std::move(entity)), model_int_(static_cast<int>(model)) {}
+    explicit PointMassGravity(std::string name = "Gravity", std::string entity = "")
+        : name_(std::move(name)), entity_(std::move(entity)) {}
 
     // =========================================================================
     // Component Identity
@@ -74,7 +73,7 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     /**
      * @brief Register outputs, inputs, and config
      */
-    void Provision(Backplane<Scalar> &bp, const ComponentConfig &) override {
+    void Provision(Backplane<Scalar> &bp) override {
         // === Outputs ===
         // Output force (not acceleration) - allows summing multiple force sources
         bp.template register_output_vec3<Scalar>("force", &force_, "N", "Gravity force");
@@ -99,14 +98,27 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     }
 
     /**
-     * @brief Stage phase - resolve dependencies
+     * @brief Stage phase - load config
      *
-     * Note: Wiring is defined externally (simulator config) and applied here.
+     * Reads from config (only if explicitly set):
+     * - scalars["mu"]: Gravitational parameter
+     * - scalars["model"]: Gravity model (0=Constant, 1=PointMass)
+     *
+     * For programmatic setup, use SetGravitationalParameter(), SetModel()
+     * before calling Stage() - these values won't be overwritten if
+     * not present in config.
      */
-    void Stage(Backplane<Scalar> &bp, const ComponentConfig &cfg) override {
-        // Apply wiring from configuration
-        for (const auto &[input, source] : cfg.wiring) {
-            bp.template wire_input<Scalar>(input, source);
+    void Stage(Backplane<Scalar> &) override {
+        const auto &config = this->GetConfig();
+
+        // Only override mu if explicitly set in config
+        if (config.template Has<double>("mu")) {
+            mu_ = config.template Get<double>("mu", vulcan::constants::earth::mu);
+        }
+
+        // Only override model if explicitly set in config
+        if (config.template Has<int>("model")) {
+            model_int_ = config.template Get<int>("model", 0);
         }
     }
 

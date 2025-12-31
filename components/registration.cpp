@@ -1,0 +1,86 @@
+/**
+ * @file registration.cpp
+ * @brief Component factory registration for built-in components
+ *
+ * This file registers all built-in components with the ComponentFactory,
+ * enabling them to be instantiated from YAML configuration files.
+ *
+ * Components are registered at static initialization time when this
+ * translation unit is linked into an executable.
+ *
+ * Registers with both janus::NumericScalar (double) and janus::SymbolicScalar
+ * (casadi::MX) backends for full dual-backend support.
+ */
+
+#include <icarus/core/ComponentFactory.hpp>
+
+#include <dynamics/PointMass3DOF.hpp>
+#include <environment/AtmosphericDrag.hpp>
+#include <environment/PointMassGravity.hpp>
+
+namespace {
+
+// Static registration - runs at program startup
+// Registers all components with both numeric and symbolic backends.
+
+// === Numeric Backend (janus::NumericScalar = double) ===
+const bool registered_numeric = []() {
+    auto &factory = ::icarus::ComponentFactory<janus::NumericScalar>::Instance();
+
+    // Dynamics components
+    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Environment components
+    factory.Register("PointMassGravity", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::PointMassGravity<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("AtmosphericDrag", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::AtmosphericDrag<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    return true;
+}();
+
+// === Symbolic Backend (janus::SymbolicScalar = casadi::MX) ===
+const bool registered_symbolic = []() {
+    auto &factory = ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance();
+
+    // Dynamics components
+    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Environment components
+    factory.Register("PointMassGravity", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::PointMassGravity<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("AtmosphericDrag", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::AtmosphericDrag<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    return true;
+}();
+
+} // anonymous namespace

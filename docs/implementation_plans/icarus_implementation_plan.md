@@ -139,17 +139,17 @@ Phase 4–7 (horizontal expansion)
 
 ### Tasks
 
-- [ ] **3.1 Dual-Mode Validation**
-  - [ ] Instantiate `Simulator<casadi::MX>`, ensure compilation
-  - [ ] No `std::` math or `if/else` on Scalar in codebase
+- [x] **3.1 Dual-Mode Validation**
+  - [x] Instantiate `Simulator<casadi::MX>`, ensure compilation
+  - [x] No `std::` math or `if/else` on Scalar in codebase
 
-- [ ] **3.2 Graph Export**
-  - [ ] `GenerateGraph()` returns `casadi::Function`
-  - [ ] Derivatives extractable via AD
+- [x] **3.2 Graph Export**
+  - [x] `GenerateGraph()` returns `casadi::Function`
+  - [x] Derivatives extractable via AD
 
-- [ ] **3.3 Symbolic Test Suite**
-  - [ ] Verify `PointMass3DOF` traces correctly
-  - [ ] Numeric/symbolic output comparison tests
+- [x] **3.3 Symbolic Test Suite**
+  - [x] Verify `PointMass3DOF` traces correctly
+  - [x] Numeric/symbolic output comparison tests
 
 ### Architecture References
 
@@ -160,28 +160,39 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Extract symbolic dynamics as `janus::Function`
-- [ ] Evaluate numerically, match `Simulator<double>` output
-- [ ] Zero template violations in codebase
+- [x] Extract symbolic dynamics as `janus::Function`
+- [x] Evaluate numerically, match `Simulator<double>` output
+- [x] Zero template violations in codebase
 
 ---
 
 ## Phase 4: Aggregation & 6DOF
 
-**Goal:** Multi-component force/moment aggregation.
+**Goal:** Multi-component force/moment aggregation with config-driven initialization.
+
+> **See:** [phase4/](implementation_plans/phase4/) for detailed implementation plans.
+
+### Prerequisites
+
+- [ ] **4.0 Configuration Infrastructure** ([phase4_0_config_infrastructure.md](implementation_plans/phase4/phase4_0_config_infrastructure.md))
+  - [ ] `ComponentConfig` with typed accessors
+  - [ ] YAML configuration loader
+  - [ ] `ComponentFactory` for type registration
+  - [ ] Refactor existing components (no public setters)
 
 ### Tasks
 
-- [ ] **4.1 Force/Mass Registration**
-  - [ ] `register_force_source()`, `register_mass_source()` with frame metadata
-  - [ ] Query sources by entity prefix
+- [ ] **4.1 Signal Conventions**
+  - [ ] Mass sources publish `MassProperties<Scalar>`
+  - [ ] Force sources publish `force` in body frame
+  - [ ] Backplane support for composite types
 
 - [ ] **4.2 Aggregators**
-  - [ ] `ForceAggregator` — frame transforms, moment transfer
-  - [ ] `MassAggregator` — total mass, CG, inertia tensor
+  - [ ] `MassAggregator` — uses Vulcan `MassProperties::operator+`
+  - [ ] `ForceAggregator` — sums forces, moment transfer about CG
 
 - [ ] **4.3 RigidBody6DOF**
-  - [ ] Full rotational dynamics using Vulcan EOM utilities
+  - [ ] 13-state quaternion dynamics using Vulcan EOM
   - [ ] Consumes aggregated force/moment/inertia
 
 ### Architecture References
@@ -193,29 +204,30 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Tumbling rigid body with multiple force sources
-- [ ] Correct angular momentum conservation
-- [ ] Force frame transforms working
+- [ ] Tumbling rigid body with angular momentum conservation
+- [ ] Multi-source force aggregation with moment transfer
+- [ ] All components config-driven (no public setters)
 
 ---
 
-## Phase 5: Configuration & Scheduling
+## Phase 5: Advanced Configuration & Scheduling
 
-**Goal:** YAML-driven simulation setup.
+**Goal:** Extended configuration layers and multi-rate scheduling.
+
+> **Note:** Basic YAML loading moved to Phase 4.0. Phase 5 extends with advanced features.
 
 ### Tasks
 
-- [ ] **5.1 Configuration Loader**
-  - [ ] Parse component definitions (Layer A)
-  - [ ] Entity bundles (Layer A')
-  - [ ] Scenario definitions (Layer B)
-  - [ ] Wiring (Layer C)
+- [ ] **5.1 Extended Configuration Layers**
+  - [ ] Entity bundles (Layer A') — reusable component groups
+  - [ ] Scenario definitions (Layer B) — initial conditions, variants
+  - [ ] Include/merge support for config composition
 
 - [ ] **5.2 Scheduler**
   - [ ] Topological sort from dependency graph
   - [ ] Rate groups for multi-rate simulation (Layer D)
 
-- [ ] **5.3 Data Dictionary**
+- [ ] **5.3 Data Dictionary Export**
   - [ ] Auto-generate signal catalog at Provision
   - [ ] Export as JSON/YAML
 
@@ -229,8 +241,8 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Load `scenarios/rocket_launch.yaml`
-- [ ] Run simulation without hardcoded component setup
+- [ ] Load complex scenario with entity bundles
+- [ ] Multi-rate simulation working
 - [ ] Data Dictionary exported
 
 ---

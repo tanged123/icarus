@@ -1,0 +1,90 @@
+# Signal Routing Configuration
+# Example: 6DOF Rocket
+#
+# Defines all signal connections between components.
+# Format: input -> output with optional gain
+#
+# Run with: ./icarus --config rocket_6dof.yaml --routes rocket_routes.yaml
+
+routes:
+  # ===========================================================================
+  # Mass Aggregator Inputs
+  # ===========================================================================
+
+  - input: Rocket.Mass.source_0
+    output: Rocket.Structure.mass_properties
+    gain: 1.0
+
+  - input: Rocket.Mass.source_1
+    output: Rocket.FuelTank.mass_properties
+    gain: 1.0
+
+  # ===========================================================================
+  # Gravity Inputs
+  # ===========================================================================
+
+  - input: Rocket.Gravity.position
+    output: Rocket.EOM.position
+    gain: 1.0
+
+  - input: Rocket.Gravity.mass
+    output: Rocket.Mass.total_mass
+    gain: 1.0
+
+  # ===========================================================================
+  # Thrust Inputs
+  # ===========================================================================
+
+  - input: Rocket.Engine.throttle
+    output: Rocket.GNC.throttle_cmd
+    gain: 1.0
+
+  # ===========================================================================
+  # Force Aggregator Inputs
+  # ===========================================================================
+
+  - input: Rocket.Forces.cg
+    output: Rocket.Mass.cg
+    gain: 1.0
+
+  # Source 0: Gravity (acts at CG, no moment arm)
+  - input: Rocket.Forces.src0_force
+    output: Rocket.Gravity.force_body
+    gain: 1.0
+
+  # Source 1: Engine thrust (with application point for moment arm)
+  - input: Rocket.Forces.src1_force
+    output: Rocket.Engine.force
+    gain: 1.0
+
+  - input: Rocket.Forces.src1_app_point
+    output: Rocket.Engine.application_point
+    gain: 1.0
+
+  # ===========================================================================
+  # EOM Inputs
+  # ===========================================================================
+
+  - input: Rocket.EOM.total_force
+    output: Rocket.Forces.total_force
+    gain: 1.0
+
+  - input: Rocket.EOM.total_moment
+    output: Rocket.Forces.total_moment
+    gain: 1.0
+
+  - input: Rocket.EOM.total_mass
+    output: Rocket.Mass.total_mass
+    gain: 1.0
+
+  - input: Rocket.EOM.inertia
+    output: Rocket.Mass.inertia
+    gain: 1.0
+
+  # ===========================================================================
+  # Fuel Tank (mass depletion from engine)
+  # ===========================================================================
+
+  - input: Rocket.FuelTank.fuel_flow_rate
+    output: Rocket.Engine.fuel_flow
+    gain: 1.0

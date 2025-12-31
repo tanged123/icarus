@@ -1,5 +1,7 @@
 CompileFlags:
   CompilationDatabase: build/
+  # Add:
+  #   - "--query-driver=/nix/store/*/bin/*"
 
 # This is the key setting - allow clangd to query any Nix clang for system headers
 Index:

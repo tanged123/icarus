@@ -1,0 +1,98 @@
+# Icarus Simulation Configuration Example
+# Point Mass Free-Fall Demo
+#
+# Demonstrates:
+# - YAML configuration parsing
+# - Entity-based component organization
+# - Signal routing
+# - Scheduler rate groups
+
+simulation:
+  name: "Point Mass Free-Fall Demo"
+  version: "1.0.0"
+  description: |
+    Simple point mass falling under constant gravity.
+    Demonstrates the core Icarus configuration pipeline.
+
+time:
+  start: 0.0
+  end: 10.0          # 10 second simulation
+  dt: 0.01           # 100 Hz base rate
+
+# =============================================================================
+# Entity Definition
+# =============================================================================
+
+entities:
+  - name: TestMass
+    entity:
+      components:
+        # Gravity environment model
+        - type: PointMassGravity
+          name: Gravity
+          scalars:
+            model: constant   # Use constant g (not point-mass model)
+            g0: 9.81          # Surface gravity [m/s²]
+
+        # Point mass dynamics (3DOF)
+        - type: PointMass3DOF
+          name: EOM
+          scalars:
+            mass: 1.0         # 1 kg test mass
+          vectors:
+            initial_position: [0.0, 0.0, 100.0]   # Start at 100m height
+            initial_velocity: [0.0, 0.0, 0.0]     # Start at rest
+
+      # Internal entity signal routing
+      routes:
+        # Gravity reads position from EOM
+        - input: Gravity.position.x
+          output: EOM.position.x
+        - input: Gravity.position.y
+          output: EOM.position.y
+        - input: Gravity.position.z
+          output: EOM.position.z
+        - input: Gravity.mass
+          output: EOM.mass
+
+        # EOM reads force from Gravity
+        - input: EOM.force.x
+          output: Gravity.force.x
+        - input: EOM.force.y
+          output: Gravity.force.y
+        - input: EOM.force.z
+          output: Gravity.force.z
+
+# =============================================================================
+# Scheduler Configuration (Optional)
+# =============================================================================
+
+scheduler:
+  groups:
+    - name: dynamics
+      rate_hz: 100       # 100 Hz update rate
+      priority: 1
+      members:
+        - component: Gravity
+          priority: 1    # Gravity runs first
+        - component: EOM
+          priority: 2    # Then EOM reads force
+
+# =============================================================================
+# Integrator Configuration (Optional - RK4 is default)
+# =============================================================================
+
+integrator:
+  type: RK4
+
+# =============================================================================
+# Output Configuration (Optional)
+# =============================================================================
+
+output:
+  enabled: true
+  format: csv
+  path: "output/freefall_results.csv"
+  signals:
+    - TestMass.EOM.position.z
+    - TestMass.EOM.velocity.z

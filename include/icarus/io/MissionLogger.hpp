@@ -8,18 +8,22 @@
  * Provides structured logging throughout the simulation lifecycle.
  */
 
-#include <icarus/core/Types.hpp>
-#include <icarus/io/Banner.hpp>
-#include <icarus/io/Console.hpp>
-#include <icarus/io/DataDictionary.hpp>
-#include <icarus/io/FlightManifest.hpp>
-#include <icarus/io/MissionDebrief.hpp>
+#include <icarus/core/CoreTypes.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
+#include <icarus/io/log/Console.hpp>
+#include <icarus/io/report/Banner.hpp>
+#include <icarus/io/report/FlightManifest.hpp>
+#include <icarus/io/report/MissionDebrief.hpp>
+#include <icarus/sim/SimulatorConfig.hpp>
+#include <icarus/staging/StagingTypes.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <numbers>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -27,9 +31,18 @@
 namespace icarus {
 
 /**
- * @brief Simulation lifecycle phases for logging
+ * @brief Simulation phase names for logging banners
+ *
+ * These are string constants used with MissionLogger::BeginPhase().
+ * Separate from the Phase enum in Types.hpp which tracks simulation state.
  */
-enum class SimPhase { Init, Provision, Stage, Run, Shutdown };
+namespace SimPhase {
+constexpr const char *Init = "INIT";
+constexpr const char *Provision = "PROVISION";
+constexpr const char *Stage = "STAGE";
+constexpr const char *Run = "RUN";
+constexpr const char *Shutdown = "SHUTDOWN";
+} // namespace SimPhase
 
 /**
  * @brief Mission Logger - Flight Recorder style logging
@@ -79,6 +92,11 @@ class MissionLogger {
     /// Check if profiling is enabled
     [[nodiscard]] bool IsProfilingEnabled() const { return profiling_enabled_; }
 
+    /// Get total wall time elapsed since startup
+    [[nodiscard]] std::chrono::nanoseconds WallElapsed() const {
+        return Clock::now() - startup_time_;
+    }
+
     /// Set log file path (closes existing if open)
     void SetLogFile(const std::string &path) {
         if (log_file_.is_open()) {
@@ -92,19 +110,58 @@ class MissionLogger {
 
     // === Lifecycle Logging ===
 
-    /// Log simulation startup (splash screen)
+    /// Log simulation startup (splash screen) - uses Icarus engine version
     void LogStartup() {
-        std::string splash = Banner::GetSplashScreen(build_type_, version_);
+        std::string splash = Banner::GetSplashScreen(build_type_, icarus::Version());
         console_.WriteLine(splash);
         WriteToFile(splash);
     }
 
+    /// Log simulation configuration info (from YAML)
+    void LogSimulationConfig(const std::string &name, const std::string &version,
+                             const std::string &description = "") {
+        std::ostringstream oss;
+        oss << "[SIM] Simulation: " << name << " (v" << version << ")";
+        Log(LogLevel::Info, oss.str());
+
+        if (!description.empty()) {
+            // Log first line of description
+            std::string first_line = description;
+            auto pos = first_line.find('\n');
+            if (pos != std::string::npos) {
+                first_line = first_line.substr(0, pos);
+            }
+            if (!first_line.empty()) {
+                Log(LogLevel::Debug, "         " + first_line);
+            }
+        }
+    }
+
+    /// Log configuration file path
+    void LogConfigFile(const std::string &path) { Log(LogLevel::Info, "[CFG] Config: " + path); }
+
+    /// Log time configuration
+    void LogTimeConfig(double t_start, double t_end, double dt) {
+        std::ostringstream oss;
+        oss << "[CFG] Time: start=" << std::fixed << std::setprecision(1) << t_start
+            << "s, end=" << t_end << "s, dt=" << std::setprecision(4) << dt << "s";
+        Log(LogLevel::Info, oss.str());
+    }
+
+    /// Log integrator type
+    void LogIntegrator(const std::string &type) {
+        Log(LogLevel::Debug, "[CFG] Integrator: " + type);
+    }
+
+    /// Log integrator type (enum version)
+    void LogIntegrator(IntegratorType type) { LogIntegrator(to_string(type)); }
+
     /// Begin a lifecycle phase
-    void BeginPhase(SimPhase phase) {
+    void BeginPhase(const char *phase) {
         current_phase_ = phase;
         phase_start_time_ = Clock::now();
 
-        std::string header = Banner::GetPhaseHeader(PhaseToString(phase));
+        std::string header = Banner::GetPhaseHeader(phase);
         console_.WriteLine(header);
         WriteToFile(header);
     }
@@ -113,8 +170,7 @@ class MissionLogger {
     void EndPhase(double sim_time = 0.0) {
         auto elapsed = std::chrono::duration<double>(Clock::now() - phase_start_time_).count();
         std::ostringstream oss;
-        oss << "[SYS] " << PhaseToString(current_phase_) << " phase complete ("
-            << FormatDuration(elapsed) << ")";
+        oss << "[SYS] " << current_phase_ << " phase complete (" << FormatDuration(elapsed) << ")";
         LogTimed(LogLevel::Info, sim_time, oss.str());
     }
 
@@ -135,16 +191,43 @@ class MissionLogger {
     /// Log the Flight Manifest (Data Dictionary)
     void LogManifest(const DataDictionary &dict) {
         FlightManifest manifest(console_);
-        manifest.SetVersion(version_);
+        manifest.SetVersion(icarus::Version());
         manifest.SetOutputPath(GetDictionaryPath());
         manifest.Generate(dict);
+
+        // Also write summary to log file
+        WriteToFile(manifest.GenerateSummary(dict));
+    }
+
+    /// Log simulation run start (entering RUN phase)
+    void LogRunStart(double t_start, double t_end, double dt) {
+        run_start_wall_time_ = Clock::now();
+        std::ostringstream oss;
+        oss << "[SYS] Starting simulation (t=" << std::fixed << std::setprecision(3) << t_start
+            << " → " << std::setprecision(1) << t_end << " s, dt=" << std::setprecision(4) << dt
+            << " s)";
+        LogTimed(LogLevel::Info, t_start, oss.str());
+    }
+
+    /// Log periodic run progress
+    void LogRunProgress(double sim_time, double t_end) {
+        double progress = (t_end > 0) ? (sim_time / t_end) * 100.0 : 0.0;
+        auto wall_elapsed =
+            std::chrono::duration<double>(Clock::now() - run_start_wall_time_).count();
+        double rtf = (wall_elapsed > 0) ? sim_time / wall_elapsed : 0.0;
+
+        std::ostringstream oss;
+        oss << "[RUN] Progress: " << std::fixed << std::setprecision(1) << progress << "% ("
+            << std::setprecision(1) << sim_time << "/" << t_end
+            << " s, RTF: " << std::setprecision(1) << rtf << "x)";
+        LogTimed(LogLevel::Trace, sim_time, oss.str());
     }
 
     /// Log mission debrief (shutdown statistics)
     void LogDebrief(double sim_time, double wall_time) {
         MissionDebrief debrief(console_);
         debrief.SetExitStatus(ExitStatus::EndConditionMet);
-        debrief.SetExitReason("End condition met (t >= t_max)");
+        debrief.SetExitReason("Reached end of simulation time");
         debrief.SetTiming(sim_time, wall_time);
 
         if (profiling_enabled_) {
@@ -220,6 +303,37 @@ class MissionLogger {
         }
     }
 
+    /// Log scheduler execution order with groups and rates (Debug level)
+    void LogSchedulerOrder(double sim_rate_hz, const std::vector<SchedulerGroupConfig> &groups,
+                           const std::unordered_map<std::string, int> &divisors) {
+        std::ostringstream header;
+        header << "[SCH] Scheduler (sim rate: " << sim_rate_hz << " Hz)";
+        Log(LogLevel::Debug, header.str());
+
+        for (std::size_t i = 0; i < groups.size(); ++i) {
+            const auto &group = groups[i];
+            auto it = divisors.find(group.name);
+            int divisor = (it != divisors.end()) ? it->second : 1;
+            double group_dt = 1.0 / group.rate_hz;
+
+            std::ostringstream oss;
+            bool is_last = (i == groups.size() - 1);
+            oss << "         " << (is_last ? "└─" : "├─") << " [" << group.name << "] "
+                << group.rate_hz << " Hz (÷" << divisor << ", dt=" << std::fixed
+                << std::setprecision(6) << group_dt << "s)";
+            Log(LogLevel::Debug, oss.str());
+
+            for (std::size_t j = 0; j < group.members.size(); ++j) {
+                const auto &member = group.members[j];
+                std::ostringstream mem_oss;
+                bool mem_last = (j == group.members.size() - 1);
+                mem_oss << "         " << (is_last ? "   " : "│  ") << (mem_last ? "└─" : "├─")
+                        << " " << member.component;
+                Log(LogLevel::Debug, mem_oss.str());
+            }
+        }
+    }
+
     /// Log trim solver progress
     void LogTrimStart(const std::string &mode,
                       const std::vector<std::pair<std::string, double>> &targets) {
@@ -245,6 +359,91 @@ class MissionLogger {
 
     void LogTrimFailed(const std::string &reason) {
         Log(LogLevel::Error, "[TRM] Trim failed: " + reason);
+    }
+
+    // === Linearization Logging ===
+
+    /// Log linear model summary (called after linearization)
+    void LogLinearModel(const staging::LinearModel &model) {
+        // Banner
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
+        Log(LogLevel::Info, "[LIN]   Linear Model at Operating Point");
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
+
+        // Dimensions (Info level)
+        {
+            std::ostringstream oss;
+            oss << "[LIN] State-Space: A[" << model.A.rows() << "x" << model.A.cols() << "], B["
+                << model.B.rows() << "x" << model.B.cols() << "], C[" << model.C.rows() << "x"
+                << model.C.cols() << "], D[" << model.D.rows() << "x" << model.D.cols() << "]";
+            Log(LogLevel::Info, oss.str());
+        }
+
+        // Operating point (Debug level)
+        Log(LogLevel::Debug, "[LIN] Operating Point (x0):");
+        for (std::size_t i = 0; i < model.state_names.size(); ++i) {
+            std::ostringstream oss;
+            oss << "         " << model.state_names[i] << " = " << std::scientific
+                << std::setprecision(4) << model.x0(static_cast<Eigen::Index>(i));
+            Log(LogLevel::Debug, oss.str());
+        }
+
+        // A matrix (Trace level - very verbose)
+        Log(LogLevel::Trace, "[LIN] A Matrix (df/dx):");
+        for (Eigen::Index i = 0; i < model.A.rows(); ++i) {
+            std::ostringstream oss;
+            oss << "         [";
+            for (Eigen::Index j = 0; j < model.A.cols(); ++j) {
+                oss << std::fixed << std::setw(12) << std::setprecision(6) << model.A(i, j);
+                if (j < model.A.cols() - 1)
+                    oss << ", ";
+            }
+            oss << "]";
+            Log(LogLevel::Trace, oss.str());
+        }
+
+        // Eigenvalue analysis (Info level - important for stability)
+        Log(LogLevel::Info, "[LIN] Eigenvalue Analysis:");
+        auto eigenvalues = model.Eigenvalues();
+        for (Eigen::Index i = 0; i < eigenvalues.size(); ++i) {
+            double real = eigenvalues(i).real();
+            double imag = eigenvalues(i).imag();
+
+            std::ostringstream oss;
+            oss << "         λ" << (i + 1) << " = " << std::scientific << std::setprecision(4)
+                << real;
+            if (std::abs(imag) > 1e-10) {
+                oss << (imag >= 0 ? " + " : " - ") << std::abs(imag) << "i";
+                // Compute period from imaginary part
+                double period = 2.0 * std::numbers::pi / std::abs(imag);
+                oss << std::fixed << std::setprecision(1) << "  (period: " << period
+                    << " s = " << period / 60.0 << " min)";
+            }
+            Log(LogLevel::Info, oss.str());
+        }
+
+        // Stability and controllability (Info level)
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Stability: " << (model.IsStable() ? "STABLE" : "UNSTABLE")
+                << " (Lyapunov sense)";
+            Log(LogLevel::Info, oss.str());
+        }
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Controllability: " << model.ControllabilityRank() << " / "
+                << model.A.rows()
+                << (model.ControllabilityRank() == model.A.rows() ? " (fully controllable)" : "");
+            Log(LogLevel::Info, oss.str());
+        }
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Observability: " << model.ObservabilityRank() << " / " << model.A.rows()
+                << (model.ObservabilityRank() == model.A.rows() ? " (fully observable)" : "");
+            Log(LogLevel::Info, oss.str());
+        }
+
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
     }
 
     // === Run Phase Logging ===
@@ -373,7 +572,7 @@ class MissionLogger {
     void Log(LogLevel level, const std::string &message) {
         console_.Log(level, message);
         if (log_file_.is_open() && level >= file_level_) {
-            log_file_ << StripAnsi(message) << "\n";
+            log_file_ << LevelPrefix(level) << " " << StripAnsi(message) << "\n";
             log_file_.flush();
         }
     }
@@ -382,7 +581,7 @@ class MissionLogger {
         std::string formatted = FormatTime(sim_time) + " " + message;
         console_.Log(level, formatted);
         if (log_file_.is_open() && level >= file_level_) {
-            log_file_ << StripAnsi(formatted) << "\n";
+            log_file_ << LevelPrefix(level) << " " << StripAnsi(formatted) << "\n";
             log_file_.flush();
         }
     }
@@ -404,7 +603,8 @@ class MissionLogger {
     // Timing
     TimePoint startup_time_;
     TimePoint phase_start_time_;
-    SimPhase current_phase_ = SimPhase::Init;
+    TimePoint run_start_wall_time_;
+    std::string current_phase_ = SimPhase::Init;
 
     // Progress display
     bool progress_enabled_ = true;
@@ -445,27 +645,31 @@ class MissionLogger {
         return oss.str();
     }
 
-    [[nodiscard]] static std::string PhaseToString(SimPhase phase) {
-        switch (phase) {
-        case SimPhase::Init:
-            return "INIT";
-        case SimPhase::Provision:
-            return "PROVISION";
-        case SimPhase::Stage:
-            return "STAGE";
-        case SimPhase::Run:
-            return "RUN";
-        case SimPhase::Shutdown:
-            return "SHUTDOWN";
-        }
-        return "UNKNOWN";
-    }
-
     void WriteToFile(const std::string &message) {
         if (log_file_.is_open()) {
             log_file_ << StripAnsi(message) << "\n";
             log_file_.flush();
         }
+    }
+
+    [[nodiscard]] static std::string LevelPrefix(LogLevel level) {
+        switch (level) {
+        case LogLevel::Trace:
+            return "[TRC]";
+        case LogLevel::Debug:
+            return "[DBG]";
+        case LogLevel::Info:
+            return "[INF]";
+        case LogLevel::Event:
+            return "[EVT]";
+        case LogLevel::Warning:
+            return "[WRN]";
+        case LogLevel::Error:
+            return "[ERR]";
+        case LogLevel::Fatal:
+            return "[FTL]";
+        }
+        return "[???]";
     }
 
     [[nodiscard]] static std::string StripAnsi(const std::string &s) {
