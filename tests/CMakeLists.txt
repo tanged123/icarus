@@ -107,3 +107,9 @@ icarus_add_test(test_staging
     staging/test_staging.cpp
 )
 target_include_directories(test_staging PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Phase 4: Symbolic core tests (SymbolicSimulatorCore, SymbolicStager)
+icarus_add_test(test_symbolic_core
+    staging/test_symbolic_core.cpp
+)
+target_include_directories(test_symbolic_core PRIVATE ${PROJECT_SOURCE_DIR}/components)

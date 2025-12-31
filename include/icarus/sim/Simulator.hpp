@@ -343,6 +343,7 @@ class Simulator {
 // Include staging solvers for Stage() implementation
 // (Must be outside namespace icarus to avoid double-nesting)
 #include <icarus/staging/Linearizer.hpp>
+#include <icarus/staging/SymbolicStager.hpp>
 #include <icarus/staging/TrimSolver.hpp>
 
 namespace icarus {
@@ -617,9 +618,33 @@ inline void Simulator::Stage() {
     // Symbolic Graph Generation (if enabled)
     // =========================================================================
     if (config_.staging.symbolics.enabled) {
-        // TODO: Implement symbolic graph generation
-        // This requires SymbolicSimulatorCore (deferred to later phase)
-        logger_.Log(LogLevel::Debug, "[SYM] Symbolic graph generation not yet implemented");
+        try {
+            staging::SymbolicSimulatorCore sym_sim(config_);
+            staging::SymbolicStager stager(sym_sim);
+
+            staging::SymbolicStagerConfig stager_config;
+            stager_config.generate_dynamics = true;
+            stager_config.generate_jacobian = config_.staging.symbolics.generate_jacobian;
+            stager_config.include_time = true;
+
+            auto sym_dynamics = stager.GenerateDynamics(stager_config);
+
+            dynamics_graph_ = sym_dynamics.dynamics;
+            if (config_.staging.symbolics.generate_jacobian) {
+                jacobian_ = sym_dynamics.jacobian_x;
+            }
+
+            logger_.Log(LogLevel::Info, "[SYM] Symbolic graphs generated: " +
+                                            std::to_string(sym_sim.GetStateSize()) + " states");
+        } catch (const Error &e) {
+            logger_.Log(LogLevel::Warning,
+                        "[SYM] Symbolic generation failed: " + std::string(e.what()));
+            // Continue - symbolic is optional
+        } catch (const std::exception &e) {
+            logger_.Log(LogLevel::Warning,
+                        "[SYM] Symbolic generation failed: " + std::string(e.what()));
+            // Continue - symbolic is optional
+        }
     }
 
     logger_.EndPhase();

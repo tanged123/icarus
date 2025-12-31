@@ -16,6 +16,11 @@
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/staging/StagingTypes.hpp>
 
+// Include SymbolicSimulatorCore and AutoDiff here (outside namespace)
+// to avoid namespace resolution issues
+#include <icarus/staging/SymbolicSimulatorCore.hpp>
+#include <janus/math/AutoDiff.hpp>
+
 #include <Eigen/Dense>
 #include <memory>
 #include <string>
@@ -264,10 +269,223 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
     return model;
 }
 
-// SymbolicLinearizer implementation is deferred until SymbolicSimulatorCore is available
+// =============================================================================
+// SymbolicLinearizer Implementation
+// =============================================================================
+
 inline ::icarus::staging::LinearModel
-SymbolicLinearizer::Compute(::icarus::Simulator & /*sim*/, const LinearizationConfig & /*config*/) {
-    throw NotImplementedError("SymbolicLinearizer requires SymbolicSimulatorCore");
+SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig &config) {
+    using Scalar = janus::SymbolicScalar;
+
+    ::icarus::staging::LinearModel model;
+    model.state_names = config.states;
+    model.input_names = config.inputs;
+    model.output_names = config.outputs;
+
+    const int nx = static_cast<int>(config.states.size());
+    const int nu = static_cast<int>(config.inputs.size());
+    const int ny = static_cast<int>(config.outputs.size());
+
+    if (nx == 0) {
+        throw ConfigError("SymbolicLinearizer: requires at least one state");
+    }
+
+    // Store operating point from numeric simulator
+    model.t0 = sim.Time();
+    model.x0.resize(nx);
+    for (int i = 0; i < nx; ++i) {
+        model.x0(i) = sim.Peek(config.states[i]);
+    }
+    model.u0.resize(nu);
+    for (int i = 0; i < nu; ++i) {
+        model.u0(i) = sim.Peek(config.inputs[i]);
+    }
+
+    // Create symbolic simulator
+    SymbolicSimulatorCore sym_sim(sim.GetConfig());
+
+    const std::size_t n_states_total = sym_sim.GetStateSize();
+
+    // Create symbolic variables
+    auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states_total));
+    Scalar t_sym = janus::sym("t");
+
+    // Create symbolic inputs
+    std::vector<Scalar> u_elements;
+    Scalar u_mx;
+    if (nu > 0) {
+        auto [u_v, u_m] = janus::sym_vec_pair("u", nu);
+        for (int i = 0; i < nu; ++i) {
+            u_elements.push_back(u_v(i));
+        }
+        u_mx = u_m;
+    }
+
+    // Set symbolic state and time
+    sym_sim.SetState(x_vec);
+    sym_sim.SetTime(t_sym);
+
+    // Apply symbolic inputs
+    for (int i = 0; i < nu; ++i) {
+        sym_sim.SetSignal(config.inputs[i], u_elements[i]);
+    }
+
+    // Compute derivatives symbolically
+    JanusVector<Scalar> xdot_vec = sym_sim.ComputeDerivatives();
+
+    // Build symbolic xdot (only the states we care about)
+    // For linearization, we need xdot for the selected states
+    // Find indices of selected states in global state vector
+    std::vector<int> state_indices;
+    state_indices.reserve(nx);
+    for (const auto &slice : sym_sim.GetStateLayout()) {
+        for (std::size_t i = 0; i < slice.size; ++i) {
+            std::string state_name = slice.component_name + ".state[" + std::to_string(i) + "]";
+            for (int j = 0; j < nx; ++j) {
+                if (config.states[j] == state_name ||
+                    config.states[j] == slice.component_name + ".x[" + std::to_string(i) + "]") {
+                    state_indices.push_back(static_cast<int>(slice.offset + i));
+                    break;
+                }
+            }
+        }
+    }
+
+    // If we couldn't match by name, assume states are in order of the state vector
+    if (state_indices.size() != static_cast<std::size_t>(nx)) {
+        state_indices.clear();
+        for (int i = 0; i < nx && i < static_cast<int>(n_states_total); ++i) {
+            state_indices.push_back(i);
+        }
+    }
+
+    // Build symbolic xdot vector for selected states
+    std::vector<Scalar> xdot_selected;
+    xdot_selected.reserve(nx);
+    for (int idx : state_indices) {
+        xdot_selected.push_back(xdot_vec(idx));
+    }
+    Scalar xdot_mx = Scalar::vertcat(xdot_selected);
+
+    // Build symbolic x vector for selected states
+    std::vector<Scalar> x_selected;
+    x_selected.reserve(nx);
+    for (int idx : state_indices) {
+        x_selected.push_back(x_vec(idx));
+    }
+    Scalar x_selected_mx = Scalar::vertcat(x_selected);
+
+    // Compute A = df/dx using symbolic Jacobian
+    Scalar A_sym = janus::jacobian({xdot_mx}, {x_selected_mx});
+
+    // Compute B = df/du
+    Scalar B_sym;
+    if (nu > 0) {
+        B_sym = janus::jacobian({xdot_mx}, {u_mx});
+    }
+
+    // Build symbolic outputs
+    std::vector<Scalar> y_elements;
+    y_elements.reserve(ny);
+    for (const auto &output_name : config.outputs) {
+        if (sym_sim.HasSignal(output_name)) {
+            y_elements.push_back(sym_sim.GetSignal(output_name));
+        } else {
+            throw ConfigError("SymbolicLinearizer: Unknown output signal '" + output_name + "'");
+        }
+    }
+
+    Scalar C_sym, D_sym;
+    if (ny > 0) {
+        Scalar y_mx = Scalar::vertcat(y_elements);
+
+        // Compute C = dg/dx
+        C_sym = janus::jacobian({y_mx}, {x_selected_mx});
+
+        // Compute D = dg/du
+        if (nu > 0) {
+            D_sym = janus::jacobian({y_mx}, {u_mx});
+        }
+    }
+
+    // Create janus::Functions for evaluation
+    std::vector<janus::SymbolicArg> all_inputs;
+    all_inputs.push_back(t_sym);
+    all_inputs.push_back(x_mx);
+    if (nu > 0) {
+        all_inputs.push_back(u_mx);
+    }
+
+    janus::Function A_func("A", all_inputs, {A_sym});
+
+    // Evaluate at operating point
+    std::vector<double> eval_args;
+    eval_args.push_back(model.t0);
+    for (int i = 0; i < static_cast<int>(n_states_total); ++i) {
+        if (i < static_cast<int>(model.x0.size())) {
+            eval_args.push_back(model.x0(i));
+        } else {
+            // Use zero for non-selected states (operating point states are already captured)
+            eval_args.push_back(0.0);
+        }
+    }
+    for (int i = 0; i < nu; ++i) {
+        eval_args.push_back(model.u0(i));
+    }
+
+    // Evaluate A matrix
+    auto A_result = A_func(eval_args);
+    model.A.resize(nx, nx);
+    for (int i = 0; i < nx; ++i) {
+        for (int j = 0; j < nx; ++j) {
+            model.A(i, j) = A_result[0](i, j);
+        }
+    }
+
+    // Evaluate B matrix
+    if (nu > 0) {
+        janus::Function B_func("B", all_inputs, {B_sym});
+        auto B_result = B_func(eval_args);
+        model.B.resize(nx, nu);
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < nu; ++j) {
+                model.B(i, j) = B_result[0](i, j);
+            }
+        }
+    } else {
+        model.B.resize(nx, 0);
+    }
+
+    // Evaluate C matrix
+    if (ny > 0) {
+        janus::Function C_func("C", all_inputs, {C_sym});
+        auto C_result = C_func(eval_args);
+        model.C.resize(ny, nx);
+        for (int i = 0; i < ny; ++i) {
+            for (int j = 0; j < nx; ++j) {
+                model.C(i, j) = C_result[0](i, j);
+            }
+        }
+    } else {
+        model.C.resize(0, nx);
+    }
+
+    // Evaluate D matrix
+    if (ny > 0 && nu > 0) {
+        janus::Function D_func("D", all_inputs, {D_sym});
+        auto D_result = D_func(eval_args);
+        model.D.resize(ny, nu);
+        for (int i = 0; i < ny; ++i) {
+            for (int j = 0; j < nu; ++j) {
+                model.D(i, j) = D_result[0](i, j);
+            }
+        }
+    } else {
+        model.D.resize(ny, nu);
+        model.D.setZero();
+    }
+
+    return model;
 }
 
 } // namespace icarus::staging

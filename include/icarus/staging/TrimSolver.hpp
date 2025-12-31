@@ -16,6 +16,10 @@
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/staging/StagingTypes.hpp>
 
+// Include SymbolicSimulatorCore here (outside namespace)
+// to avoid namespace resolution issues
+#include <icarus/staging/SymbolicSimulatorCore.hpp>
+
 #include <janus/core/Function.hpp>
 #include <janus/math/RootFinding.hpp>
 
@@ -347,17 +351,154 @@ inline void FiniteDifferenceTrim::ApplyBounds(
     }
 }
 
-// SymbolicTrim implementation is deferred until SymbolicSimulatorCore is available
-inline ::icarus::staging::TrimResult SymbolicTrim::Solve(::icarus::Simulator & /*sim*/,
-                                                         const TrimConfig & /*config*/) {
+// =============================================================================
+// SymbolicTrim Implementation
+// =============================================================================
+
+inline ::icarus::staging::TrimResult SymbolicTrim::Solve(::icarus::Simulator &sim,
+                                                         const TrimConfig &config) {
     ::icarus::staging::TrimResult result;
-    result.message = "SymbolicTrim requires SymbolicSimulatorCore (not yet implemented)";
+
+    const auto &controls = config.control_signals;
+    const auto &derivs = config.zero_derivatives;
+    const int n_controls = static_cast<int>(controls.size());
+    const int n_residuals = static_cast<int>(derivs.size());
+
+    if (n_controls == 0) {
+        result.message = "No control signals specified";
+        return result;
+    }
+    if (n_residuals == 0) {
+        result.message = "No zero_derivatives specified";
+        return result;
+    }
+
+    // Log start
+    std::vector<std::pair<std::string, double>> targets;
+    targets.reserve(n_residuals);
+    for (const auto &name : derivs) {
+        targets.emplace_back(name, 0.0);
+    }
+    sim.GetLogger().LogTrimStart("symbolic-newton", targets);
+
+    // Create symbolic simulator from same config
+    try {
+        SymbolicSimulatorCore sym_sim(sim.GetConfig());
+
+        // Build symbolic residual function
+        janus::Function F = BuildResidualFunction(sym_sim, config);
+
+        // Configure Newton solver
+        janus::RootFinderOptions opts;
+        opts.abstol = config.tolerance;
+        opts.max_iter = config.max_iterations;
+        opts.line_search = true;
+        opts.verbose = false;
+
+        janus::NewtonSolver solver(F, opts);
+
+        // Get initial guess from config or current simulator values
+        Eigen::VectorXd u0(n_controls);
+        for (int i = 0; i < n_controls; ++i) {
+            auto it = config.initial_guesses.find(controls[i]);
+            if (it != config.initial_guesses.end()) {
+                u0(i) = it->second;
+            } else {
+                u0(i) = sim.Peek(controls[i]);
+            }
+        }
+
+        // Solve
+        auto root_result = solver.solve(u0);
+
+        // Convert to TrimResult
+        result.converged = root_result.converged;
+        result.iterations = root_result.iterations;
+        result.message = root_result.message;
+
+        if (result.converged) {
+            // Apply solution to numeric simulator
+            for (int i = 0; i < n_controls; ++i) {
+                double val = root_result.x(i);
+                result.controls[controls[i]] = val;
+                sim.Poke(controls[i], val);
+            }
+
+            // Evaluate final residuals
+            double t = sim.Time();
+            sim.ComputeDerivatives(t);
+            for (int i = 0; i < n_residuals; ++i) {
+                result.residuals[derivs[i]] = sim.Peek(derivs[i]);
+            }
+
+            // Compute residual norm
+            double norm = 0.0;
+            for (const auto &[name, val] : result.residuals) {
+                norm += val * val;
+            }
+            result.residual_norm = std::sqrt(norm);
+
+            sim.GetLogger().LogTrimConverged(result.iterations);
+        } else {
+            sim.GetLogger().LogTrimFailed(result.message);
+        }
+
+    } catch (const Error &e) {
+        result.converged = false;
+        result.message = std::string("Symbolic trim failed: ") + e.what();
+        sim.GetLogger().LogTrimFailed(result.message);
+    } catch (const std::exception &e) {
+        result.converged = false;
+        result.message = std::string("Symbolic trim failed: ") + e.what();
+        sim.GetLogger().LogTrimFailed(result.message);
+    }
+
     return result;
 }
 
-inline janus::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore & /*sym_sim*/,
-                                                           const TrimConfig & /*config*/) {
-    throw NotImplementedError("SymbolicTrim::BuildResidualFunction");
+inline janus::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore &sym_sim,
+                                                           const TrimConfig &config) {
+    using Scalar = janus::SymbolicScalar;
+
+    const int n_controls = static_cast<int>(config.control_signals.size());
+    const int n_residuals = static_cast<int>(config.zero_derivatives.size());
+    const std::size_t n_states = sym_sim.GetStateSize();
+
+    // Create symbolic control variables
+    auto [u_vec, u_mx] = janus::sym_vec_pair("u", n_controls);
+
+    // Create symbolic state and time (use current numeric values as base)
+    auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
+    Scalar t_sym = janus::sym("t");
+
+    // Set symbolic state and time
+    sym_sim.SetState(x_vec);
+    sym_sim.SetTime(t_sym);
+
+    // Apply symbolic controls to simulator
+    for (int i = 0; i < n_controls; ++i) {
+        sym_sim.SetSignal(config.control_signals[i], u_vec(i));
+    }
+
+    // Compute derivatives symbolically (traces the graph)
+    sym_sim.ComputeDerivatives();
+
+    // Gather residuals (the derivatives we want to be zero)
+    std::vector<Scalar> residual_elements;
+    residual_elements.reserve(n_residuals);
+    for (const auto &deriv_name : config.zero_derivatives) {
+        if (!sym_sim.HasSignal(deriv_name)) {
+            throw ConfigError("SymbolicTrim: Unknown derivative signal '" + deriv_name + "'");
+        }
+        residual_elements.push_back(sym_sim.GetSignal(deriv_name));
+    }
+
+    // Concatenate into single output vector
+    Scalar residuals = Scalar::vertcat(residual_elements);
+
+    // Build function: F(u) -> residuals
+    // Note: x and t are fixed parameters (not optimized), u is the decision variable
+    return janus::Function("trim_residual", {u_mx}, {residuals});
 }
 
 } // namespace icarus::staging
