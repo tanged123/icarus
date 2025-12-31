@@ -17,9 +17,9 @@
 #include <icarus/core/ComponentFactory.hpp>
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/ErrorLogging.hpp>
-#include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/MissionLogger.hpp>
 #include <icarus/io/SimulationLoader.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/SignalRouter.hpp>

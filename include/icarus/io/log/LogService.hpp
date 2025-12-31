@@ -11,7 +11,7 @@
  */
 
 #include <icarus/core/CoreTypes.hpp>
-#include <icarus/io/Console.hpp>
+#include <icarus/io/log/Console.hpp>
 
 #include <algorithm>
 #include <chrono>

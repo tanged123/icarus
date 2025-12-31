@@ -7,10 +7,10 @@
  * Part of Phase 2.2: Integrator Interface
  */
 
-#include <icarus/sim/Integrator.hpp>
-#include <icarus/sim/IntegratorTypes.hpp>
-#include <icarus/sim/RK45Integrator.hpp>
-#include <icarus/sim/RK4Integrator.hpp>
+#include <icarus/sim/integrators/Integrator.hpp>
+#include <icarus/sim/integrators/IntegratorTypes.hpp>
+#include <icarus/sim/integrators/RK45Integrator.hpp>
+#include <icarus/sim/integrators/RK4Integrator.hpp>
 #include <memory>
 #include <stdexcept>
 

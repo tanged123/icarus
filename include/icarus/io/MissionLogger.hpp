@@ -9,11 +9,11 @@
  */
 
 #include <icarus/core/CoreTypes.hpp>
-#include <icarus/io/Banner.hpp>
-#include <icarus/io/Console.hpp>
-#include <icarus/io/DataDictionary.hpp>
-#include <icarus/io/FlightManifest.hpp>
-#include <icarus/io/MissionDebrief.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
+#include <icarus/io/log/Console.hpp>
+#include <icarus/io/report/Banner.hpp>
+#include <icarus/io/report/FlightManifest.hpp>
+#include <icarus/io/report/MissionDebrief.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/staging/StagingTypes.hpp>
 

@@ -7,7 +7,7 @@
  * Part of Phase 2.2: Integrator Interface
  */
 
-#include <icarus/sim/Integrator.hpp>
+#include <icarus/sim/integrators/Integrator.hpp>
 #include <janus/math/IntegratorStep.hpp>
 
 namespace icarus {

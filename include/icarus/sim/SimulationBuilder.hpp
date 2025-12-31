@@ -11,9 +11,9 @@
 
 #include <icarus/core/Component.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/sim/Integrator.hpp>
-#include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Simulator.hpp>
+#include <icarus/sim/integrators/Integrator.hpp>
+#include <icarus/sim/integrators/RK4Integrator.hpp>
 
 #include <map>
 #include <memory>

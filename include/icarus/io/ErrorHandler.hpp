@@ -9,7 +9,7 @@
  */
 
 #include <icarus/core/Error.hpp>
-#include <icarus/io/LogService.hpp>
+#include <icarus/io/log/LogService.hpp>
 
 #include <cstdlib>
 #include <functional>

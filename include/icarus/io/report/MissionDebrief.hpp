@@ -7,9 +7,9 @@
  * Part of Phase 2.5: ASCII-Rich Logging.
  */
 
-#include <icarus/io/AsciiTable.hpp>
-#include <icarus/io/Banner.hpp>
-#include <icarus/io/Console.hpp>
+#include <icarus/io/log/Console.hpp>
+#include <icarus/io/report/AsciiTable.hpp>
+#include <icarus/io/report/Banner.hpp>
 
 #include <algorithm>
 #include <iomanip>

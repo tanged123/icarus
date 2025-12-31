@@ -7,7 +7,7 @@
  * Part of Phase 2.5: ASCII-Rich Logging.
  */
 
-#include <icarus/io/Console.hpp>
+#include <icarus/io/log/Console.hpp>
 
 #include <algorithm>
 #include <sstream>

@@ -8,10 +8,10 @@
  * Generates the Flight Manifest (Data Dictionary) in ASCII format.
  */
 
-#include <icarus/io/AsciiTable.hpp>
-#include <icarus/io/Banner.hpp>
-#include <icarus/io/Console.hpp>
-#include <icarus/io/DataDictionary.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
+#include <icarus/io/log/Console.hpp>
+#include <icarus/io/report/AsciiTable.hpp>
+#include <icarus/io/report/Banner.hpp>
 
 #include <chrono>
 #include <ctime>

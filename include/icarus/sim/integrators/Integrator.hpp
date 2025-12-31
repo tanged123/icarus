@@ -9,7 +9,7 @@
 
 #include <functional>
 #include <icarus/core/CoreTypes.hpp>
-#include <icarus/sim/IntegratorTypes.hpp>
+#include <icarus/sim/integrators/IntegratorTypes.hpp>
 #include <string>
 
 namespace icarus {

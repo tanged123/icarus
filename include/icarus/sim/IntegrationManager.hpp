@@ -15,9 +15,9 @@
  */
 
 #include <icarus/core/CoreTypes.hpp>
-#include <icarus/sim/Integrator.hpp>
-#include <icarus/sim/IntegratorFactory.hpp>
-#include <icarus/sim/IntegratorTypes.hpp>
+#include <icarus/sim/integrators/Integrator.hpp>
+#include <icarus/sim/integrators/IntegratorFactory.hpp>
+#include <icarus/sim/integrators/IntegratorTypes.hpp>
 
 #include <functional>
 #include <memory>

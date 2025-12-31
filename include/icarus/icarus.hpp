@@ -26,12 +26,12 @@
 #include <icarus/signal/VecHandle.hpp>
 
 // Simulation
-#include <icarus/sim/Integrator.hpp>
-#include <icarus/sim/IntegratorFactory.hpp>
-#include <icarus/sim/IntegratorTypes.hpp>
-#include <icarus/sim/RK45Integrator.hpp>
-#include <icarus/sim/RK4Integrator.hpp>
 #include <icarus/sim/Scheduler.hpp>
+#include <icarus/sim/integrators/Integrator.hpp>
+#include <icarus/sim/integrators/IntegratorFactory.hpp>
+#include <icarus/sim/integrators/IntegratorTypes.hpp>
+#include <icarus/sim/integrators/RK45Integrator.hpp>
+#include <icarus/sim/integrators/RK4Integrator.hpp>
 // Note: SimulationBuilder and SimulationRunner disabled pending Phase 4.0.7 update
 // #include <icarus/sim/SimulationBuilder.hpp>
 #include <icarus/sim/SimulationResults.hpp>
@@ -39,15 +39,15 @@
 #include <icarus/sim/Simulator.hpp>
 
 // I/O
-#include <icarus/io/DataDictionary.hpp>
-#include <icarus/io/Playback.hpp>
-#include <icarus/io/Recorder.hpp>
+#include <icarus/io/data/DataDictionary.hpp>
+#include <icarus/io/data/Playback.hpp>
+#include <icarus/io/data/Recorder.hpp>
 
 // Symbolic (Phase 3) - disabled pending Phase 4.0.7 update
-// #include <icarus/symbolic/SymbolicTracer.hpp>
+// #include <icarus/staging/SymbolicTracer.hpp>
 
 // Utilities
-#include <icarus/util/ScalarFormat.hpp>
+#include <icarus/io/ScalarFormat.hpp>
 
 namespace icarus {
 // Version functions are defined in core/CoreTypes.hpp
