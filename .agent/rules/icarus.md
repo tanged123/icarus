@@ -6,6 +6,10 @@ trigger: always_on
 
 You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Janus and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
 
+## Project Overview
+
+Icarus is a 6DOF simulation engine for aerospace applications, built on Janus (math) and Vulcan (physics utilities). It uses a data-oriented architecture where all simulation components are structural peers.
+
 ## On Start — Required Reading
 
 **Before writing any code, you MUST read these documents:**
@@ -23,6 +27,43 @@ You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation
 3. **Architecture Index**: `docs/architecture/00_index.md`
    - Document library overview
    - Quick reference for the "flat simulation" philosophy
+
+## Workflow: Beads (bd) & Global Sync
+
+This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+
+### Quick Reference
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --status in_progress  # Claim work
+bd close <id>         # Complete work
+bd sync               # Sync with git
+```
+
+### Landing the Plane (Session Completion)
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds (`./scripts/verify.sh`)
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds.
+- NEVER stop before pushing - that leaves work stranded locally.
+- NEVER say "ready to push when you are" - YOU must push.
+- If push fails, resolve and retry until it succeeds.
 
 ## Global Behavioral Rules
 
@@ -50,6 +91,8 @@ You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation
 ## Icarus-Specific Rules (CRITICAL)
 
 ### 1. Janus Compatibility (The "Red Line")
+
+**These rules are INVIOLABLE. Breaking them causes symbolic mode to fail.**
 
 - **Template-First**: ALL components MUST be templated on `Scalar`.
 - **Dual-Backend**: Code must compile and run for both `double` AND `casadi::MX`.
