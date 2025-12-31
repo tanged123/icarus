@@ -27,11 +27,11 @@ template <typename WriteFunc>
 inline void WriteToFile(const std::string &path, WriteFunc write_content) {
     std::ofstream file(path);
     if (!file.is_open()) {
-        throw IOError("Failed to open file for writing: '" + path + "': " + std::strerror(errno));
+        throw IOError("open", path, "Failed to open file for writing");
     }
     write_content(file);
     if (file.fail()) {
-        throw IOError("Failed to write to file: '" + path + "': " + std::strerror(errno));
+        throw IOError("write", path, "Failed to write to file");
     }
 }
 } // namespace detail

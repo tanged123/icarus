@@ -85,6 +85,8 @@ template <typename Scalar> class StateManager {
         // Allocate vectors
         X_global_ = JanusVector<Scalar>::Zero(static_cast<int>(total_size));
         X_dot_global_ = JanusVector<Scalar>::Zero(static_cast<int>(total_size));
+
+        allocated_ = true;
     }
 
     /**
@@ -96,20 +98,27 @@ template <typename Scalar> class StateManager {
      * @param components List of components to bind
      */
     void BindComponents(std::vector<std::unique_ptr<Component<Scalar>>> &components) {
-        std::size_t offset = 0;
-        for (auto &comp : components) {
-            if (comp) {
-                std::size_t comp_size = comp->StateSize();
-                if (comp_size > 0) {
-                    // Create map views into the global vectors
-                    // Note: This assumes components store Eigen::Map or similar
-                    Scalar *x_ptr = X_global_.data() + offset;
-                    Scalar *x_dot_ptr = X_dot_global_.data() + offset;
-
-                    comp->BindState(x_ptr, x_dot_ptr, comp_size);
-                    offset += comp_size;
+        // Iterate layout_ to use stored offsets (computed during AllocateState)
+        for (const auto &slice : layout_) {
+            // Find matching component by name
+            Component<Scalar> *comp_ptr = nullptr;
+            for (auto &comp : components) {
+                if (comp && comp->FullName() == slice.component_name) {
+                    comp_ptr = comp.get();
+                    break;
                 }
             }
+
+            if (comp_ptr == nullptr) {
+                throw std::runtime_error("StateManager::BindComponents: component '" +
+                                         slice.component_name +
+                                         "' from layout not found in component vector");
+            }
+
+            // Use stored offset and size from layout_
+            Scalar *x_ptr = X_global_.data() + slice.offset;
+            Scalar *x_dot_ptr = X_dot_global_.data() + slice.offset;
+            comp_ptr->BindState(x_ptr, x_dot_ptr, slice.size);
         }
     }
 
@@ -169,12 +178,13 @@ template <typename Scalar> class StateManager {
     /**
      * @brief Check if state has been allocated
      */
-    [[nodiscard]] bool IsAllocated() const { return X_global_.size() > 0 || layout_.empty(); }
+    [[nodiscard]] bool IsAllocated() const { return allocated_; }
 
   private:
     JanusVector<Scalar> X_global_;           ///< Global state vector
     JanusVector<Scalar> X_dot_global_;       ///< Global derivative vector
     std::vector<StateSlice<Scalar>> layout_; ///< Per-component layout info
+    bool allocated_ = false;                 ///< Explicit allocation tracking
 };
 
 } // namespace icarus

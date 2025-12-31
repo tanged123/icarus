@@ -15,6 +15,8 @@
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/Error.hpp>
 
+#include <janus/core/JanusTypes.hpp>
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -135,13 +137,16 @@ template <typename Scalar> class ComponentFactory {
 // =============================================================================
 
 /**
- * @brief Register a component type with the factory
+ * @brief Register a component type with the factory (both backends)
  *
  * The component class must have a constructor that accepts (name, entity):
  *   ComponentType(std::string name, std::string entity)
  *
  * The factory will call SetConfig() after construction. Components read
  * their configuration in Stage() via GetConfig().
+ *
+ * Registers with both janus::NumericScalar (double) and janus::SymbolicScalar
+ * (casadi::MX) backends for full dual-backend support.
  *
  * Usage in component header or cpp file (namespace scope):
  * @code
@@ -150,10 +155,21 @@ template <typename Scalar> class ComponentFactory {
  */
 #define ICARUS_REGISTER_COMPONENT(ComponentType)                                                   \
     namespace {                                                                                    \
-    static bool _reg_double_##ComponentType = []() {                                               \
-        ::icarus::ComponentFactory<double>::Instance().Register(                                   \
+    static bool _reg_numeric_##ComponentType = []() {                                              \
+        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(                     \
             #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
-                auto comp = std::make_unique<ComponentType<double>>(config.name, config.entity);   \
+                auto comp = std::make_unique<ComponentType<janus::NumericScalar>>(config.name,     \
+                                                                                  config.entity);  \
+                comp->SetConfig(config);                                                           \
+                return comp;                                                                       \
+            });                                                                                    \
+        return true;                                                                               \
+    }();                                                                                           \
+    static bool _reg_symbolic_##ComponentType = []() {                                             \
+        ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance().Register(                    \
+            #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
+                auto comp = std::make_unique<ComponentType<janus::SymbolicScalar>>(config.name,    \
+                                                                                   config.entity); \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
             });                                                                                    \
@@ -162,7 +178,9 @@ template <typename Scalar> class ComponentFactory {
     }
 
 /**
- * @brief Register component with custom type name
+ * @brief Register component with custom type name (both backends)
+ *
+ * Registers with both janus::NumericScalar and janus::SymbolicScalar backends.
  *
  * Usage (at namespace scope, inside the component's namespace):
  * @code
@@ -171,10 +189,21 @@ template <typename Scalar> class ComponentFactory {
  */
 #define ICARUS_REGISTER_COMPONENT_IMPL2(ComponentType, TypeName, Counter)                          \
     namespace {                                                                                    \
-    static const bool _icarus_reg_##Counter = []() {                                               \
-        ::icarus::ComponentFactory<double>::Instance().Register(                                   \
+    static const bool _icarus_reg_numeric_##Counter = []() {                                       \
+        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(                     \
             TypeName, [](const ::icarus::ComponentConfig &config) {                                \
-                auto comp = std::make_unique<ComponentType<double>>(config.name, config.entity);   \
+                auto comp = std::make_unique<ComponentType<janus::NumericScalar>>(config.name,     \
+                                                                                  config.entity);  \
+                comp->SetConfig(config);                                                           \
+                return comp;                                                                       \
+            });                                                                                    \
+        return true;                                                                               \
+    }();                                                                                           \
+    static const bool _icarus_reg_symbolic_##Counter = []() {                                      \
+        ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance().Register(                    \
+            TypeName, [](const ::icarus::ComponentConfig &config) {                                \
+                auto comp = std::make_unique<ComponentType<janus::SymbolicScalar>>(config.name,    \
+                                                                                   config.entity); \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
             });                                                                                    \
@@ -189,27 +218,38 @@ template <typename Scalar> class ComponentFactory {
     ICARUS_REGISTER_COMPONENT_IMPL(ComponentType, TypeName, __COUNTER__)
 
 /**
- * @brief Register component with custom creator function
+ * @brief Register component with custom creator function (numeric backend only)
  *
  * Use when component needs special construction logic.
  * The creator lambda is responsible for calling SetConfig() on the component.
+ *
+ * Note: This macro only registers with janus::NumericScalar. For dual-backend
+ * support with custom creators, use the factory directly.
  *
  * Usage:
  * @code
  * ICARUS_REGISTER_COMPONENT_WITH_CREATOR("CustomType",
  *     [](const ComponentConfig& cfg) {
- *         auto comp = std::make_unique<CustomComponent<double>>(cfg.name, cfg.entity);
+ *         auto comp = std::make_unique<CustomComponent<janus::NumericScalar>>(
+ *             cfg.name, cfg.entity);
  *         comp->SetConfig(cfg);
  *         return comp;
  *     })
  * @endcode
  */
-#define ICARUS_REGISTER_COMPONENT_WITH_CREATOR(TypeName, CreatorLambda)                            \
+#define ICARUS_REGISTER_COMPONENT_WITH_CREATOR_IMPL2(TypeName, CreatorLambda, Counter)             \
     namespace {                                                                                    \
-    static bool _reg_creator_##__LINE__ = []() {                                                   \
-        ::icarus::ComponentFactory<double>::Instance().Register(TypeName, CreatorLambda);          \
+    static bool _icarus_reg_creator_##Counter = []() {                                             \
+        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(TypeName,            \
+                                                                              CreatorLambda);      \
         return true;                                                                               \
     }();                                                                                           \
     }
+
+#define ICARUS_REGISTER_COMPONENT_WITH_CREATOR_IMPL(TypeName, CreatorLambda, Counter)              \
+    ICARUS_REGISTER_COMPONENT_WITH_CREATOR_IMPL2(TypeName, CreatorLambda, Counter)
+
+#define ICARUS_REGISTER_COMPONENT_WITH_CREATOR(TypeName, CreatorLambda)                            \
+    ICARUS_REGISTER_COMPONENT_WITH_CREATOR_IMPL(TypeName, CreatorLambda, __COUNTER__)
 
 } // namespace icarus

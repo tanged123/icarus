@@ -32,6 +32,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Janus includes for symbolic graph generation
@@ -650,6 +651,34 @@ inline void Simulator::Step(double dt) {
     // Get active groups for this frame
     auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
 
+    // Build set of active component names for O(1) lookup
+    std::unordered_set<std::string> active_components;
+    for (const auto &group_name : active_groups) {
+        for (const auto &comp_name : scheduler_.GetMembersForGroup(group_name)) {
+            active_components.insert(comp_name);
+        }
+    }
+
+    // Build set of all scheduled component names (to detect unscheduled components)
+    std::unordered_set<std::string> all_scheduled_components;
+    for (const auto &group : scheduler_.GetGroups()) {
+        for (const auto &member : group.members) {
+            all_scheduled_components.insert(member.component);
+        }
+    }
+
+    // Helper to check if component should run this frame
+    // A component runs if: (1) it's in an active group, OR (2) it's not in any scheduler group
+    auto should_run = [&active_components, &all_scheduled_components](const auto &comp) {
+        const std::string &name = comp->Name();
+        // If component isn't registered with scheduler, run every frame (default behavior)
+        if (!all_scheduled_components.contains(name)) {
+            return true;
+        }
+        // Otherwise, only run if its group is active this frame
+        return active_components.contains(name);
+    };
+
     // Helper to execute component method with error handling
     auto exec_component = [this](auto &comp, auto method, double t, double step_dt) {
         try {
@@ -666,25 +695,34 @@ inline void Simulator::Step(double dt) {
     // If no state, just call components directly
     if (state_manager_.TotalSize() == 0) {
         for (auto &comp : components_) {
-            exec_component(comp, &Component<double>::PreStep, time_, dt);
+            if (should_run(comp)) {
+                exec_component(comp, &Component<double>::PreStep, time_, dt);
+            }
         }
         for (auto &comp : components_) {
-            exec_component(comp, &Component<double>::Step, time_, dt);
+            if (should_run(comp)) {
+                exec_component(comp, &Component<double>::Step, time_, dt);
+            }
         }
         for (auto &comp : components_) {
-            exec_component(comp, &Component<double>::PostStep, time_, dt);
+            if (should_run(comp)) {
+                exec_component(comp, &Component<double>::PostStep, time_, dt);
+            }
         }
     } else {
         // Create derivative function for integrator
-        auto deriv_func =
-            [this, &exec_component](double t, const JanusVector<double> &x) -> JanusVector<double> {
+        // Capture dt (the actual step timestep) instead of using config_.dt
+        auto deriv_func = [this, &exec_component, &should_run,
+                           dt](double t, const JanusVector<double> &x) -> JanusVector<double> {
             state_manager_.SetState(x);
             state_manager_.ZeroDerivatives();
 
             for (auto &comp : components_) {
-                exec_component(comp, &Component<double>::PreStep, t, config_.dt);
-                exec_component(comp, &Component<double>::Step, t, config_.dt);
-                exec_component(comp, &Component<double>::PostStep, t, config_.dt);
+                if (should_run(comp)) {
+                    exec_component(comp, &Component<double>::PreStep, t, dt);
+                    exec_component(comp, &Component<double>::Step, t, dt);
+                    exec_component(comp, &Component<double>::PostStep, t, dt);
+                }
             }
 
             return state_manager_.GetDerivatives();
@@ -707,7 +745,7 @@ inline void Simulator::Step(double dt) {
     // Periodic progress logging (e.g., every 100 frames)
     if (logger_.IsProgressEnabled() && (frame_count_ % 100 == 0)) {
         logger_.LogRunProgress(time_, config_.t_end);
-    };
+    }
 
     // Invoke output observers
     InvokeOutputObservers();

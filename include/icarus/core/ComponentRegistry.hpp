@@ -2,63 +2,24 @@
 
 /**
  * @file ComponentRegistry.hpp
- * @brief Registers all built-in components with the ComponentFactory
+ * @brief Documentation for component registration
  *
- * This header must be included somewhere in the final executable to ensure
- * component types are registered before Simulator::FromConfig() is called.
+ * Component registration is handled automatically in components/registration.cpp
+ * using the ICARUS_REGISTER_COMPONENT macro, which registers components with
+ * both janus::NumericScalar (double) and janus::SymbolicScalar (casadi::MX)
+ * backends.
  *
- * Usage:
- * - Include this header in your main.cpp or simulator compilation unit
- * - Or call RegisterBuiltinComponents() explicitly
+ * To add a new component to the factory:
+ * 1. Include the component header in components/registration.cpp
+ * 2. Add: ICARUS_REGISTER_COMPONENT(YourComponentType)
+ *
+ * The macro expects components to have a two-argument constructor:
+ *   ComponentType(std::string name, std::string entity)
+ *
+ * Configuration is set via SetConfig() after construction.
  *
  * Part of Phase 4.0.7: Config-driven simulation
  */
 
-#include <icarus/core/ComponentConfig.hpp>
-#include <icarus/core/ComponentFactory.hpp>
-
-// Built-in components
-#include <dynamics/PointMass3DOF.hpp>
-#include <environment/PointMassGravity.hpp>
-
-namespace icarus {
-
-/**
- * @brief Register all built-in components with the factory
- *
- * Call this before using Simulator::FromConfig() to ensure
- * all component types are available.
- *
- * @return Number of components registered
- */
-inline std::size_t RegisterBuiltinComponents() {
-    auto &factory = ComponentFactory<double>::Instance();
-
-    // Skip if already registered
-    if (factory.NumRegistered() > 0) {
-        return factory.NumRegistered();
-    }
-
-    // Dynamics components
-    factory.Register("PointMass3DOF", [](const ComponentConfig &cfg) {
-        return std::make_unique<components::PointMass3DOF<double>>(cfg);
-    });
-
-    // Environment components
-    factory.Register("PointMassGravity", [](const ComponentConfig &cfg) {
-        return std::make_unique<components::PointMassGravity<double>>(cfg);
-    });
-
-    return factory.NumRegistered();
-}
-
-/**
- * @brief Static initializer to auto-register components
- *
- * This ensures components are registered when this header is included.
- */
-namespace detail {
-inline const std::size_t _builtin_components_registered = RegisterBuiltinComponents();
-} // namespace detail
-
-} // namespace icarus
+// No runtime registration needed - handled by static initialization
+// in components/registration.cpp

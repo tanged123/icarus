@@ -150,29 +150,6 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
         model.u0(i) = sim.Peek(config.inputs[i]);
     }
     model.t0 = t;
-
-    // Helper: get state derivatives
-    // Assumes derivative signal is available (state + "_dot" or similar)
-    // This needs to be adapted based on how derivatives are exposed
-    auto get_xdot = [&]() {
-        sim.ComputeDerivatives(t);
-        Eigen::VectorXd xdot(nx);
-        for (int i = 0; i < nx; ++i) {
-            // Try to get derivative from state manager or signal registry
-            // For now, assume derivatives are accessible via the same signal names
-            // This may need adjustment based on actual signal structure
-            xdot(i) = sim.Peek(config.states[i]);
-        }
-        return xdot;
-    };
-
-    // For proper linearization, we need to compute derivatives from state
-    // The sim.ComputeDerivatives() already computes xdot internally
-    // We need access to the derivative vector
-
-    // Alternative approach: use GetState/SetState and GetDerivatives pattern
-    // This is more reliable than signal-based approach
-
     // Compute A = df/dx (central differences on derivatives)
     model.A.resize(nx, nx);
     Eigen::VectorXd state_backup = sim.GetState();

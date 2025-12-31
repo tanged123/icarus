@@ -30,7 +30,7 @@ logging:
 time:
   start: 0.0
   end: 5400.0          # 90 minutes (one orbit period for LEO)
-  dt: 0.01              # 10 Hz timestep (better accuracy)
+  dt: 0.1              # 10 Hz timestep (better accuracy)
 
 # =============================================================================
 # Integrator Configuration
@@ -89,14 +89,14 @@ routes:
 scheduler:
   groups:
     - name: environment
-      rate_hz: 100.0     # Match timestep (10 Hz)
+      rate_hz: 10.0     # Match timestep (10 Hz)
       priority: 1
       members:
         - component: EarthGravity
           priority: 1
 
     - name: dynamics
-      rate_hz: 1000.0     # Match timestep (10 Hz)
+      rate_hz: 10.0     # Match timestep (10 Hz)
       priority: 2
       members:
         - component: Satellite

@@ -23,6 +23,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <numbers>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -414,7 +415,7 @@ class MissionLogger {
             if (std::abs(imag) > 1e-10) {
                 oss << (imag >= 0 ? " + " : " - ") << std::abs(imag) << "i";
                 // Compute period from imaginary part
-                double period = 2.0 * M_PI / std::abs(imag);
+                double period = 2.0 * std::numbers::pi / std::abs(imag);
                 oss << std::fixed << std::setprecision(1) << "  (period: " << period
                     << " s = " << period / 60.0 << " min)";
             }

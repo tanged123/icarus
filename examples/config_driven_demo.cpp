@@ -118,10 +118,10 @@ int main(int argc, char *argv[]) {
     double x = final_state[0], y = final_state[1], z = final_state[2];
     double r_final = std::sqrt(x * x + y * y + z * z);
 
-    // std::cout << "Final Results:\n";
-    // std::cout << "  Time: " << std::fixed << std::setprecision(1) << sim->Time() << " s\n";
-    // std::cout << "  Position: (" << x / 1e6 << ", " << y / 1e6 << ", " << z / 1e6 << ") Mm\n";
-    // std::cout << "  Altitude: " << (r_final - R_earth) / 1000.0 << " km\n\n";
+    std::cout << "Final Results:\n";
+    std::cout << "  Time: " << std::fixed << std::setprecision(1) << sim->Time() << " s\n";
+    std::cout << "  Position: (" << x / 1e6 << ", " << y / 1e6 << ", " << z / 1e6 << ") Mm\n";
+    std::cout << "  Altitude: " << (r_final - R_earth) / 1000.0 << " km\n\n";
 
     // std::cout << "✅ Simulation complete!\n";
     return 0;

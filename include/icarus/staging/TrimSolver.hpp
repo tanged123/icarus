@@ -233,18 +233,25 @@ inline ::icarus::staging::TrimResult FiniteDifferenceTrim::Solve(::icarus::Simul
         // Compute Jacobian
         Eigen::MatrixXd J = ComputeJacobian(sim, controls, derivs, t);
 
-        // Solve J * du = -F using QR decomposition
-        Eigen::VectorXd du;
-        if (n_controls == n_residuals) {
-            // Square system
-            du = J.colPivHouseholderQr().solve(-F);
-        } else if (n_controls > n_residuals) {
-            // Underdetermined: minimum norm solution
-            du = J.transpose() * (J * J.transpose()).ldlt().solve(-F);
-        } else {
-            // Overdetermined: least squares
-            du = (J.transpose() * J).ldlt().solve(-J.transpose() * F);
-        }
+        // Solve J * du = -F using SVD-based pseudo-inverse for robustness
+        // This handles rank-deficient, underdetermined, and overdetermined cases
+        // automatically with tolerance-based singular value thresholding.
+        //
+        // SVD tolerance: singular values below this fraction of the largest
+        // are treated as zero, providing numerical stability for near-singular
+        // Jacobians. Default threshold is O(machine_epsilon * max_dim).
+        Eigen::JacobiSVD<Eigen::MatrixXd> svd(J, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+        // Set threshold for singular values (relative to largest)
+        // Values below threshold * max_singular_value are treated as zero
+        constexpr double svd_tolerance = 1e-10;
+        svd.setThreshold(svd_tolerance);
+
+        // SVD.solve() automatically computes:
+        // - Minimum-norm solution for underdetermined systems (n_controls > n_residuals)
+        // - Least-squares solution for overdetermined systems (n_residuals > n_controls)
+        // - Exact solution for square full-rank systems
+        Eigen::VectorXd du = svd.solve(-F);
 
         // Update with damping
         u += opts_.damping * du;

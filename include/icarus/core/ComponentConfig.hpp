@@ -11,6 +11,7 @@
 #include <icarus/core/Error.hpp>
 #include <icarus/core/Types.hpp>
 
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -120,7 +121,19 @@ template <> inline bool ComponentConfig::Has<double>(const std::string &key) con
 
 template <> inline int ComponentConfig::Get<int>(const std::string &key, const int &def) const {
     auto it = integers.find(key);
-    return (it != integers.end()) ? static_cast<int>(it->second) : def;
+    if (it == integers.end()) {
+        return def;
+    }
+    // Range check to prevent silent truncation
+    int64_t val = it->second;
+    if (val < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
+        val > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        throw ConfigError("Component '" + FullPath() + "' integer '" + key + "' value " +
+                          std::to_string(val) + " overflows int range [" +
+                          std::to_string(std::numeric_limits<int>::min()) + ", " +
+                          std::to_string(std::numeric_limits<int>::max()) + "]");
+    }
+    return static_cast<int>(val);
 }
 
 template <> inline int ComponentConfig::Require<int>(const std::string &key) const {
@@ -128,7 +141,16 @@ template <> inline int ComponentConfig::Require<int>(const std::string &key) con
     if (it == integers.end()) {
         throw ConfigError("Component '" + FullPath() + "' missing required integer: " + key);
     }
-    return static_cast<int>(it->second);
+    // Range check to prevent silent truncation
+    int64_t val = it->second;
+    if (val < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
+        val > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        throw ConfigError("Component '" + FullPath() + "' integer '" + key + "' value " +
+                          std::to_string(val) + " overflows int range [" +
+                          std::to_string(std::numeric_limits<int>::min()) + ", " +
+                          std::to_string(std::numeric_limits<int>::max()) + "]");
+    }
+    return static_cast<int>(val);
 }
 
 template <> inline bool ComponentConfig::Has<int>(const std::string &key) const {
@@ -172,8 +194,9 @@ inline bool ComponentConfig::Require<bool>(
     return it->second;
 }
 
-// Note: Has<bool> specialization would conflict with Get<bool>'s return type
-// Use Has<int> pattern for bool existence check via integers map or direct booleans.count()
+template <> inline bool ComponentConfig::Has<bool>(const std::string &key) const {
+    return booleans.count(key) > 0;
+}
 
 // =============================================================================
 // Template Specializations - std::string

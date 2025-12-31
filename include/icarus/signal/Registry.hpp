@@ -805,6 +805,12 @@ template <typename Scalar> class SignalRegistry {
             throw WiringError("Input not found: '" + input_name + "'");
         }
 
+        // Verify type matches what was registered (prevents undefined behavior)
+        const std::string expected_type = typeid(T).name();
+        if (it->second.info.semantic != expected_type) {
+            throw SignalError::TypeMismatch(input_name, it->second.info.semantic, expected_type);
+        }
+
         // Resolve the source signal
         auto source_handle = resolve<T>(source_name);
 

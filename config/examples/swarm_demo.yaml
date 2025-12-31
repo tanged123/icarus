@@ -65,7 +65,7 @@ swarms:
 
 entities:
   # Override starting positions to form a V-formation
-  - name: Drone_000_override
+  - name: Drone_000
     entity:
       components:
         - type: PointMass3DOF
@@ -75,7 +75,7 @@ entities:
         vectors:
           initial_position: [0.0, 0.0, 10.0]    # Lead drone
 
-  - name: Drone_001_override
+  - name: Drone_001
     entity:
       components:
         - type: PointMass3DOF
@@ -85,7 +85,7 @@ entities:
         vectors:
           initial_position: [-5.0, -5.0, 10.0]  # Left wing
 
-  - name: Drone_002_override
+  - name: Drone_002
     entity:
       components:
         - type: PointMass3DOF
@@ -95,7 +95,7 @@ entities:
         vectors:
           initial_position: [5.0, -5.0, 10.0]   # Right wing
 
-  - name: Drone_003_override
+  - name: Drone_003
     entity:
       components:
         - type: PointMass3DOF
@@ -105,7 +105,7 @@ entities:
         vectors:
           initial_position: [-10.0, -10.0, 10.0] # Far left
 
-  - name: Drone_004_override
+  - name: Drone_004
     entity:
       components:
         - type: PointMass3DOF
