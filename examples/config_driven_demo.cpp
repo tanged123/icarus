@@ -153,6 +153,16 @@ int main(int argc, char *argv[]) {
             std::cout << f.name_out(i) << "[" << f.nnz_out(i) << "]";
         }
         std::cout << ")\n";
+
+        // Export interactive HTML graph visualization
+        fs::create_directories("output");
+        try {
+            janus::export_graph_deep(f, "output/dynamics_graph", janus::DeepGraphFormat::HTML,
+                                     "Orbital Dynamics");
+            std::cout << "  📊 Exported: output/dynamics_graph.html\n";
+        } catch (const std::exception &e) {
+            std::cout << "  ⚠️  Graph export failed: " << e.what() << "\n";
+        }
     } else {
         std::cout << "  ⚠️  Dynamics graph not available (symbolics disabled in config)\n";
     }

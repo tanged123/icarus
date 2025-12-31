@@ -58,6 +58,8 @@ components:
     name: EarthGravity
     scalars:
       mu: 3.986004418e14   # Earth GM [m³/s²]
+    integers:
+      model: 1             # 0=Constant, 1=PointMass (inverse-square law)
 
 # =============================================================================
 # Signal Routing (matches component.signal naming from programmatic setup)

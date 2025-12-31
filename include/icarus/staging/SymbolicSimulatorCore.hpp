@@ -23,8 +23,10 @@
 
 #include <janus/core/JanusTypes.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace icarus::staging {
@@ -91,7 +93,8 @@ class SymbolicSimulatorCore {
      * @brief Compute derivatives symbolically
      *
      * Calls PreStep/Step/PostStep on all components to trace the
-     * symbolic computational graph.
+     * symbolic computational graph. Components are executed in scheduler
+     * priority order (lower priority = runs first) to match numeric simulator.
      *
      * @return Symbolic derivative vector xdot
      */
@@ -100,13 +103,40 @@ class SymbolicSimulatorCore {
 
         Scalar dt = Scalar(config_.dt);
 
+        // Build execution order based on scheduler priority
+        // Components with lower priority values run first
+        std::vector<Component<Scalar> *> exec_order;
+        exec_order.reserve(components_.size());
+
+        // Build component priority map from scheduler config
+        std::unordered_map<std::string, int> priority_map;
+        for (const auto &group : config_.scheduler.groups) {
+            for (const auto &member : group.members) {
+                priority_map[member.component] = group.priority;
+            }
+        }
+
+        // Copy component pointers and sort by priority
         for (auto &comp : components_) {
+            exec_order.push_back(comp.get());
+        }
+        std::stable_sort(
+            exec_order.begin(), exec_order.end(),
+            [&priority_map](Component<Scalar> *a, Component<Scalar> *b) {
+                int pa = priority_map.count(a->FullName()) ? priority_map[a->FullName()]
+                                                           : 1000; // Default high priority
+                int pb = priority_map.count(b->FullName()) ? priority_map[b->FullName()] : 1000;
+                return pa < pb;
+            });
+
+        // Execute in priority order
+        for (auto *comp : exec_order) {
             comp->PreStep(time_, dt);
         }
-        for (auto &comp : components_) {
+        for (auto *comp : exec_order) {
             comp->Step(time_, dt);
         }
-        for (auto &comp : components_) {
+        for (auto *comp : exec_order) {
             comp->PostStep(time_, dt);
         }
 
