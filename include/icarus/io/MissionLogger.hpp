@@ -15,8 +15,10 @@
 #include <icarus/io/FlightManifest.hpp>
 #include <icarus/io/MissionDebrief.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
+#include <icarus/staging/StagingTypes.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -356,6 +358,91 @@ class MissionLogger {
 
     void LogTrimFailed(const std::string &reason) {
         Log(LogLevel::Error, "[TRM] Trim failed: " + reason);
+    }
+
+    // === Linearization Logging ===
+
+    /// Log linear model summary (called after linearization)
+    void LogLinearModel(const staging::LinearModel &model) {
+        // Banner
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
+        Log(LogLevel::Info, "[LIN]   Linear Model at Operating Point");
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
+
+        // Dimensions (Info level)
+        {
+            std::ostringstream oss;
+            oss << "[LIN] State-Space: A[" << model.A.rows() << "x" << model.A.cols() << "], B["
+                << model.B.rows() << "x" << model.B.cols() << "], C[" << model.C.rows() << "x"
+                << model.C.cols() << "], D[" << model.D.rows() << "x" << model.D.cols() << "]";
+            Log(LogLevel::Info, oss.str());
+        }
+
+        // Operating point (Debug level)
+        Log(LogLevel::Debug, "[LIN] Operating Point (x0):");
+        for (std::size_t i = 0; i < model.state_names.size(); ++i) {
+            std::ostringstream oss;
+            oss << "         " << model.state_names[i] << " = " << std::scientific
+                << std::setprecision(4) << model.x0(static_cast<Eigen::Index>(i));
+            Log(LogLevel::Debug, oss.str());
+        }
+
+        // A matrix (Trace level - very verbose)
+        Log(LogLevel::Trace, "[LIN] A Matrix (df/dx):");
+        for (Eigen::Index i = 0; i < model.A.rows(); ++i) {
+            std::ostringstream oss;
+            oss << "         [";
+            for (Eigen::Index j = 0; j < model.A.cols(); ++j) {
+                oss << std::fixed << std::setw(12) << std::setprecision(6) << model.A(i, j);
+                if (j < model.A.cols() - 1)
+                    oss << ", ";
+            }
+            oss << "]";
+            Log(LogLevel::Trace, oss.str());
+        }
+
+        // Eigenvalue analysis (Info level - important for stability)
+        Log(LogLevel::Info, "[LIN] Eigenvalue Analysis:");
+        auto eigenvalues = model.Eigenvalues();
+        for (Eigen::Index i = 0; i < eigenvalues.size(); ++i) {
+            double real = eigenvalues(i).real();
+            double imag = eigenvalues(i).imag();
+
+            std::ostringstream oss;
+            oss << "         λ" << (i + 1) << " = " << std::scientific << std::setprecision(4)
+                << real;
+            if (std::abs(imag) > 1e-10) {
+                oss << (imag >= 0 ? " + " : " - ") << std::abs(imag) << "i";
+                // Compute period from imaginary part
+                double period = 2.0 * M_PI / std::abs(imag);
+                oss << std::fixed << std::setprecision(1) << "  (period: " << period
+                    << " s = " << period / 60.0 << " min)";
+            }
+            Log(LogLevel::Info, oss.str());
+        }
+
+        // Stability and controllability (Info level)
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Stability: " << (model.IsStable() ? "STABLE" : "UNSTABLE")
+                << " (Lyapunov sense)";
+            Log(LogLevel::Info, oss.str());
+        }
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Controllability: " << model.ControllabilityRank() << " / "
+                << model.A.rows()
+                << (model.ControllabilityRank() == model.A.rows() ? " (fully controllable)" : "");
+            Log(LogLevel::Info, oss.str());
+        }
+        {
+            std::ostringstream oss;
+            oss << "[LIN] Observability: " << model.ObservabilityRank() << " / " << model.A.rows()
+                << (model.ObservabilityRank() == model.A.rows() ? " (fully observable)" : "");
+            Log(LogLevel::Info, oss.str());
+        }
+
+        Log(LogLevel::Info, "[LIN] ═══════════════════════════════════════════════════════");
     }
 
     // === Run Phase Logging ===

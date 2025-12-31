@@ -13,6 +13,12 @@ fi
 CLEAN=false
 BUILD_TYPE="${BUILD_TYPE:-Debug}"  # Default to Debug for local development
 
+# Default jobs: half of available cores, minimum 2
+# This prevents OOM on 32GB systems with heavy template code (CasADi/Janus)
+DEFAULT_JOBS=$(( $(nproc) / 2 ))
+[ "$DEFAULT_JOBS" -lt 2 ] && DEFAULT_JOBS=2
+JOBS="${JOBS:-$DEFAULT_JOBS}"
+
 for arg in "$@"; do
     case $arg in
         --clean)
@@ -27,6 +33,19 @@ for arg in "$@"; do
         --relwithdebinfo)
             BUILD_TYPE="RelWithDebInfo"
             ;;
+        --jobs=*|-j=*)
+            JOBS="${arg#*=}"
+            ;;
+        --jobs|-j)
+            # Next argument will be the job count (handled below)
+            NEXT_IS_JOBS=true
+            ;;
+        *)
+            if [ "$NEXT_IS_JOBS" = true ]; then
+                JOBS="$arg"
+                NEXT_IS_JOBS=false
+            fi
+            ;;
     esac
 done
 
@@ -36,10 +55,10 @@ if [ "$CLEAN" = true ]; then
     "$SCRIPT_DIR/clean.sh"
 fi
 
-echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE"
+echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS)"
 
 # Create build directory if it doesn't exist or reconfigure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
-# Build the project
-ninja -C build
+# Build the project with limited parallelism to prevent OOM
+ninja -C build -j "$JOBS"

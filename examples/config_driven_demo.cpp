@@ -65,12 +65,14 @@ int main(int argc, char *argv[]) {
     // std::cout << "  End time: " << sim->EndTime() << " s\n\n";
 
     // =========================================================================
-    // Stage() - Prepare for execution
+    // Stage() - Prepare for execution (includes linearization if enabled)
     // =========================================================================
 
-    // std::cout << "Staging simulation...\n";
+    std::cout << "Staging simulation...\n";
     sim->Stage();
-    // std::cout << "  State size: " << sim->GetState().size() << "\n\n";
+    std::cout << "  State size: " << sim->GetState().size() << "\n\n";
+
+    // Linear model is now logged automatically during Stage() if linearization is enabled
 
     // =========================================================================
     // Run simulation

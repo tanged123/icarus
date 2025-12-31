@@ -27,6 +27,7 @@
 #include <icarus/sim/Scheduler.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/sim/StateManager.hpp>
+#include <icarus/staging/StagingTypes.hpp>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,6 +37,12 @@
 // Janus includes for symbolic graph generation
 #include <janus/core/Function.hpp>
 #include <janus/core/JanusTypes.hpp>
+
+// Forward declarations for staging
+namespace icarus::staging {
+class TrimSolver;
+class Linearizer;
+} // namespace icarus::staging
 
 namespace icarus {
 
@@ -155,6 +162,12 @@ class Simulator {
     void Poke(const std::string &name, double value) { registry_.SetByName(name, value); }
 
     /**
+     * @brief Get the mission logger
+     */
+    [[nodiscard]] MissionLogger &GetLogger() { return logger_; }
+    [[nodiscard]] const MissionLogger &GetLogger() const { return logger_; }
+
+    /**
      * @brief Reset simulation to initial state
      * Re-applies ICs, resets time to 0.
      */
@@ -205,6 +218,27 @@ class Simulator {
      * Available after Stage() if symbolics.generate_jacobian = true.
      */
     [[nodiscard]] std::optional<janus::Function> GetJacobian() const;
+
+    /**
+     * @brief Get trim result
+     * Available after Stage() if trim.enabled = true.
+     */
+    [[nodiscard]] const std::optional<staging::TrimResult> &GetTrimResult() const {
+        return trim_result_;
+    }
+
+    /**
+     * @brief Get linear model
+     * Available after Stage() if linearization.enabled = true.
+     */
+    [[nodiscard]] const std::optional<staging::LinearModel> &GetLinearModel() const {
+        return linear_model_;
+    }
+
+    /**
+     * @brief Get simulator configuration
+     */
+    [[nodiscard]] const SimulatorConfig &GetConfig() const { return config_; }
 
     // =========================================================================
     // PROGRAMMATIC SETUP (Alternative to FromConfig)
@@ -286,6 +320,10 @@ class Simulator {
     std::optional<janus::Function> dynamics_graph_;
     std::optional<janus::Function> jacobian_;
 
+    // Staging results (optional, after Stage)
+    std::optional<staging::TrimResult> trim_result_;
+    std::optional<staging::LinearModel> linear_model_;
+
     // External callbacks
     std::unordered_map<std::string, InputSourceCallback> input_sources_;
     std::unordered_map<std::string, OutputObserverCallback> output_observers_;
@@ -295,9 +333,18 @@ class Simulator {
     std::unordered_map<Component<double> *, std::vector<std::string>> inputs_;
 };
 
+} // namespace icarus
+
 // =============================================================================
 // INLINE IMPLEMENTATIONS
 // =============================================================================
+
+// Include staging solvers for Stage() implementation
+// (Must be outside namespace icarus to avoid double-nesting)
+#include <icarus/staging/Linearizer.hpp>
+#include <icarus/staging/TrimSolver.hpp>
+
+namespace icarus {
 
 inline Simulator::~Simulator() {
     // If we ever ran, log the debrief on destruction (RAII)
@@ -509,15 +556,69 @@ inline void Simulator::Stage() {
     // Validate wiring
     ValidateWiring();
 
-    // Generate symbolic graphs if enabled
-    if (config_.staging.symbolics.enabled) {
-        // TODO: Implement symbolic graph generation
-        // This requires creating symbolic components and tracing
+    // =========================================================================
+    // Trim Optimization (if enabled)
+    // =========================================================================
+    if (config_.staging.trim.enabled) {
+        // Build targets list for logging
+        auto solver =
+            staging::CreateTrimSolver(config_.staging.trim, config_.staging.symbolics.enabled);
+        auto result = solver->Solve(*this, config_.staging.trim);
+
+        if (config_.staging.trim.tolerance > 0 && !result.converged) {
+            // Only throw if strict tolerance was specified
+            throw StageError("Trim optimization failed: " + result.message);
+        }
+
+        trim_result_ = std::move(result);
     }
 
-    // Run trim if enabled
-    if (config_.staging.trim.enabled) {
-        // TODO: Implement trim optimization
+    // =========================================================================
+    // Linearization (if enabled)
+    // =========================================================================
+    if (config_.staging.linearization.enabled) {
+        std::ostringstream oss;
+        oss << "[LIN] Computing linear model (" << config_.staging.linearization.states.size()
+            << " states, " << config_.staging.linearization.inputs.size() << " inputs, "
+            << config_.staging.linearization.outputs.size() << " outputs)";
+        logger_.Log(LogLevel::Debug, oss.str());
+
+        auto linearizer = staging::CreateLinearizer(config_.staging.symbolics.enabled);
+        auto model = linearizer->Compute(*this, config_.staging.linearization);
+
+        // Log full linear model analysis
+        logger_.LogLinearModel(model);
+
+        // Export if configured
+        const auto &lin = config_.staging.linearization;
+        if (!lin.output_dir.empty()) {
+            if (lin.export_matlab) {
+                model.ExportMatlab(lin.output_dir + "/linear_model.m");
+                logger_.Log(LogLevel::Debug,
+                            "[LIN] Exported MATLAB to " + lin.output_dir + "/linear_model.m");
+            }
+            if (lin.export_numpy) {
+                model.ExportNumPy(lin.output_dir + "/linear_model.py");
+                logger_.Log(LogLevel::Debug,
+                            "[LIN] Exported NumPy to " + lin.output_dir + "/linear_model.py");
+            }
+            if (lin.export_json) {
+                model.ExportJSON(lin.output_dir + "/linear_model.json");
+                logger_.Log(LogLevel::Debug,
+                            "[LIN] Exported JSON to " + lin.output_dir + "/linear_model.json");
+            }
+        }
+
+        linear_model_ = std::move(model);
+    }
+
+    // =========================================================================
+    // Symbolic Graph Generation (if enabled)
+    // =========================================================================
+    if (config_.staging.symbolics.enabled) {
+        // TODO: Implement symbolic graph generation
+        // This requires SymbolicSimulatorCore (deferred to later phase)
+        logger_.Log(LogLevel::Debug, "[SYM] Symbolic graph generation not yet implemented");
     }
 
     logger_.EndPhase();

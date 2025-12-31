@@ -114,3 +114,9 @@ icarus_add_test(test_yaml_integration
     sim/test_yaml_integration.cpp
 )
 target_include_directories(test_yaml_integration PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Phase 4: Staging tests (TrimSolver, Linearizer, LinearModel)
+icarus_add_test(test_staging
+    staging/test_staging.cpp
+)
+target_include_directories(test_staging PRIVATE ${PROJECT_SOURCE_DIR}/components)

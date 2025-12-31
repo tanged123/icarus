@@ -4,7 +4,13 @@
 # Helper function to add examples
 function(icarus_add_example NAME)
     add_executable(${NAME} ${ARGN})
+    # Link to icarus (headers) and icarus_components (for component factory registration)
+    # Use whole-archive to ensure static registration code is included even though
+    # there are no direct symbol references from the executable.
     target_link_libraries(${NAME} PRIVATE icarus)
+    target_link_libraries(${NAME} PRIVATE
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>
+    )
     target_include_directories(${NAME} PRIVATE ${PROJECT_SOURCE_DIR}/components)
 endfunction()
 

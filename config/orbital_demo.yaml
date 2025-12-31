@@ -101,3 +101,40 @@ scheduler:
       members:
         - component: Satellite
           priority: 1
+
+# =============================================================================
+# Staging Configuration (Trim, Linearization, Symbolics)
+# =============================================================================
+
+staging:
+  # Linearization: Extract state-space model (A, B, C, D) at initial operating point
+  linearization:
+    enabled: true
+    # State variables (must match state vector order from PointMass3DOF)
+    states:
+      - Satellite.position.x
+      - Satellite.position.y
+      - Satellite.position.z
+      - Satellite.velocity.x
+      - Satellite.velocity.y
+      - Satellite.velocity.z
+    # Inputs: none for pure gravity (no thrust control)
+    # inputs: []  # (omitted - defaults to empty)
+    # Outputs (observable signals)
+    outputs:
+      - Satellite.position.x
+      - Satellite.position.y
+      - Satellite.position.z
+    # Export options
+    export_matlab: false
+    export_numpy: false
+    export_json: false
+    output_dir: "./output"
+
+  # Trim: Not applicable for orbital mechanics (no equilibrium without thrust)
+  trim:
+    enabled: false
+
+  # Symbolics: Generate symbolic dynamics graph (future feature)
+  symbolics:
+    enabled: false
