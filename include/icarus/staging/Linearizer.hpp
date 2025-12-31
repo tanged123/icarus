@@ -351,6 +351,14 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     // If we couldn't match by name, assume states are in order of the state vector
     if (state_indices.size() != static_cast<std::size_t>(nx)) {
+        // Warn about fallback behavior - this could produce incorrect results
+        // if state ordering doesn't match config expectations
+        sim.GetLogger().Log(
+            LogLevel::Warning,
+            "[LIN] SymbolicLinearizer: Could not match " +
+                std::to_string(nx - static_cast<int>(state_indices.size())) +
+                " state name(s) to state layout. Falling back to index-based mapping. "
+                "This may produce incorrect Jacobian results.");
         state_indices.clear();
         for (int i = 0; i < nx && i < static_cast<int>(n_states_total); ++i) {
             state_indices.push_back(i);
@@ -409,13 +417,22 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     janus::Function A_full_func("A_full", all_inputs, {A_full_sym});
 
-    // Get full state from numeric simulator for evaluation
-    Eigen::VectorXd full_state = sim.GetState();
-    // Pad if necessary
-    if (full_state.size() < static_cast<Eigen::Index>(n_states_total)) {
-        Eigen::VectorXd padded = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_states_total));
-        padded.head(full_state.size()) = full_state;
-        full_state = padded;
+    // Build full state vector for evaluation:
+    // - Start with the full operating-point state from the simulator
+    // - Override selected state positions with model.x0 values using state_indices
+    Eigen::VectorXd full_state = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_states_total));
+
+    // Get the full operating-point state from simulator
+    Eigen::VectorXd sim_state = sim.GetState();
+    for (Eigen::Index k = 0;
+         k < std::min(sim_state.size(), static_cast<Eigen::Index>(n_states_total)); ++k) {
+        full_state(k) = sim_state(k);
+    }
+
+    // Map model.x0 values into their correct positions using state_indices
+    for (int j = 0; j < nx; ++j) {
+        int k = state_indices[j]; // Full state index for selected state j
+        full_state(k) = model.x0(j);
     }
 
     // Evaluate A matrix (full) and extract selected columns

@@ -863,7 +863,13 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     if (phase_ != Phase::Staged && phase_ != Phase::Running) {
         throw LifecycleError(LifecyclePhase::Step, "AdaptiveStep() requires prior Stage()");
     }
-    phase_ = Phase::Running;
+
+    // Auto-log RUN phase on first step (mirrors Step() behavior)
+    if (phase_ == Phase::Staged) {
+        phase_ = Phase::Running;
+        logger_.BeginPhase(SimPhase::Run);
+        logger_.LogRunStart(time_, config_.t_end, config_.dt);
+    }
 
     auto deriv_func = [this](double t, const JanusVector<double> &x) -> JanusVector<double> {
         state_manager_.SetState(x);
