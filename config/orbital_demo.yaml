@@ -135,6 +135,10 @@ staging:
   trim:
     enabled: false
 
-  # Symbolics: Generate symbolic dynamics graph (future feature)
+  # Symbolics: Generate symbolic dynamics graph
   symbolics:
-    enabled: false
+    enabled: true
+    generate_dynamics: true   # Generate f(t, x) -> xdot function
+    generate_jacobian: true   # Generate df/dx Jacobian
+    generate_step: true       # Generate RK4 step function
+    step_dt: 0.1              # Step size for discrete step function

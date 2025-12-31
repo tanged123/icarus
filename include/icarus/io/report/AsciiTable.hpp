@@ -63,8 +63,8 @@ class AsciiTable {
         // Top border
         oss << RenderTopBorder(widths) << "\n";
 
-        // Header row
-        oss << RenderRow(GetHeaders(), widths) << "\n";
+        // Header row (always left-aligned)
+        oss << RenderHeaderRow(GetHeaders(), widths) << "\n";
 
         // Header separator
         oss << RenderHeaderSeparator(widths) << "\n";
@@ -180,13 +180,40 @@ class AsciiTable {
         return oss.str();
     }
 
+    /// Render header row (always left-aligned regardless of column alignment)
+    [[nodiscard]] std::string RenderHeaderRow(const std::vector<std::string> &cells,
+                                              const std::vector<std::size_t> &widths) const {
+        std::ostringstream oss;
+        oss << BoxChars::Vertical;
+        for (std::size_t i = 0; i < widths.size(); ++i) {
+            std::string cell = (i < cells.size()) ? cells[i] : "";
+            oss << " " << AlignCell(cell, widths[i], Align::Left) << " ";
+            oss << BoxChars::Vertical;
+        }
+        return oss.str();
+    }
+
+    /// Calculate display width of a UTF-8 string (codepoints, not bytes)
+    [[nodiscard]] static std::size_t DisplayWidth(const std::string &text) {
+        std::size_t width = 0;
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(text[i]);
+            // Count only lead bytes (not continuation bytes 10xxxxxx)
+            if ((c & 0xC0) != 0x80) {
+                ++width;
+            }
+        }
+        return width;
+    }
+
     [[nodiscard]] static std::string AlignCell(const std::string &text, std::size_t width,
                                                Align align) {
-        if (text.size() >= width) {
+        std::size_t display_width = DisplayWidth(text);
+        if (display_width >= width) {
             return text.substr(0, width);
         }
 
-        std::size_t padding = width - text.size();
+        std::size_t padding = width - display_width;
         switch (align) {
         case Align::Left:
             return text + std::string(padding, ' ');

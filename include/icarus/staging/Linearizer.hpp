@@ -306,7 +306,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     const std::size_t n_states_total = sym_sim.GetStateSize();
 
-    // Create symbolic variables
+    // Create symbolic variables - MUST use sym_vec_pair to get pure symbolic MX
     auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states_total));
     Scalar t_sym = janus::sym("t");
 
@@ -333,8 +333,6 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     // Compute derivatives symbolically
     JanusVector<Scalar> xdot_vec = sym_sim.ComputeDerivatives();
 
-    // Build symbolic xdot (only the states we care about)
-    // For linearization, we need xdot for the selected states
     // Find indices of selected states in global state vector
     std::vector<int> state_indices;
     state_indices.reserve(nx);
@@ -367,16 +365,9 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     }
     Scalar xdot_mx = Scalar::vertcat(xdot_selected);
 
-    // Build symbolic x vector for selected states
-    std::vector<Scalar> x_selected;
-    x_selected.reserve(nx);
-    for (int idx : state_indices) {
-        x_selected.push_back(x_vec(idx));
-    }
-    Scalar x_selected_mx = Scalar::vertcat(x_selected);
-
     // Compute A = df/dx using symbolic Jacobian
-    Scalar A_sym = janus::jacobian({xdot_mx}, {x_selected_mx});
+    // Use the full x_mx symbol (pure MX) for differentiation, then extract relevant columns
+    Scalar A_full_sym = janus::jacobian({xdot_mx}, {x_mx});
 
     // Compute B = df/du
     Scalar B_sym;
@@ -395,12 +386,12 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
         }
     }
 
-    Scalar C_sym, D_sym;
+    Scalar C_full_sym, D_sym;
     if (ny > 0) {
         Scalar y_mx = Scalar::vertcat(y_elements);
 
-        // Compute C = dg/dx
-        C_sym = janus::jacobian({y_mx}, {x_selected_mx});
+        // Compute C = dg/dx (full Jacobian)
+        C_full_sym = janus::jacobian({y_mx}, {x_mx});
 
         // Compute D = dg/du
         if (nu > 0) {
@@ -416,36 +407,38 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
         all_inputs.push_back(u_mx);
     }
 
-    janus::Function A_func("A", all_inputs, {A_sym});
+    janus::Function A_full_func("A_full", all_inputs, {A_full_sym});
 
-    // Evaluate at operating point
-    std::vector<double> eval_args;
-    eval_args.push_back(model.t0);
-    for (int i = 0; i < static_cast<int>(n_states_total); ++i) {
-        if (i < static_cast<int>(model.x0.size())) {
-            eval_args.push_back(model.x0(i));
-        } else {
-            // Use zero for non-selected states (operating point states are already captured)
-            eval_args.push_back(0.0);
-        }
-    }
-    for (int i = 0; i < nu; ++i) {
-        eval_args.push_back(model.u0(i));
+    // Get full state from numeric simulator for evaluation
+    Eigen::VectorXd full_state = sim.GetState();
+    // Pad if necessary
+    if (full_state.size() < static_cast<Eigen::Index>(n_states_total)) {
+        Eigen::VectorXd padded = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_states_total));
+        padded.head(full_state.size()) = full_state;
+        full_state = padded;
     }
 
-    // Evaluate A matrix
-    auto A_result = A_func(eval_args);
+    // Evaluate A matrix (full) and extract selected columns
+    // Call function with properly typed arguments: (t0, x, [u])
+    std::vector<Eigen::MatrixXd> A_full_result;
+    if (nu > 0) {
+        A_full_result = A_full_func(model.t0, full_state, model.u0);
+    } else {
+        A_full_result = A_full_func(model.t0, full_state);
+    }
+
     model.A.resize(nx, nx);
     for (int i = 0; i < nx; ++i) {
         for (int j = 0; j < nx; ++j) {
-            model.A(i, j) = A_result[0](i, j);
+            int col_idx = state_indices[j]; // Map to full state column
+            model.A(i, j) = A_full_result[0](i, col_idx);
         }
     }
 
     // Evaluate B matrix
     if (nu > 0) {
         janus::Function B_func("B", all_inputs, {B_sym});
-        auto B_result = B_func(eval_args);
+        auto B_result = B_func(model.t0, full_state, model.u0);
         model.B.resize(nx, nu);
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nu; ++j) {
@@ -456,14 +449,20 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
         model.B.resize(nx, 0);
     }
 
-    // Evaluate C matrix
+    // Evaluate C matrix (full) and extract selected columns
     if (ny > 0) {
-        janus::Function C_func("C", all_inputs, {C_sym});
-        auto C_result = C_func(eval_args);
+        janus::Function C_full_func("C_full", all_inputs, {C_full_sym});
+        std::vector<Eigen::MatrixXd> C_full_result;
+        if (nu > 0) {
+            C_full_result = C_full_func(model.t0, full_state, model.u0);
+        } else {
+            C_full_result = C_full_func(model.t0, full_state);
+        }
         model.C.resize(ny, nx);
         for (int i = 0; i < ny; ++i) {
             for (int j = 0; j < nx; ++j) {
-                model.C(i, j) = C_result[0](i, j);
+                int col_idx = state_indices[j]; // Map to full state column
+                model.C(i, j) = C_full_result[0](i, col_idx);
             }
         }
     } else {
@@ -473,7 +472,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     // Evaluate D matrix
     if (ny > 0 && nu > 0) {
         janus::Function D_func("D", all_inputs, {D_sym});
-        auto D_result = D_func(eval_args);
+        auto D_result = D_func(model.t0, full_state, model.u0);
         model.D.resize(ny, nu);
         for (int i = 0; i < ny; ++i) {
             for (int j = 0; j < nu; ++j) {
