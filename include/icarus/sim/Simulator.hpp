@@ -871,6 +871,9 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
         logger_.LogRunStart(time_, config_.t_end, config_.dt);
     }
 
+    // Invoke input sources (mirrors Step() logic)
+    InvokeInputSources();
+
     // Get active groups for this frame (mirrors Step() logic)
     auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
 
@@ -944,6 +947,10 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     if (result.accepted) {
         state_manager_.SetState(result.state);
         time_ += result.dt_actual;
+        frame_count_++;
+
+        // Invoke output observers (mirrors Step() logic)
+        InvokeOutputObservers();
     }
 
     return result;
