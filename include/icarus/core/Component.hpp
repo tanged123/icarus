@@ -9,8 +9,8 @@
  */
 
 #include <icarus/core/ComponentConfig.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <string>
 #include <vector>
 

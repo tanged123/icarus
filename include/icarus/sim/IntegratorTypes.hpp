@@ -9,7 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <stdexcept>
 #include <string>
 

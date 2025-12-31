@@ -8,8 +8,8 @@
  * InputHandles are registered at Provision and wired at Stage.
  */
 
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <string>
 
 namespace icarus {

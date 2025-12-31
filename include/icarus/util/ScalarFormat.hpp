@@ -8,7 +8,7 @@
  * Provides templated formatting that works for both double and SymbolicScalar.
  */
 
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 
 #include <iomanip>
 #include <sstream>

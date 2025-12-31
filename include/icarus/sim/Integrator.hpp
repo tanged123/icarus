@@ -8,7 +8,7 @@
  */
 
 #include <functional>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/sim/IntegratorTypes.hpp>
 #include <string>
 

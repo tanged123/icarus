@@ -15,8 +15,8 @@
 #include <icarus/core/Component.hpp>
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/ComponentFactory.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/ErrorLogging.hpp>
-#include <icarus/core/Types.hpp>
 #include <icarus/io/DataDictionary.hpp>
 #include <icarus/io/MissionLogger.hpp>
 #include <icarus/io/SimulationLoader.hpp>
@@ -670,7 +670,7 @@ inline void Simulator::Step(double dt) {
     // Helper to check if component should run this frame
     // A component runs if: (1) it's in an active group, OR (2) it's not in any scheduler group
     auto should_run = [&active_components, &all_scheduled_components](const auto &comp) {
-        const std::string &name = comp->Name();
+        const std::string &name = comp->FullName();
         // If component isn't registered with scheduler, run every frame (default behavior)
         if (!all_scheduled_components.contains(name)) {
             return true;

@@ -8,7 +8,7 @@
  * Wraps SignalRegistry with component context awareness.
  */
 
-#include <icarus/core/Config.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>

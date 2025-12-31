@@ -9,9 +9,8 @@
  */
 
 #include <deque>
-#include <icarus/core/Config.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Signal.hpp>
@@ -824,7 +823,9 @@ template <typename Scalar> class SignalRegistry {
      * @brief Wire an input with gain (type-erased version)
      *
      * Uses the input's registered type information to perform wiring.
-     * Falls back to Scalar type if type cannot be determined.
+     * Only supports Scalar type - gain wiring is not applicable to vector types.
+     *
+     * @throws WiringError if input type is not Scalar
      */
     void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
                               double gain = 1.0) {
@@ -833,8 +834,14 @@ template <typename Scalar> class SignalRegistry {
             throw WiringError("Input not found: '" + input_name + "'");
         }
 
-        // For now, assume Scalar type. In a full implementation,
-        // we would use type information stored during registration.
+        // Verify input is Scalar type - gain wiring only applies to scalars
+        const std::string &semantic_type = it->second.info.semantic;
+        if (semantic_type != typeid(Scalar).name()) {
+            throw WiringError(
+                "wire_input_with_gain only supports Scalar type, got: " + semantic_type +
+                " (input: '" + input_name + "'). Use wire_input for vector types.");
+        }
+
         wire_input_with_gain<Scalar>(input_name, source_name, gain);
     }
 

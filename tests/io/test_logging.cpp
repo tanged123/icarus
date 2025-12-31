@@ -7,8 +7,6 @@
 #include <icarus/io/Banner.hpp>
 #include <icarus/io/Console.hpp>
 #include <icarus/io/ErrorHandler.hpp>
-#include <icarus/io/LogConfig.hpp>
-#include <icarus/io/LogEntry.hpp>
 #include <icarus/io/LogService.hpp>
 #include <icarus/io/LogSink.hpp>
 #include <icarus/io/MissionDebrief.hpp>

@@ -12,8 +12,8 @@
  */
 
 #include <icarus/core/ComponentConfig.hpp>
-#include <icarus/core/Types.hpp>
-#include <icarus/io/LogConfig.hpp>
+#include <icarus/core/CoreTypes.hpp>
+#include <icarus/io/LogService.hpp>
 #include <icarus/signal/SignalRouter.hpp>
 #include <icarus/sim/IntegratorTypes.hpp>
 

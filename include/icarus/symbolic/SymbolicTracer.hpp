@@ -8,8 +8,8 @@
  * Traces simulation dynamics to produce janus::Function for AD & optimization.
  */
 
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 #include <icarus/sim/Simulator.hpp>
 
 #include <janus/core/Function.hpp>

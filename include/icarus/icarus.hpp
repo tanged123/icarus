@@ -14,9 +14,8 @@
 
 // Core
 #include <icarus/core/Component.hpp>
-#include <icarus/core/Concepts.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 
 // Signal
 #include <icarus/signal/Backplane.hpp>
@@ -51,5 +50,5 @@
 #include <icarus/util/ScalarFormat.hpp>
 
 namespace icarus {
-// Version functions are defined in core/Types.hpp
+// Version functions are defined in core/CoreTypes.hpp
 } // namespace icarus

@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <icarus/core/Component.hpp>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>

@@ -15,7 +15,7 @@
  */
 
 #include <icarus/core/Component.hpp>
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 
 #include <cstddef>
 #include <memory>

@@ -8,7 +8,7 @@
  * Provides structured logging throughout the simulation lifecycle.
  */
 
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/io/Banner.hpp>
 #include <icarus/io/Console.hpp>
 #include <icarus/io/DataDictionary.hpp>

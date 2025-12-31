@@ -8,7 +8,6 @@
  */
 
 #include <icarus/io/Console.hpp>
-#include <icarus/io/LogEntry.hpp>
 #include <icarus/io/LogService.hpp>
 
 #include <fstream>

@@ -8,7 +8,7 @@
  * Captures simulation outcomes for analysis.
  */
 
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 
 #include <chrono>
 #include <map>

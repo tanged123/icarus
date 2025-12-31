@@ -14,7 +14,7 @@
  * This class IS templated on Scalar for dual-backend support.
  */
 
-#include <icarus/core/Types.hpp>
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/sim/Integrator.hpp>
 #include <icarus/sim/IntegratorFactory.hpp>
 #include <icarus/sim/IntegratorTypes.hpp>

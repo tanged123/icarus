@@ -8,8 +8,8 @@
  * Components request config values using typed accessors in Provision().
  */
 
+#include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <icarus/core/Types.hpp>
 
 #include <limits>
 #include <string>
