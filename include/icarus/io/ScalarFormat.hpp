@@ -14,7 +14,7 @@
 #include <sstream>
 #include <string>
 
-namespace icarus::util {
+namespace icarus::io {
 
 /**
  * @brief Format a scalar value to string
@@ -171,4 +171,4 @@ template <typename Scalar> double EvaluateToDouble(const Scalar &value, double d
     }
 }
 
-} // namespace icarus::util
+} // namespace icarus::io

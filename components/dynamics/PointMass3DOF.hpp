@@ -104,6 +104,8 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
      * For programmatic setup, use SetMass(), SetInitialPosition(), etc.
      * before calling Stage() - these values won't be overwritten if
      * not present in config.
+     *
+     * Also applies ICs to state vector if already bound (for Reset() support).
      */
     void Stage(Backplane<Scalar> &) override {
         const auto &config = this->GetConfig();
@@ -125,6 +127,20 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
             auto vel = config.template Get<Vec3<double>>("initial_velocity", Vec3<double>::Zero());
             ic_velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
                                         static_cast<Scalar>(vel(2))};
+        }
+
+        // Apply ICs to state vector if already bound (for Reset() support)
+        if (state_pos_ != nullptr) {
+            state_pos_[0] = ic_position_(0);
+            state_pos_[1] = ic_position_(1);
+            state_pos_[2] = ic_position_(2);
+            state_vel_[0] = ic_velocity_(0);
+            state_vel_[1] = ic_velocity_(1);
+            state_vel_[2] = ic_velocity_(2);
+
+            // Also update output signals
+            position_ = ic_position_;
+            velocity_ = ic_velocity_;
         }
     }
 
