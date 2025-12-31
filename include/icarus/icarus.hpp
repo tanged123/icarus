@@ -27,7 +27,6 @@
 
 // Simulation
 #include <icarus/sim/Scheduler.hpp>
-#include <icarus/sim/SimulationResults.hpp>
 #include <icarus/sim/Simulator.hpp>
 #include <icarus/sim/integrators/Integrator.hpp>
 #include <icarus/sim/integrators/IntegratorFactory.hpp>
