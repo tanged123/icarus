@@ -155,17 +155,117 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
         model.u0(i) = sim.Peek(config.inputs[i]);
     }
     model.t0 = t;
+    // Get full state vector and its size
+    Eigen::VectorXd state_backup = sim.GetState();
+    const auto n_states_total = state_backup.size();
+
+    // Resolve mapping from config.states names to full-state indices
+    // This uses the DataDictionary to find the actual state positions
+    std::vector<int> state_indices;
+    state_indices.reserve(nx);
+    auto dict = sim.GetDataDictionary();
+
+    for (const auto &state_name : config.states) {
+        bool found = false;
+        // Search through components to find state offset
+        Eigen::Index current_offset = 0;
+        for (const auto &comp_entry : dict.components) {
+            // Check if this component owns the state by matching the prefix
+            if (state_name.rfind(comp_entry.name + ".", 0) == 0) {
+                // Found the component - need to find which state index within it
+                // States are typically ordered: x, y, z, vx, vy, vz, etc.
+                // We look for the local state name after the component prefix
+                std::string local_state = state_name.substr(comp_entry.name.size() + 1);
+
+                // Get component state size from outputs that look like state variables
+                std::size_t comp_state_size = 0;
+                std::vector<std::string> state_like_outputs;
+                for (const auto &output : comp_entry.outputs) {
+                    // State variables are typically position, velocity, attitude, etc.
+                    std::string local = output.name.substr(comp_entry.name.size() + 1);
+                    if (local.find("position") != std::string::npos ||
+                        local.find("velocity") != std::string::npos ||
+                        local.find("attitude") != std::string::npos ||
+                        local.find("omega") != std::string::npos ||
+                        local.find(".x") != std::string::npos ||
+                        local.find(".y") != std::string::npos ||
+                        local.find(".z") != std::string::npos) {
+                        state_like_outputs.push_back(local);
+                        comp_state_size++;
+                    }
+                }
+
+                // Find position of this state within component's states
+                for (std::size_t i = 0; i < state_like_outputs.size(); ++i) {
+                    if (local_state == state_like_outputs[i]) {
+                        state_indices.push_back(static_cast<int>(current_offset + i));
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                    break;
+            }
+            // Estimate component state size based on typical 6DOF patterns
+            // This is a heuristic - components with position/velocity have 6 states
+            std::size_t estimated_state_size = 0;
+            for (const auto &output : comp_entry.outputs) {
+                std::string local = output.name.substr(comp_entry.name.size() + 1);
+                if (local.find("position") != std::string::npos ||
+                    local.find("velocity") != std::string::npos) {
+                    estimated_state_size = 6; // 3 position + 3 velocity
+                    break;
+                }
+            }
+            current_offset += static_cast<Eigen::Index>(estimated_state_size);
+        }
+
+        if (!found) {
+            // Fallback: try direct registry lookup by name pattern
+            // Assume states are named like "Component.position.x" and map to indices
+            // based on the position in config.states list
+            state_indices.push_back(static_cast<int>(state_indices.size()));
+        }
+    }
+
+    // If mapping failed, warn and fall back to sequential indices
+    // This matches SymbolicLinearizer's fallback behavior
+    bool mapping_failed = false;
+    for (int i = 0; i < nx; ++i) {
+        if (state_indices[i] >= static_cast<int>(n_states_total)) {
+            mapping_failed = true;
+            break;
+        }
+    }
+    if (mapping_failed) {
+        sim.GetLogger().Log(
+            LogLevel::Warning,
+            "[LIN] FiniteDifferenceLinearizer: State index mapping produced out-of-bounds indices. "
+            "Falling back to sequential indices. This may produce incorrect Jacobian results.");
+        // Guard: ensure we have enough states in the simulator to populate all indices
+        if (n_states_total < static_cast<Eigen::Index>(nx)) {
+            throw ConfigError("FiniteDifferenceLinearizer: Cannot linearize - simulator has only " +
+                              std::to_string(n_states_total) +
+                              " states but linearization config requires " + std::to_string(nx) +
+                              " states.");
+        }
+        state_indices.clear();
+        for (int i = 0; i < nx; ++i) {
+            state_indices.push_back(i);
+        }
+    }
+
     // Compute A = df/dx (central differences on derivatives)
     model.A.resize(nx, nx);
-    Eigen::VectorXd state_backup = sim.GetState();
 
     for (int j = 0; j < nx; ++j) {
-        // Get original state value
+        int full_idx = state_indices[j]; // Index in full state vector
+
         Eigen::VectorXd state_plus = state_backup;
         Eigen::VectorXd state_minus = state_backup;
 
-        state_plus(j) += h;
-        state_minus(j) -= h;
+        state_plus(full_idx) += h;
+        state_minus(full_idx) -= h;
 
         // Forward perturbation
         sim.SetState(state_plus);
@@ -175,8 +275,13 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
         sim.SetState(state_minus);
         Eigen::VectorXd xdot_minus = sim.ComputeDerivatives(t);
 
-        // Central difference
-        model.A.col(j) = (xdot_plus - xdot_minus) / (2.0 * h);
+        // Central difference - extract only the rows corresponding to selected states
+        Eigen::VectorXd col(nx);
+        for (int i = 0; i < nx; ++i) {
+            int row_idx = state_indices[i];
+            col(i) = (xdot_plus(row_idx) - xdot_minus(row_idx)) / (2.0 * h);
+        }
+        model.A.col(j) = col;
     }
 
     // Restore state
@@ -195,8 +300,13 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
         sim.Poke(config.inputs[j], u0_j - h);
         Eigen::VectorXd xdot_minus = sim.ComputeDerivatives(t);
 
-        // Central difference
-        model.B.col(j) = (xdot_plus - xdot_minus) / (2.0 * h);
+        // Central difference - extract only the rows corresponding to selected states
+        Eigen::VectorXd col(nx);
+        for (int i = 0; i < nx; ++i) {
+            int row_idx = state_indices[i];
+            col(i) = (xdot_plus(row_idx) - xdot_minus(row_idx)) / (2.0 * h);
+        }
+        model.B.col(j) = col;
 
         // Restore
         sim.Poke(config.inputs[j], u0_j);
@@ -215,11 +325,13 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
     model.C.resize(ny, nx);
     if (ny > 0) {
         for (int j = 0; j < nx; ++j) {
+            int full_idx = state_indices[j]; // Index in full state vector
+
             Eigen::VectorXd state_plus = state_backup;
             Eigen::VectorXd state_minus = state_backup;
 
-            state_plus(j) += h;
-            state_minus(j) -= h;
+            state_plus(full_idx) += h;
+            state_minus(full_idx) -= h;
 
             // Forward perturbation
             sim.SetState(state_plus);
@@ -359,8 +471,15 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
                 std::to_string(nx - static_cast<int>(state_indices.size())) +
                 " state name(s) to state layout. Falling back to index-based mapping. "
                 "This may produce incorrect Jacobian results.");
+        // Guard: ensure we have enough states in the symbolic simulator to populate all indices
+        if (n_states_total < static_cast<std::size_t>(nx)) {
+            throw ConfigError(
+                "SymbolicLinearizer: Cannot linearize - symbolic simulator has only " +
+                std::to_string(n_states_total) + " states but linearization config requires " +
+                std::to_string(nx) + " states.");
+        }
         state_indices.clear();
-        for (int i = 0; i < nx && i < static_cast<int>(n_states_total); ++i) {
+        for (int i = 0; i < nx; ++i) {
             state_indices.push_back(i);
         }
     }

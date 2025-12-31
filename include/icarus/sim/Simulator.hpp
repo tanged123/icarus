@@ -871,9 +871,65 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
         logger_.LogRunStart(time_, config_.t_end, config_.dt);
     }
 
-    auto deriv_func = [this](double t, const JanusVector<double> &x) -> JanusVector<double> {
+    // Get active groups for this frame (mirrors Step() logic)
+    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
+
+    // Build set of active component names for O(1) lookup
+    std::unordered_set<std::string> active_components;
+    for (const auto &group_name : active_groups) {
+        for (const auto &comp_name : scheduler_.GetMembersForGroup(group_name)) {
+            active_components.insert(comp_name);
+        }
+    }
+
+    // Build set of all scheduled component names (to detect unscheduled components)
+    std::unordered_set<std::string> all_scheduled_components;
+    for (const auto &group : scheduler_.GetGroups()) {
+        for (const auto &member : group.members) {
+            all_scheduled_components.insert(member.component);
+        }
+    }
+
+    // Helper to check if component should run this frame
+    // A component runs if: (1) it's in an active group, OR (2) it's not in any scheduler group
+    auto should_run = [&active_components, &all_scheduled_components](const auto &comp) {
+        const std::string &name = comp->FullName();
+        // If component isn't registered with scheduler, run every frame (default behavior)
+        if (!all_scheduled_components.contains(name)) {
+            return true;
+        }
+        // Otherwise, only run if its group is active this frame
+        return active_components.contains(name);
+    };
+
+    // Helper to execute component method with error handling
+    auto exec_component = [this](auto &comp, auto method, double t, double step_dt) {
+        try {
+            logger_.BeginComponentTiming(comp->Name());
+            (comp.get()->*method)(t, step_dt);
+            logger_.EndComponentTiming();
+        } catch (const Error &e) {
+            logger_.EndComponentTiming();
+            LogError(e, t, comp->FullName());
+            throw;
+        }
+    };
+
+    // Derivative function with scheduler filtering (mirrors Step() logic)
+    auto deriv_func = [this, &exec_component, &should_run,
+                       dt_request](double t, const JanusVector<double> &x) -> JanusVector<double> {
         state_manager_.SetState(x);
-        return ComputeDerivatives(t);
+        state_manager_.ZeroDerivatives();
+
+        for (auto &comp : components_) {
+            if (should_run(comp)) {
+                exec_component(comp, &Component<double>::PreStep, t, dt_request);
+                exec_component(comp, &Component<double>::Step, t, dt_request);
+                exec_component(comp, &Component<double>::PostStep, t, dt_request);
+            }
+        }
+
+        return state_manager_.GetDerivatives();
     };
 
     JanusVector<double> X = state_manager_.GetState();
