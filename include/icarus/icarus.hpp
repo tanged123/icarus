@@ -14,8 +14,11 @@
 
 // Core
 #include <icarus/core/Component.hpp>
+#include <icarus/core/ComponentConfig.hpp>
+#include <icarus/core/ComponentFactory.hpp>
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
+#include <icarus/core/ErrorLogging.hpp>
 
 // Signal
 #include <icarus/signal/Backplane.hpp>
@@ -23,18 +26,25 @@
 #include <icarus/signal/InputHandle.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/Signal.hpp>
+#include <icarus/signal/SignalRouter.hpp>
 #include <icarus/signal/VecHandle.hpp>
 
 // Simulation
 #include <icarus/sim/Scheduler.hpp>
 #include <icarus/sim/Simulator.hpp>
+#include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/sim/integrators/Integrator.hpp>
 #include <icarus/sim/integrators/IntegratorFactory.hpp>
 #include <icarus/sim/integrators/IntegratorTypes.hpp>
 #include <icarus/sim/integrators/RK45Integrator.hpp>
 #include <icarus/sim/integrators/RK4Integrator.hpp>
 
+// Staging (Phase 4)
+#include <icarus/staging/StagingTypes.hpp>
+
 // I/O
+#include <icarus/io/MissionLogger.hpp>
+#include <icarus/io/SimulationLoader.hpp>
 #include <icarus/io/data/DataDictionary.hpp>
 #include <icarus/io/data/Playback.hpp>
 #include <icarus/io/data/Recorder.hpp>
