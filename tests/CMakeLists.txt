@@ -124,3 +124,10 @@ icarus_add_test(test_symbolic_core
     staging/test_symbolic_core.cpp
 )
 target_include_directories(test_symbolic_core PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Phase 4.5: Tumbling body integration test
+icarus_add_test(test_tumbling_body
+    integration/test_tumbling_body.cpp
+)
+target_include_directories(test_tumbling_body PRIVATE ${PROJECT_SOURCE_DIR}/components)
+target_link_libraries(test_tumbling_body PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>)
