@@ -43,7 +43,7 @@ if ! command -v bd &> /dev/null; then
     echo "  manual resolution."
     echo ""
     echo "  To install bd, run:"
-    echo "    curl -sSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
+    echo "    curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
     echo ""
     echo "  After installing, re-run this script to configure the merge driver."
     echo ""
@@ -51,7 +51,7 @@ if ! command -v bd &> /dev/null; then
 else
     # Configure the beads merge driver in the repo's local git config
     git config merge.beads.name "Beads JSONL 3-way merge"
-    git config merge.beads.driver "bd merge %O %A %B %P"
+    git config merge.beads.driver "bd merge %A %O %A %B"
 
     echo "✓ Beads merge driver configured!"
     echo "   Git will use 'bd merge' for 3-way merges on .beads/issues.jsonl"
