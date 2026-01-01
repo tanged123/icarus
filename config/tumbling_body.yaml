@@ -18,12 +18,12 @@ simulation:
 # =============================================================================
 
 logging:
-  console_level: debug       # trace, debug, info, warning, error
-  file_enabled: true      # Set to true to write log file
+  console_level: info       # trace, debug, info, warning, error
+  file_enabled: false      # Set to true to write log file
   file_path: "tumbling_body_demo.log"
-  file_level: trace
-  progress_enabled: true
-  profiling_enabled: true
+  file_level: info
+  progress_enabled: false
+  profiling_enabled: false
 
 # =============================================================================
 # Time Configuration
