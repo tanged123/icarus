@@ -14,9 +14,13 @@
 
 #include <icarus/core/ComponentFactory.hpp>
 
+#include <aggregators/ForceAggregator.hpp>
+#include <aggregators/MassAggregator.hpp>
 #include <dynamics/PointMass3DOF.hpp>
+#include <dynamics/RigidBody6DOF.hpp>
 #include <environment/AtmosphericDrag.hpp>
 #include <environment/PointMassGravity.hpp>
+#include <mass/StaticMass.hpp>
 
 namespace {
 
@@ -50,6 +54,36 @@ const bool registered_numeric = []() {
         return comp;
     });
 
+    // Mass components
+    factory.Register("StaticMass", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::StaticMass<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Aggregator components
+    factory.Register("MassAggregator", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::MassAggregator<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("ForceAggregator", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::ForceAggregator<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("RigidBody6DOF", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::RigidBody6DOF<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
     return true;
 }();
 
@@ -75,6 +109,36 @@ const bool registered_symbolic = []() {
 
     factory.Register("AtmosphericDrag", [](const ::icarus::ComponentConfig &config) {
         auto comp = std::make_unique<::icarus::components::AtmosphericDrag<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Mass components
+    factory.Register("StaticMass", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::StaticMass<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Aggregator components
+    factory.Register("MassAggregator", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::MassAggregator<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("ForceAggregator", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::ForceAggregator<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("RigidBody6DOF", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::RigidBody6DOF<janus::SymbolicScalar>>(
             config.name, config.entity);
         comp->SetConfig(config);
         return comp;

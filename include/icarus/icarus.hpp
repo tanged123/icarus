@@ -13,6 +13,7 @@
 #include <vulcan/vulcan.hpp>
 
 // Core
+#include <icarus/core/AggregationTypes.hpp>
 #include <icarus/core/Component.hpp>
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/ComponentFactory.hpp>

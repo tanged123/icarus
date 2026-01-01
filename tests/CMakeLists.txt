@@ -41,6 +41,23 @@ icarus_add_test(test_point_mass
 )
 target_include_directories(test_point_mass PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Mass aggregator tests (Phase 4)
+icarus_add_test(test_mass_aggregator
+    components/test_mass_aggregator.cpp
+)
+target_include_directories(test_mass_aggregator PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Force aggregator tests (Phase 4)
+icarus_add_test(test_force_aggregator
+    components/test_force_aggregator.cpp
+)
+target_include_directories(test_force_aggregator PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# RigidBody6DOF tests (Phase 4.4)
+icarus_add_test(test_rigid_body_6dof
+    components/test_rigid_body_6dof.cpp
+)
+target_include_directories(test_rigid_body_6dof PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
 # IO tests
 icarus_add_test(test_data_dictionary
