@@ -75,8 +75,9 @@ class TumblingBodyTest : public ::testing::Test {
         if (fs::exists("../../config/tumbling_body.yaml")) {
             return "../../config/tumbling_body.yaml";
         }
-        // Absolute fallback
-        return "/home/tanged/sources/icarus/config/tumbling_body.yaml";
+        // No fallback - throw descriptive error
+        throw std::runtime_error("Could not find config/tumbling_body.yaml. "
+                                 "Run tests from repository root or build directory.");
     }
 };
 
