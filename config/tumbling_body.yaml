@@ -18,10 +18,12 @@ simulation:
 # =============================================================================
 
 logging:
-  console_level: info
-  file_enabled: false
-  progress_enabled: false
-  profiling_enabled: false
+  console_level: debug       # trace, debug, info, warning, error
+  file_enabled: true      # Set to true to write log file
+  file_path: "tumbling_body_demo.log"
+  file_level: trace
+  progress_enabled: true
+  profiling_enabled: true
 
 # =============================================================================
 # Time Configuration
@@ -30,7 +32,7 @@ logging:
 time:
   start: 0.0
   end: 10.0          # 10 seconds of tumbling
-  dt: 0.001          # 1 kHz for high accuracy
+  dt: 0.005          # 200 Hz for high accuracy
 
 # =============================================================================
 # Integrator Configuration
@@ -120,21 +122,21 @@ routes:
 scheduler:
   groups:
     - name: mass
-      rate_hz: 1000.0
+      rate_hz: 200.0
       priority: 1
       members:
         - component: Mass
           priority: 1
 
     - name: forces
-      rate_hz: 1000.0
+      rate_hz: 200.0
       priority: 2
       members:
         - component: Forces
           priority: 1
 
     - name: dynamics
-      rate_hz: 1000.0
+      rate_hz: 200.0
       priority: 3
       members:
         - component: Body

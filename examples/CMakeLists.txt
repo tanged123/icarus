@@ -26,3 +26,9 @@ icarus_add_example(config_driven_demo
     config_driven_demo.cpp
 )
 
+# Tumbling Body Demo
+# Demonstrates: RigidBody6DOF, quaternion attitude, conservation laws
+icarus_add_example(tumbling_body_demo
+    tumbling_body_demo.cpp
+)
+
