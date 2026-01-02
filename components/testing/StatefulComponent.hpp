@@ -59,6 +59,7 @@ template <typename Scalar> class StatefulComponent : public Component<Scalar> {
     void Stage(Backplane<Scalar> &) override {
         // Mark as bound (for compatibility with tests)
         state_bound_ = Scalar{1};
+        state_bound_flag_ = true;
     }
 
     void Step(Scalar /*t*/, Scalar /*dt*/) override {
@@ -71,7 +72,14 @@ template <typename Scalar> class StatefulComponent : public Component<Scalar> {
     // Accessors for testing
     [[nodiscard]] Scalar *GetStatePtr() { return state_.data(); }
     [[nodiscard]] Scalar *GetStateDotPtr() { return state_dot_.data(); }
-    [[nodiscard]] bool IsBound() const { return state_bound_ > Scalar{0}; }
+
+    /**
+     * @brief Check if state has been bound (staged)
+     *
+     * Uses a plain bool flag instead of Scalar comparison to work
+     * correctly in both numeric and symbolic backends.
+     */
+    [[nodiscard]] bool IsBound() const { return state_bound_flag_; }
 
     // Direct state access for testing
     [[nodiscard]] const std::vector<Scalar> &GetState() const { return state_; }
@@ -89,6 +97,7 @@ template <typename Scalar> class StatefulComponent : public Component<Scalar> {
     std::vector<Scalar> state_;
     std::vector<Scalar> state_dot_;
     Scalar state_bound_{0};
+    bool state_bound_flag_ = false; ///< Plain bool for IsBound() to work in symbolic mode
 };
 
 } // namespace icarus
