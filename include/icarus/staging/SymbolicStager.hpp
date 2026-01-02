@@ -200,11 +200,10 @@ class SymbolicStager {
      */
     [[nodiscard]] std::vector<std::string> GetStateNames() const {
         std::vector<std::string> names;
-        const auto &layout = sym_sim_.GetStateLayout();
-        for (const auto &slice : layout) {
-            for (std::size_t i = 0; i < slice.size; ++i) {
-                names.push_back(slice.component_name + ".state[" + std::to_string(i) + "]");
-            }
+        const auto &bindings = sym_sim_.GetStateBindings();
+        names.reserve(bindings.size());
+        for (const auto &binding : bindings) {
+            names.push_back(binding.name);
         }
         return names;
     }

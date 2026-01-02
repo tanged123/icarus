@@ -3,6 +3,7 @@
  * @brief Unit tests for SymbolicSimulatorCore and SymbolicStager
  *
  * Part of Phase 4: Staging Implementation (Phase C.6)
+ * Updated for Phase 6: Unified signal model
  *
  * Tests the symbolic graph generation infrastructure.
  */
@@ -33,6 +34,7 @@ using namespace icarus::staging;
  * Params: a, b
  *
  * This component works in both numeric and symbolic modes.
+ * Updated for Phase 6: Uses register_state() instead of BindState().
  */
 template <typename Scalar> class LinearDynamics : public Component<Scalar> {
   public:
@@ -42,12 +44,10 @@ template <typename Scalar> class LinearDynamics : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "LinearDynamics"; }
-    [[nodiscard]] std::size_t StateSize() const override { return 1; }
 
     void Provision(Backplane<Scalar> &bp) override {
-        // Output
-        bp.template register_output<Scalar>("x", &x_, "m", "Position state");
-        bp.template register_output<Scalar>("xdot", &xdot_, "m/s", "State derivative");
+        // State (using unified signal model)
+        bp.template register_state<Scalar>("x", &x_, &xdot_, "m", "Position state");
 
         // Input
         bp.template register_input<Scalar>("u", &u_input_, "N", "Control input");
@@ -59,25 +59,15 @@ template <typename Scalar> class LinearDynamics : public Component<Scalar> {
 
     void Stage(Backplane<Scalar> &) override {
         // Set initial condition
-        if (x_ptr_ != nullptr) {
-            *x_ptr_ = x0_;
-        }
+        x_ = x0_;
     }
 
     void Step(Scalar /*t*/, Scalar /*dt*/) override {
-        // Read state
-        x_ = (x_ptr_ != nullptr) ? *x_ptr_ : Scalar{0};
-
         // Read input
         Scalar u = u_input_.get();
 
         // Compute derivative: xdot = a*x + b*u
         xdot_ = a_ * x_ + b_ * u;
-
-        // Write derivative
-        if (xdot_ptr_ != nullptr) {
-            *xdot_ptr_ = xdot_;
-        }
     }
 
     void SetInitialCondition(double x0) { x0_ = Scalar{x0}; }
@@ -90,14 +80,10 @@ template <typename Scalar> class LinearDynamics : public Component<Scalar> {
     std::string name_;
     std::string entity_;
 
-    // State binding
-    Scalar *x_ptr_ = nullptr;
-    Scalar *xdot_ptr_ = nullptr;
-    Scalar x0_{0.0};
-
-    // Internal values
+    // State values
     Scalar x_{0.0};
     Scalar xdot_{0.0};
+    Scalar x0_{0.0};
 
     // Input handle
     InputHandle<Scalar> u_input_;
@@ -105,15 +91,6 @@ template <typename Scalar> class LinearDynamics : public Component<Scalar> {
     // Parameters
     Scalar a_{-1.0};
     Scalar b_{1.0};
-
-    void BindState(Scalar *x, Scalar *xdot, std::size_t /*size*/) override {
-        x_ptr_ = x;
-        xdot_ptr_ = xdot;
-        // Initialize state
-        if (x_ptr_ != nullptr) {
-            *x_ptr_ = x0_;
-        }
-    }
 };
 
 /**
@@ -127,7 +104,6 @@ template <typename Scalar> class ConstantInput : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "ConstantInput"; }
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
 
     void Provision(Backplane<Scalar> &bp) override {
         bp.template register_output<Scalar>("value", &value_, "", "Output value");
@@ -227,15 +203,16 @@ TEST_F(SymbolicSimulatorCoreTest, SignalAccess) {
     EXPECT_GE(names.size(), 2);
 }
 
-TEST_F(SymbolicSimulatorCoreTest, StateLayout) {
+TEST_F(SymbolicSimulatorCoreTest, StateBindingsAccess) {
     SymbolicSimulatorCore sym_sim(config_);
 
-    const auto &layout = sym_sim.GetStateLayout();
-    EXPECT_EQ(layout.size(), 1); // Only Dynamics has state
+    // Use GetStateBindings() instead of GetStateLayout()
+    const auto &bindings = sym_sim.GetStateBindings();
+    EXPECT_EQ(bindings.size(), 1); // Only Dynamics has state
 
-    EXPECT_EQ(layout[0].component_name, "Dynamics");
-    EXPECT_EQ(layout[0].offset, 0);
-    EXPECT_EQ(layout[0].size, 1);
+    EXPECT_NE(bindings[0].name.find("Dynamics"), std::string::npos);
+    EXPECT_NE(bindings[0].value_ptr, nullptr);
+    EXPECT_NE(bindings[0].derivative_ptr, nullptr);
 }
 
 // =============================================================================

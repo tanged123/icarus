@@ -64,8 +64,6 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "PointMassGravity"; }
 
-    [[nodiscard]] std::size_t StateSize() const override { return 0; } // Stateless
-
     // =========================================================================
     // Lifecycle Methods
     // =========================================================================

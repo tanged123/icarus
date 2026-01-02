@@ -46,8 +46,6 @@ template <typename Scalar> class StaticMass : public Component<Scalar> {
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "StaticMass"; }
 
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
-
     // =========================================================================
     // Lifecycle Methods
     // =========================================================================

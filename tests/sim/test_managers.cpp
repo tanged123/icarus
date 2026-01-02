@@ -19,7 +19,7 @@ namespace {
 TEST(StateManagerTest, DefaultConstruction) {
     StateManager<double> sm;
     EXPECT_EQ(sm.TotalSize(), 0u);
-    EXPECT_TRUE(sm.GetLayout().empty());
+    EXPECT_TRUE(sm.GetBindings().empty());
 }
 
 TEST(StateManagerTest, ZeroDerivatives) {

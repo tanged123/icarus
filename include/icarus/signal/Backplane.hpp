@@ -114,6 +114,75 @@ template <typename Scalar> class Backplane {
     }
 
     // =========================================================================
+    // Phase 6: State Registration (Unified Signal Model)
+    // =========================================================================
+
+    /**
+     * @brief Register a scalar state with its derivative
+     *
+     * The state value is published as an output signal AND marked for integration.
+     * StateManager discovers these during DiscoverStates().
+     *
+     * @tparam T The scalar type
+     * @param local_name State name (without entity/component prefix)
+     * @param value Pointer to state value storage
+     * @param derivative Pointer to derivative storage
+     * @param unit Physical unit
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void register_state(const std::string &local_name, T *value, T *derivative,
+                        const std::string &unit = "", const std::string &description = "") {
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_state<T>(full_name, value, derivative, unit, description);
+        registered_outputs_.push_back(full_name);
+        registered_outputs_.push_back(full_name + "_dot");
+    }
+
+    /**
+     * @brief Register a Vec3 state with its derivative
+     *
+     * Creates 6 signals: 3 for value (.x/.y/.z) and 3 for derivative (_dot.x/.y/.z).
+     */
+    template <typename S>
+    void register_state_vec3(const std::string &local_name, Vec3<S> *value, Vec3<S> *derivative,
+                             const std::string &unit = "", const std::string &description = "") {
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_state_vec3<S>(full_name, value, derivative, unit, description);
+        // Track the output signals created
+        registered_outputs_.push_back(full_name + ".x");
+        registered_outputs_.push_back(full_name + ".y");
+        registered_outputs_.push_back(full_name + ".z");
+        registered_outputs_.push_back(full_name + "_dot.x");
+        registered_outputs_.push_back(full_name + "_dot.y");
+        registered_outputs_.push_back(full_name + "_dot.z");
+    }
+
+    /**
+     * @brief Register a quaternion state with its derivative
+     *
+     * Creates 8 signals: 4 for value (.w/.x/.y/.z) and 4 for derivative (_dot.w/.x/.y/.z).
+     */
+    template <typename S>
+    void register_state_quat(const std::string &local_name, Vec4<S> *value, Vec4<S> *derivative,
+                             const std::string &unit = "", const std::string &description = "") {
+        ICARUS_ASSERT(!component_.empty(), "Context must be set before registration");
+        std::string full_name = make_full_name(local_name);
+        registry_.template register_state_quat<S>(full_name, value, derivative, unit, description);
+        // Track the output signals created
+        registered_outputs_.push_back(full_name + ".w");
+        registered_outputs_.push_back(full_name + ".x");
+        registered_outputs_.push_back(full_name + ".y");
+        registered_outputs_.push_back(full_name + ".z");
+        registered_outputs_.push_back(full_name + "_dot.w");
+        registered_outputs_.push_back(full_name + "_dot.x");
+        registered_outputs_.push_back(full_name + "_dot.y");
+        registered_outputs_.push_back(full_name + "_dot.z");
+    }
+
+    // =========================================================================
     // Input Resolution (Stage phase)
     // =========================================================================
 

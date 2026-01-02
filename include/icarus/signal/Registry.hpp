@@ -129,6 +129,160 @@ template <typename Scalar> class SignalRegistry {
     }
 
     // =========================================================================
+    // Phase 6: State Registration (Unified Signal Model)
+    // =========================================================================
+
+    /**
+     * @brief Register a scalar state with its derivative
+     *
+     * Creates two signals: the state value (integrable) and its derivative.
+     * StateManager will discover these and build the integration vector.
+     *
+     * @tparam T The scalar type
+     * @param name State name (e.g., "altitude")
+     * @param value Pointer to state value storage
+     * @param derivative Pointer to derivative storage
+     * @param unit Physical unit
+     * @param description Human-readable description
+     */
+    template <typename T>
+    void register_state(const std::string &name, T *value, T *derivative,
+                        const std::string &unit = "", const std::string &description = "") {
+        if (value == nullptr) {
+            throw SignalError::NullPointer(name, "state value");
+        }
+        if (derivative == nullptr) {
+            throw SignalError::NullPointer(name + "_dot", "state derivative");
+        }
+
+        std::string value_name = name;
+        std::string deriv_name = name + "_dot";
+
+        // Register value signal (integrable)
+        register_signal_impl<T>(value_name, value, unit, description, SignalLifecycle::Dynamic);
+        auto &value_desc = signals_[name_to_index_[value_name]];
+        value_desc.is_integrable = true;
+        value_desc.derivative_signal = deriv_name;
+
+        // Register derivative signal
+        std::string deriv_unit = unit.empty() ? "" : unit + "/s";
+        register_signal_impl<T>(deriv_name, derivative, deriv_unit, description + " derivative",
+                                SignalLifecycle::Dynamic);
+        auto &deriv_desc = signals_[name_to_index_[deriv_name]];
+        deriv_desc.integrated_signal = value_name;
+
+        // Track the state pair
+        state_pairs_.push_back({value_name, deriv_name, value, derivative});
+    }
+
+    /**
+     * @brief Register a Vec3 state with its derivative
+     *
+     * Creates 6 signals: 3 for value (.x/.y/.z) and 3 for derivative (_dot.x/.y/.z).
+     */
+    template <typename S>
+    void register_state_vec3(const std::string &name, Vec3<S> *value, Vec3<S> *derivative,
+                             const std::string &unit = "", const std::string &description = "") {
+        if (value == nullptr) {
+            throw SignalError::NullPointer(name, "Vec3 state value");
+        }
+        if (derivative == nullptr) {
+            throw SignalError::NullPointer(name + "_dot", "Vec3 state derivative");
+        }
+
+        std::string deriv_unit = unit.empty() ? "" : unit + "/s";
+
+        // Register each component as a state pair
+        const char *suffixes[] = {"x", "y", "z"};
+        for (int i = 0; i < 3; ++i) {
+            std::string value_name = name + "." + suffixes[i];
+            std::string deriv_name = name + "_dot." + suffixes[i];
+
+            // Register value (integrable)
+            register_signal_impl<S>(value_name, &((*value)(i)), unit,
+                                    description + " (" + suffixes[i] + ")",
+                                    SignalLifecycle::Dynamic);
+            auto &value_desc = signals_[name_to_index_[value_name]];
+            value_desc.is_integrable = true;
+            value_desc.derivative_signal = deriv_name;
+
+            // Register derivative
+            register_signal_impl<S>(deriv_name, &((*derivative)(i)), deriv_unit,
+                                    description + " derivative (" + suffixes[i] + ")",
+                                    SignalLifecycle::Dynamic);
+            auto &deriv_desc = signals_[name_to_index_[deriv_name]];
+            deriv_desc.integrated_signal = value_name;
+
+            // Track the pair
+            state_pairs_.push_back({value_name, deriv_name, &((*value)(i)), &((*derivative)(i))});
+        }
+    }
+
+    /**
+     * @brief Register a quaternion state with its derivative
+     *
+     * Creates 8 signals: 4 for value (.w/.x/.y/.z) and 4 for derivative (_dot.w/.x/.y/.z).
+     */
+    template <typename S>
+    void register_state_quat(const std::string &name, Vec4<S> *value, Vec4<S> *derivative,
+                             const std::string &unit = "", const std::string &description = "") {
+        if (value == nullptr) {
+            throw SignalError::NullPointer(name, "Quat state value");
+        }
+        if (derivative == nullptr) {
+            throw SignalError::NullPointer(name + "_dot", "Quat state derivative");
+        }
+
+        // Quaternion components: w, x, y, z (indices 0, 1, 2, 3)
+        const char *suffixes[] = {"w", "x", "y", "z"};
+        for (int i = 0; i < 4; ++i) {
+            std::string value_name = name + "." + suffixes[i];
+            std::string deriv_name = name + "_dot." + suffixes[i];
+
+            // Register value (integrable)
+            register_signal_impl<S>(value_name, &((*value)(i)), unit,
+                                    description + " (" + suffixes[i] + ")",
+                                    SignalLifecycle::Dynamic);
+            auto &value_desc = signals_[name_to_index_[value_name]];
+            value_desc.is_integrable = true;
+            value_desc.derivative_signal = deriv_name;
+
+            // Register derivative
+            register_signal_impl<S>(deriv_name, &((*derivative)(i)), "",
+                                    description + " derivative (" + suffixes[i] + ")",
+                                    SignalLifecycle::Dynamic);
+            auto &deriv_desc = signals_[name_to_index_[deriv_name]];
+            deriv_desc.integrated_signal = value_name;
+
+            // Track the pair
+            state_pairs_.push_back({value_name, deriv_name, &((*value)(i)), &((*derivative)(i))});
+        }
+    }
+
+    /**
+     * @brief Get all integrable state pairs
+     *
+     * Returns pairs of (value_ptr, derivative_ptr) for building integration vectors.
+     * Used by StateManager::DiscoverStates().
+     */
+    [[nodiscard]] const auto &get_state_pairs() const { return state_pairs_; }
+
+    /**
+     * @brief Get all integrable signal descriptors
+     *
+     * Returns descriptors for signals where is_integrable == true.
+     */
+    [[nodiscard]] std::vector<const SignalDescriptor *> get_integrable_signals() const {
+        std::vector<const SignalDescriptor *> result;
+        for (const auto &desc : signals_) {
+            if (desc.is_integrable) {
+                result.push_back(&desc);
+            }
+        }
+        return result;
+    }
+
+    // =========================================================================
     // Type-Safe Resolution (Phase 1.3)
     // =========================================================================
 
@@ -398,6 +552,15 @@ template <typename Scalar> class SignalRegistry {
     std::deque<Scalar> values_;            // Deque for stable value refs (legacy API)
     std::unordered_map<std::string, SignalIndex> name_to_index_;
     std::string current_component_;
+
+    // Phase 6: State pair tracking for integration
+    struct StatePair {
+        std::string value_name;
+        std::string derivative_name;
+        void *value_ptr = nullptr;
+        void *derivative_ptr = nullptr;
+    };
+    std::vector<StatePair> state_pairs_;
 
     // =========================================================================
     // Phase 2.4: Input, Parameter, Config Storage

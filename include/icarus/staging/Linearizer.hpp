@@ -445,19 +445,21 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     // Compute derivatives symbolically
     JanusVector<Scalar> xdot_vec = sym_sim.ComputeDerivatives();
 
-    // Find indices of selected states in global state vector
+    // Find indices of selected states in global state vector using state bindings
     std::vector<int> state_indices;
     state_indices.reserve(nx);
-    for (const auto &slice : sym_sim.GetStateLayout()) {
-        for (std::size_t i = 0; i < slice.size; ++i) {
-            std::string state_name = slice.component_name + ".state[" + std::to_string(i) + "]";
-            for (int j = 0; j < nx; ++j) {
-                if (config.states[j] == state_name ||
-                    config.states[j] == slice.component_name + ".x[" + std::to_string(i) + "]") {
-                    state_indices.push_back(static_cast<int>(slice.offset + i));
-                    break;
-                }
+    const auto &bindings = sym_sim.GetStateBindings();
+    for (int j = 0; j < nx; ++j) {
+        bool found = false;
+        for (std::size_t bi = 0; bi < bindings.size(); ++bi) {
+            if (config.states[j] == bindings[bi].name) {
+                state_indices.push_back(static_cast<int>(bi));
+                found = true;
+                break;
             }
+        }
+        if (!found) {
+            // Name not found - will use fallback below
         }
     }
 

@@ -495,8 +495,8 @@ inline void Simulator::Provision() {
 inline void Simulator::ApplyRouting() { router_.ApplyRoutes(backplane_); }
 
 inline void Simulator::AllocateAndBindState() {
-    state_manager_.AllocateState(components_);
-    state_manager_.BindComponents(components_);
+    // Phase 6: Discover states from registry instead of scanning components
+    state_manager_.DiscoverStates(registry_);
 }
 
 inline void Simulator::ApplyInitialConditions() {

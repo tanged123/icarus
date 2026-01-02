@@ -1,11 +1,12 @@
 /**
  * @file test_state_management.cpp
- * @brief Tests for State Management (Phase 2.1)
+ * @brief Tests for State Management (Phase 2.1, Updated for Phase 6)
  *
- * Tests global state vectors, pointer-based scatter/gather, and integrator
+ * Tests unified signal model state registration, state vectors, and integrator
  * compatibility.
  *
- * Updated for Phase 4.0.7 non-templated Simulator API.
+ * Updated for Phase 6: Unified signal model where states are registered
+ * via register_state() and discovered by StateManager.
  */
 
 #include <gtest/gtest.h>
@@ -65,7 +66,7 @@ TEST(StateManagement, EmptyStateVectorWhenNoStatefulComponents) {
 }
 
 // =============================================================================
-// State Binding Tests
+// State Binding Tests (Updated for Phase 6: Unified Signal Model)
 // =============================================================================
 
 TEST(StateManagement, ComponentsAreBound) {
@@ -77,6 +78,7 @@ TEST(StateManagement, ComponentsAreBound) {
     sim.AddComponent(std::move(compA));
     sim.Stage();
 
+    // In Phase 6, "bound" means states are registered and staged
     EXPECT_TRUE(static_cast<StatefulComponent<double> *>(ptrA)->IsBound());
 }
 
@@ -127,11 +129,12 @@ TEST(StateManagement, StatePointersAccessGlobalVector) {
     auto new_state = make_state<double>({10.0, 20.0, 30.0});
     sim.SetState(new_state);
 
-    // Component pointer should see updated values
-    auto *state_ptr = static_cast<StatefulComponent<double> *>(ptr)->GetStatePtr();
-    EXPECT_DOUBLE_EQ(state_ptr[0], 10.0);
-    EXPECT_DOUBLE_EQ(state_ptr[1], 20.0);
-    EXPECT_DOUBLE_EQ(state_ptr[2], 30.0);
+    // Component's internal state should see updated values
+    // (states ARE the component-owned storage in Phase 6)
+    auto comp_state = static_cast<StatefulComponent<double> *>(ptr)->GetState();
+    EXPECT_DOUBLE_EQ(comp_state[0], 10.0);
+    EXPECT_DOUBLE_EQ(comp_state[1], 20.0);
+    EXPECT_DOUBLE_EQ(comp_state[2], 30.0);
 }
 
 // =============================================================================
@@ -158,43 +161,29 @@ TEST(StateManagement, ComputeDerivatives) {
 }
 
 // =============================================================================
-// Error Handling Tests
+// Phase 6: State Registration Tests
 // =============================================================================
 
-TEST(StateManagement, StateSizeMismatchInBindStateThrows) {
+TEST(StateManagement, StatesSizeAccessor) {
+    // Phase 6: StatefulComponent no longer has StateSize() as override,
+    // but provides GetStateSize() for testing purposes
     StatefulComponent<double> comp("Test", 5);
-
-    double state[3];
-    double state_dot[3];
-
-    EXPECT_THROW(comp.BindState(state, state_dot, 3), // Wrong size (expects 5)
-                 StateSizeMismatchError);
+    EXPECT_EQ(comp.GetStateSize(), 5);
 }
 
-TEST(StateManagement, StateSizeMismatchErrorDetails) {
-    try {
-        StatefulComponent<double> comp("Test", 5);
-        double state[3], state_dot[3];
-        comp.BindState(state, state_dot, 3);
-        FAIL() << "Expected StateSizeMismatchError";
-    } catch (const StateSizeMismatchError &e) {
-        EXPECT_EQ(e.expected(), 5);
-        EXPECT_EQ(e.actual(), 3);
-    }
-}
+TEST(StateManagement, StateRegistrationCreatesSignals) {
+    // Verify that register_state creates both value and derivative signals
+    Simulator sim;
+    sim.AddComponent(std::make_unique<StatefulComponent<double>>("A", 2));
+    sim.Stage();
 
-// =============================================================================
-// HasState Tests
-// =============================================================================
-
-TEST(Component, HasStateFalseForStateless) {
-    DummyComponent<double> comp;
-    EXPECT_FALSE(comp.HasState());
-}
-
-TEST(Component, HasStateTrueForStateful) {
-    StatefulComponent<double> comp("Test", 3);
-    EXPECT_TRUE(comp.HasState());
+    // The StatefulComponent registers states named "state_0", "state_1", etc.
+    // Signals should be "A.state_0" and "A.state_0_dot"
+    // Use Peek to verify signals exist (will throw if not found)
+    EXPECT_NO_THROW(sim.Peek("A.state_0"));
+    EXPECT_NO_THROW(sim.Peek("A.state_0_dot"));
+    EXPECT_NO_THROW(sim.Peek("A.state_1"));
+    EXPECT_NO_THROW(sim.Peek("A.state_1_dot"));
 }
 
 // =============================================================================
@@ -206,7 +195,7 @@ TEST(StateManagementSymbolic, AllocationCompiles) {
 
     // Only test component-level symbolic capability
     StatefulComponent<MX> comp("A", 4);
-    EXPECT_EQ(comp.StateSize(), 4);
+    EXPECT_EQ(comp.GetStateSize(), 4);
 }
 
 // NOTE: Simulator<MX> tests removed - Simulator is no longer templated.

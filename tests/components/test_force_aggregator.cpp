@@ -39,7 +39,6 @@ template <typename Scalar> class TestForceSource : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "TestForceSource"; }
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
 
     void Provision(Backplane<Scalar> &bp) override {
         bp.template register_output_vec3<Scalar>("force", &force_, "N", "Force vector");
@@ -87,7 +86,6 @@ template <typename Scalar> class TestCGSource : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "TestCGSource"; }
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
 
     void Provision(Backplane<Scalar> &bp) override {
         bp.template register_output_vec3<Scalar>("cg", &cg_, "m", "CG position");
@@ -118,12 +116,6 @@ void WireCGInputs(icarus::SignalRegistry<double> &registry, const std::string &a
 // =============================================================================
 // ForceAggregator Unit Tests
 // =============================================================================
-
-TEST(ForceAggregator, StateSize) {
-    ForceAggregator<double> agg;
-    EXPECT_EQ(agg.StateSize(), 0);
-    EXPECT_FALSE(agg.HasState());
-}
 
 TEST(ForceAggregator, Identity) {
     ForceAggregator<double> agg("ForceAgg", "Vehicle");
@@ -450,5 +442,6 @@ TEST(ForceAggregator, CombinedMomentAndTransfer) {
 
 TEST(ForceAggregatorSymbolic, BasicCompiles) {
     ForceAggregator<janus::SymbolicScalar> agg;
-    EXPECT_EQ(agg.StateSize(), 0);
+    // Just verify it compiles
+    EXPECT_EQ(agg.Name(), "ForceAggregator");
 }
