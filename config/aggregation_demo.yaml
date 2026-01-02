@@ -1,0 +1,264 @@
+# Icarus Simulation Configuration
+# Multi-Body Aggregation Demo
+#
+# Demonstrates aggregation of multiple mass and force sources:
+# - MassAggregator: Combines mass, CG, and inertia from multiple bodies
+# - ForceAggregator: Sums forces and computes moment transfer about CG
+# - Parallel axis theorem for offset inertia calculation
+#
+# Scenario: A satellite with main body + two solar panel wings + reaction wheel
+# Each has separate mass properties at offset locations
+
+simulation:
+  name: "Multi-Body Aggregation Demo"
+  version: "1.0.0"
+  description: |
+    Demonstrates mass and force aggregation for a multi-body system.
+    Satellite with main body, two solar panels, and reaction wheel.
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  console_level: info
+  file_enabled: false
+  progress_enabled: false
+  profiling_enabled: false
+
+# =============================================================================
+# Time Configuration
+# =============================================================================
+
+time:
+  start: 0.0
+  end: 5.0           # 5 seconds
+  dt: 0.01           # 100 Hz
+
+# =============================================================================
+# Integrator Configuration
+# =============================================================================
+
+integrator:
+  type: RK4
+
+# =============================================================================
+# Components
+# =============================================================================
+
+components:
+  # ---- Mass Sources ----
+  
+  # Main satellite body (centered at origin)
+  - type: StaticMass
+    name: MainBody
+    scalars:
+      mass: 100.0          # 100 kg main body
+      inertia_xx: 10.0     # kg*m^2 (about body x-axis)
+      inertia_yy: 15.0     # kg*m^2 (about body y-axis)
+      inertia_zz: 12.0     # kg*m^2 (about body z-axis)
+      inertia_xy: 0.0
+      inertia_xz: 0.0
+      inertia_yz: 0.0
+    vectors:
+      cg: [0.0, 0.0, 0.0]  # CG at origin
+
+  # Left solar panel (+Y wing)
+  - type: StaticMass
+    name: LeftPanel
+    scalars:
+      mass: 10.0           # 10 kg panel
+      inertia_xx: 0.5      # Thin panel: low about long axis
+      inertia_yy: 0.05     # Very low along length
+      inertia_zz: 0.5      # Similar to Ixx
+      inertia_xy: 0.0
+      inertia_xz: 0.0
+      inertia_yz: 0.0
+    vectors:
+      cg: [0.0, 2.0, 0.0]  # 2m out on +Y axis
+
+  # Right solar panel (-Y wing)
+  - type: StaticMass
+    name: RightPanel
+    scalars:
+      mass: 10.0           # 10 kg panel (symmetric)
+      inertia_xx: 0.5
+      inertia_yy: 0.05
+      inertia_zz: 0.5
+      inertia_xy: 0.0
+      inertia_xz: 0.0
+      inertia_yz: 0.0
+    vectors:
+      cg: [0.0, -2.0, 0.0] # 2m out on -Y axis
+
+  # Reaction wheel (offset forward)
+  - type: StaticMass
+    name: ReactionWheel
+    scalars:
+      mass: 5.0            # 5 kg wheel
+      inertia_xx: 0.1      # Symmetric about spin axis (Z)
+      inertia_yy: 0.1
+      inertia_zz: 0.05     # Low about spin axis
+      inertia_xy: 0.0
+      inertia_xz: 0.0
+      inertia_yz: 0.0
+    vectors:
+      cg: [0.5, 0.0, 0.0]  # 0.5m forward on +X
+
+  # ---- Gravity (force source) ----
+  # Two gravity sources to demonstrate force aggregation
+  
+  # Primary gravitational force (Earth-like)
+  - type: PointMassGravity
+    name: EarthGravity
+    scalars:
+      mu: 398600.4418e9    # Earth mu [m^3/s^2]
+      model: 1             # 1 = Spherical
+
+  # Secondary perturbation (Moon-like, smaller)
+  - type: PointMassGravity
+    name: MoonGravity
+    scalars:
+      mu: 4902.8e9         # Moon mu [m^3/s^2] 
+      model: 1             # Spherical
+
+  # ---- Aggregators ----
+  
+  # Mass aggregator: combines all mass sources
+  - type: MassAggregator
+    name: TotalMass
+    sources: [MainBody, LeftPanel, RightPanel, ReactionWheel]
+
+  # Force aggregator: combines all force sources
+  - type: ForceAggregator
+    name: TotalForces
+    sources: [EarthGravity, MoonGravity]
+
+  # ---- Dynamics ----
+  
+  # 6DOF rigid body using aggregated mass and forces
+  - type: RigidBody6DOF
+    name: Satellite
+    vectors:
+      initial_position: [7000000.0, 0.0, 0.0]      # 7000 km from Earth center
+      initial_velocity_body: [0.0, 7546.0, 0.0]   # ~LEO circular velocity
+      initial_attitude: [1.0, 0.0, 0.0, 0.0]      # Identity quaternion
+      initial_omega_body: [0.01, 0.02, 0.005]     # Small tumble rate
+
+# =============================================================================
+# Signal Routing
+# =============================================================================
+
+routes:
+  # ---- Gravity inputs: position and mass from dynamics ----
+  # EarthGravity reads satellite state
+  - input: EarthGravity.position.x
+    output: Satellite.position.x
+  - input: EarthGravity.position.y
+    output: Satellite.position.y
+  - input: EarthGravity.position.z
+    output: Satellite.position.z
+  - input: EarthGravity.mass
+    output: TotalMass.total_mass
+
+  # MoonGravity reads satellite state (simplified - same position)
+  - input: MoonGravity.position.x
+    output: Satellite.position.x
+  - input: MoonGravity.position.y
+    output: Satellite.position.y
+  - input: MoonGravity.position.z
+    output: Satellite.position.z
+  - input: MoonGravity.mass
+    output: TotalMass.total_mass
+
+  # ---- Force aggregator reads CG from mass aggregator ----
+  - input: TotalForces.cg.x
+    output: TotalMass.cg.x
+  - input: TotalForces.cg.y
+    output: TotalMass.cg.y
+  - input: TotalForces.cg.z
+    output: TotalMass.cg.z
+
+  # ---- RigidBody reads from mass aggregator ----
+  - input: Satellite.total_mass
+    output: TotalMass.total_mass
+  - input: Satellite.inertia.xx
+    output: TotalMass.inertia.xx
+  - input: Satellite.inertia.yy
+    output: TotalMass.inertia.yy
+  - input: Satellite.inertia.zz
+    output: TotalMass.inertia.zz
+  - input: Satellite.inertia.xy
+    output: TotalMass.inertia.xy
+  - input: Satellite.inertia.xz
+    output: TotalMass.inertia.xz
+  - input: Satellite.inertia.yz
+    output: TotalMass.inertia.yz
+
+  # ---- RigidBody reads from force aggregator ----
+  - input: Satellite.total_force.x
+    output: TotalForces.total_force.x
+  - input: Satellite.total_force.y
+    output: TotalForces.total_force.y
+  - input: Satellite.total_force.z
+    output: TotalForces.total_force.z
+  - input: Satellite.total_moment.x
+    output: TotalForces.total_moment.x
+  - input: Satellite.total_moment.y
+    output: TotalForces.total_moment.y
+  - input: Satellite.total_moment.z
+    output: TotalForces.total_moment.z
+
+# =============================================================================
+# Scheduler Configuration
+# =============================================================================
+
+scheduler:
+  groups:
+    # Mass sources run first (static, just need to publish once effectively)
+    - name: mass_sources
+      rate_hz: 100.0
+      priority: 1
+      members:
+        - component: MainBody
+          priority: 1
+        - component: LeftPanel
+          priority: 2
+        - component: RightPanel
+          priority: 3
+        - component: ReactionWheel
+          priority: 4
+
+    # Mass aggregator runs after sources
+    - name: mass_aggregation
+      rate_hz: 100.0
+      priority: 2
+      members:
+        - component: TotalMass
+          priority: 1
+
+    # Force sources run after mass aggregation (need mass for gravity)
+    - name: force_sources
+      rate_hz: 100.0
+      priority: 3
+      members:
+        - component: EarthGravity
+          priority: 1
+        - component: MoonGravity
+          priority: 2
+
+    # Force aggregator runs after force sources
+    - name: force_aggregation
+      rate_hz: 100.0
+      priority: 4
+      members:
+        - component: TotalForces
+          priority: 1
+
+    # Dynamics runs last with aggregated inputs
+    - name: dynamics
+      rate_hz: 100.0
+      priority: 5
+      members:
+        - component: Satellite
+          priority: 1
