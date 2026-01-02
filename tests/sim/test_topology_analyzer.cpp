@@ -355,7 +355,7 @@ TEST(TopologyAnalyzerTest, ComputeExecutionOrderThrowsOnCycle) {
     config.routes.push_back(signal::SignalRoute{"A.input", "B.output"});
 
     EXPECT_THROW(
-        TopologyAnalyzer::ComputeExecutionOrder(config, TopologyConfig::CycleHandling::Error),
+        (void)TopologyAnalyzer::ComputeExecutionOrder(config, TopologyConfig::CycleHandling::Error),
         ConfigError);
 }
 
@@ -438,6 +438,38 @@ TEST(TopologyAnalyzerTest, ApplyTopologyOrderAddsUnscheduledGroup) {
     ASSERT_EQ(sched_config.groups.size(), 2u);
     EXPECT_EQ(sched_config.groups[1].name, "unscheduled");
     EXPECT_EQ(sched_config.groups[1].members.size(), 2u);
+}
+
+// =============================================================================
+// Prefix Matching Tests
+// =============================================================================
+
+TEST(TopologyAnalyzerTest, PrefersLongestComponentMatch) {
+    SimulatorConfig config;
+    // We have a component "Body" and a component "Body.Sub"
+    config.components.push_back(MakeComponent("Body", "", "TypeA"));
+    config.components.push_back(MakeComponent("Sub", "Body", "TypeB")); // FullPath: Body.Sub
+    config.components.push_back(MakeComponent("Consumer", "", "TypeC"));
+
+    // Route from Body.Sub.output to Consumer.input
+    config.routes.push_back(signal::SignalRoute{"Consumer.input", "Body.Sub.output"});
+
+    auto graph = TopologyAnalyzer::BuildGraph(config);
+
+    // If it incorrectly picks "Body", then Body -> Consumer
+    // If it correctly picks "Body.Sub", then Body.Sub -> Consumer
+
+    auto deps_body = graph.GetDependents("Body");
+    auto deps_sub = graph.GetDependents("Body.Sub");
+
+    // "Body" should NOT have "Consumer" as dependent if "Body.Sub" is the producer
+    bool body_has_consumer =
+        std::find(deps_body.begin(), deps_body.end(), "Consumer") != deps_body.end();
+    bool sub_has_consumer =
+        std::find(deps_sub.begin(), deps_sub.end(), "Consumer") != deps_sub.end();
+
+    EXPECT_FALSE(body_has_consumer) << "Should NOT have matched shorter prefix 'Body'";
+    EXPECT_TRUE(sub_has_consumer) << "Should HAVE matched longer prefix 'Body.Sub'";
 }
 
 // =============================================================================

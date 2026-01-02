@@ -307,13 +307,23 @@ class TopologyAnalyzer {
     BuildGraph(const SimulatorConfig &config, const std::vector<signal::SignalRoute> &routes = {}) {
         DependencyGraph graph;
 
-        // Build set of known component names for matching
-        std::set<std::string> component_names;
+        // Build list of known component names for matching
+        std::vector<std::string> sorted_names;
         for (const auto &comp : config.components) {
             std::string name = comp.FullPath();
-            component_names.insert(name);
+            sorted_names.push_back(name);
             graph.AddNode(name);
         }
+
+        // Sort by descending length to ensure we match the longest prefix first.
+        // If lengths are equal, sort lexicographically for determinism.
+        std::sort(sorted_names.begin(), sorted_names.end(),
+                  [](const std::string &a, const std::string &b) {
+                      if (a.size() != b.size()) {
+                          return a.size() > b.size();
+                      }
+                      return a < b;
+                  });
 
         // Use provided routes or config routes
         const auto &route_list = routes.empty() ? config.routes : routes;
@@ -322,7 +332,7 @@ class TopologyAnalyzer {
         // Matches the longest known component prefix
         auto find_component = [&](const std::string &signal_path) -> std::string {
             // Try each component and see if signal starts with it
-            for (const auto &comp_name : component_names) {
+            for (const auto &comp_name : sorted_names) {
                 if (signal_path.size() > comp_name.size() &&
                     signal_path.compare(0, comp_name.size(), comp_name) == 0 &&
                     signal_path[comp_name.size()] == '.') {
