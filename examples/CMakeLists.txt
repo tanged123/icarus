@@ -38,3 +38,9 @@ icarus_add_example(aggregation_demo
     aggregation_demo.cpp
 )
 
+# Topology Analyzer Demo
+# Demonstrates: automatic execution order from signal dependencies
+icarus_add_example(topology_demo
+    topology_demo.cpp
+)
+

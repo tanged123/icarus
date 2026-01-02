@@ -1,0 +1,153 @@
+# Icarus Simulation Configuration
+# Topology Analyzer Demo
+#
+# Demonstrates automatic execution order from signal dependencies.
+# The scheduler groups are intentionally in WRONG order to show
+# that TopologyAnalyzer corrects them.
+
+simulation:
+  name: "Topology Analyzer Demo"
+  version: "1.0.0"
+  description: |
+    Demonstrates automatic topological sorting of components.
+    Signal routes define dependencies; execution order is computed automatically.
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  console_level: info
+  file_enabled: false
+  progress_enabled: false
+  profiling_enabled: false
+
+# =============================================================================
+# Time Configuration
+# =============================================================================
+
+time:
+  start: 0.0
+  end: 5.0
+  dt: 0.01  # 100 Hz
+
+# =============================================================================
+# Integrator Configuration
+# =============================================================================
+
+integrator:
+  type: RK4
+
+# =============================================================================
+# Components
+# =============================================================================
+
+components:
+  # Static mass properties
+  - type: StaticMass
+    name: Mass
+    scalars:
+      mass: 10.0
+      inertia_xx: 1.0
+      inertia_yy: 2.0
+      inertia_zz: 3.0
+      inertia_xy: 0.0
+      inertia_xz: 0.0
+      inertia_yz: 0.0
+
+  # Force aggregator (zero force/moment for torque-free motion)
+  - type: ForceAggregator
+    name: Forces
+
+  # 6DOF rigid body dynamics
+  - type: RigidBody6DOF
+    name: Body
+    vectors:
+      initial_position: [0.0, 0.0, 0.0]
+      initial_velocity_body: [0.0, 0.0, 0.0]
+      initial_attitude: [1.0, 0.0, 0.0, 0.0]
+      initial_omega_body: [1.0, 0.5, 0.2]
+
+# =============================================================================
+# Signal Routing
+# =============================================================================
+# These routes define the dependency graph:
+#   Mass -> Forces (CG input)
+#   Mass -> Body (mass/inertia inputs)
+#   Forces -> Body (force/moment inputs)
+#
+# Therefore correct order is: Mass -> Forces -> Body
+
+routes:
+  # RigidBody reads mass properties from StaticMass
+  - input: Body.total_mass
+    output: Mass.mass
+  - input: Body.inertia.xx
+    output: Mass.inertia.xx
+  - input: Body.inertia.yy
+    output: Mass.inertia.yy
+  - input: Body.inertia.zz
+    output: Mass.inertia.zz
+  - input: Body.inertia.xy
+    output: Mass.inertia.xy
+  - input: Body.inertia.xz
+    output: Mass.inertia.xz
+  - input: Body.inertia.yz
+    output: Mass.inertia.yz
+
+  # RigidBody reads force/moment from ForceAggregator
+  - input: Body.total_force.x
+    output: Forces.total_force.x
+  - input: Body.total_force.y
+    output: Forces.total_force.y
+  - input: Body.total_force.z
+    output: Forces.total_force.z
+  - input: Body.total_moment.x
+    output: Forces.total_moment.x
+  - input: Body.total_moment.y
+    output: Forces.total_moment.y
+  - input: Body.total_moment.z
+    output: Forces.total_moment.z
+
+  # ForceAggregator needs CG input
+  - input: Forces.cg.x
+    output: Mass.cg.x
+  - input: Forces.cg.y
+    output: Mass.cg.y
+  - input: Forces.cg.z
+    output: Mass.cg.z
+
+# =============================================================================
+# Scheduler Configuration
+# =============================================================================
+# INTENTIONALLY WRONG ORDER to demonstrate TopologyAnalyzer correction:
+# Body is scheduled first, but it depends on Mass and Forces!
+
+scheduler:
+  topology:
+    mode: automatic  # Compute execution order from signal dependencies
+    log_order: true
+  groups:
+    # Groups are intentionally in WRONG order to demonstrate auto-correction:
+    # Body first (should be last!), Forces second, Mass last (should be first!)
+    # TopologyAnalyzer will reorder based on routes: Mass -> Forces -> Body
+    - name: dynamics
+      rate_hz: 100.0
+      priority: 1
+      members:
+        - component: Body
+          priority: 1
+
+    - name: forces
+      rate_hz: 100.0
+      priority: 2
+      members:
+        - component: Forces
+          priority: 1
+
+    - name: mass
+      rate_hz: 100.0
+      priority: 3
+      members:
+        - component: Mass
+          priority: 1

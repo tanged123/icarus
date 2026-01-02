@@ -174,26 +174,26 @@ Phase 4–7 (horizontal expansion)
 
 ### Prerequisites
 
-- [ ] **4.0 Configuration Infrastructure** ([phase4_0_config_infrastructure.md](implementation_plans/phase4/phase4_0_config_infrastructure.md))
-  - [ ] `ComponentConfig` with typed accessors
-  - [ ] YAML configuration loader
-  - [ ] `ComponentFactory` for type registration
-  - [ ] Refactor existing components (no public setters)
+- [x] **4.0 Configuration Infrastructure** ([phase4_0_config_infrastructure.md](implementation_plans/phase4/phase4_0_config_infrastructure.md))
+  - [x] `ComponentConfig` with typed accessors
+  - [x] YAML configuration loader
+  - [x] `ComponentFactory` for type registration
+  - [x] Refactor existing components (no public setters)
 
 ### Tasks
 
-- [ ] **4.1 Signal Conventions**
-  - [ ] Mass sources publish `MassProperties<Scalar>`
-  - [ ] Force sources publish `force` in body frame
-  - [ ] Backplane support for composite types
+- [x] **4.1 Signal Conventions**
+  - [x] Mass sources publish `MassProperties<Scalar>`
+  - [x] Force sources publish `force` in body frame
+  - [x] Backplane support for composite types
 
-- [ ] **4.2 Aggregators**
-  - [ ] `MassAggregator` — uses Vulcan `MassProperties::operator+`
-  - [ ] `ForceAggregator` — sums forces, moment transfer about CG
+- [x] **4.2 Aggregators**
+  - [x] `MassAggregator` — uses Vulcan `MassProperties::operator+`
+  - [x] `ForceAggregator` — sums forces, moment transfer about CG
 
-- [ ] **4.3 RigidBody6DOF**
-  - [ ] 13-state quaternion dynamics using Vulcan EOM
-  - [ ] Consumes aggregated force/moment/inertia
+- [x] **4.3 RigidBody6DOF**
+  - [x] 13-state quaternion dynamics using Vulcan EOM
+  - [x] Consumes aggregated force/moment/inertia
 
 ### Architecture References
 
@@ -204,9 +204,9 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Tumbling rigid body with angular momentum conservation
-- [ ] Multi-source force aggregation with moment transfer
-- [ ] All components config-driven (no public setters)
+- [x] Tumbling rigid body with angular momentum conservation
+- [x] Multi-source force aggregation with moment transfer
+- [x] All components config-driven (no public setters)
 
 ---
 
@@ -218,18 +218,18 @@ Phase 4–7 (horizontal expansion)
 
 ### Tasks
 
-- [ ] **5.1 Extended Configuration Layers**
-  - [ ] Entity bundles (Layer A') — reusable component groups
-  - [ ] Scenario definitions (Layer B) — initial conditions, variants
-  - [ ] Include/merge support for config composition
+- [x] **5.1 Extended Configuration Layers**
+  - [x] Entity bundles (Layer A') — reusable component groups
+  - [x] Scenario definitions (Layer B) — initial conditions, variants
+  - [x] Include/merge support for config composition
 
-- [ ] **5.2 Scheduler**
-  - [ ] Topological sort from dependency graph
-  - [ ] Rate groups for multi-rate simulation (Layer D)
+- [x] **5.2 Scheduler**
+  - [-] Topological sort from dependency graph
+  - [x] Rate groups for multi-rate simulation (Layer D)
 
-- [ ] **5.3 Data Dictionary Export**
-  - [ ] Auto-generate signal catalog at Provision
-  - [ ] Export as JSON/YAML
+- [x] **5.3 Data Dictionary Export**
+  - [x] Auto-generate signal catalog at Provision
+  - [x] Export as JSON/YAML
 
 ### Architecture References
 
@@ -241,9 +241,9 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Load complex scenario with entity bundles
-- [ ] Multi-rate simulation working
-- [ ] Data Dictionary exported
+- [x] Load complex scenario with entity bundles
+- [x] Multi-rate simulation working
+- [x] Data Dictionary exported
 
 ---
 

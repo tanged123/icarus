@@ -27,6 +27,7 @@
 #include <icarus/sim/Scheduler.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/sim/StateManager.hpp>
+#include <icarus/sim/TopologyAnalyzer.hpp>
 #include <icarus/staging/StagingTypes.hpp>
 #include <memory>
 #include <optional>
@@ -526,6 +527,41 @@ inline void Simulator::Stage() {
 
     // Begin Stage phase logging
     logger_.BeginPhase(SimPhase::Stage);
+
+    // =========================================================================
+    // Automatic Topology Ordering (if enabled)
+    // =========================================================================
+    if (config_.scheduler.topology.mode == SchedulingMode::Automatic) {
+        logger_.Log(LogLevel::Debug, "[TOPO] Computing execution order from signal dependencies");
+
+        // Build dependency graph and compute topological order
+        auto result = TopologyAnalyzer::ComputeExecutionOrder(
+            config_, config_.scheduler.topology.cycle_detection);
+
+        if (result.has_cycles) {
+            // Log cycle warnings
+            for (const auto &cycle : result.cycles) {
+                logger_.Log(LogLevel::Warning, "[TOPO] " + cycle.ToString());
+            }
+        }
+
+        // Apply topology order to scheduler
+        TopologyAnalyzer::ApplyTopologyOrder(config_.scheduler, result);
+
+        // Reconfigure scheduler with updated order
+        scheduler_.Configure(config_.scheduler, config_.scheduler.MaxRate());
+
+        logger_.Log(
+            LogLevel::Info, "[TOPO] Computed execution order: " + [&]() {
+                std::string s;
+                for (size_t i = 0; i < result.execution_order.size(); ++i) {
+                    s += result.execution_order[i];
+                    if (i < result.execution_order.size() - 1)
+                        s += " -> ";
+                }
+                return s;
+            }());
+    }
 
     // Log wiring info (Debug level)
     for (const auto &route : router_.GetRoutes()) {

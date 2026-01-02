@@ -813,7 +813,7 @@ TEST(StagingIntegration, TrimThenLinearize) {
 
 // Symbolic trim requires proper component registration for dual-backend
 // Full integration testing deferred to dedicated symbolic test file
-TEST(SymbolicTrim, DISABLED_SymbolicCreation) {
+TEST(SymbolicTrim, SymbolicCreation) {
     // Test placeholder - symbolic components require ICARUS_REGISTER_COMPONENT
     // in built-in components to work. Test will be enabled once component
     // library fully supports symbolic mode.
@@ -850,7 +850,7 @@ TEST(SymbolicTrim, DISABLED_SymbolicCreation) {
 
 // Symbolic linearization requires proper component registration for dual-backend
 // Full integration testing deferred to dedicated symbolic test file
-TEST(SymbolicLinearizer, DISABLED_SymbolicJacobian) {
+TEST(SymbolicLinearizer, SymbolicJacobian) {
     // Test placeholder - symbolic components require ICARUS_REGISTER_COMPONENT
     // in built-in components to work. Test will be enabled once component
     // library fully supports symbolic mode.

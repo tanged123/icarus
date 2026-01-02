@@ -214,6 +214,9 @@ routes:
 # =============================================================================
 
 scheduler:
+  topology:
+    mode: automatic  # Compute execution order from signal dependencies
+    log_order: true
   groups:
     # Mass sources run first (static, just need to publish once effectively)
     - name: mass_sources
