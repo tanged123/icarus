@@ -42,13 +42,11 @@ template <typename Scalar> class MassSpringDamper : public Component<Scalar> {
     [[nodiscard]] std::string TypeName() const override { return "MassSpringDamper"; }
 
     void Provision(Backplane<Scalar> &bp) override {
-        // States (outputs) - register with pointers to local storage
-        bp.template register_output<Scalar>("position", &position_val_);
-        bp.template register_output<Scalar>("velocity", &velocity_val_);
-
-        // State derivatives (outputs for observation)
-        bp.template register_output<Scalar>("position_dot", &position_dot_val_);
-        bp.template register_output<Scalar>("velocity_dot", &velocity_dot_val_);
+        // Register states using unified signal model
+        bp.template register_state<Scalar>("position", &position_val_, &position_dot_val_, "m",
+                                           "Position state");
+        bp.template register_state<Scalar>("velocity", &velocity_val_, &velocity_dot_val_, "m/s",
+                                           "Velocity state");
 
         // Control input
         bp.template register_input<Scalar>("force", &force_input_);
@@ -66,50 +64,13 @@ template <typename Scalar> class MassSpringDamper : public Component<Scalar> {
     }
 
     void Step(Scalar /*t*/, Scalar /*dt*/) override {
-        // Read current state from bound state pointers if available,
-        // otherwise from local values (for non-integrated use)
-        Scalar x = (state_ != nullptr) ? state_[0] : position_val_;
-        Scalar v = (state_ != nullptr) ? state_[1] : velocity_val_;
-
-        // Update signal outputs so other components can read current state
-        position_val_ = x;
-        velocity_val_ = v;
-
         // Read input (may be unwired, use default if so)
         Scalar F = force_input_.is_wired() ? force_input_.get() : Scalar{0.0};
 
         // Compute derivatives
-        Scalar x_dot = v;
-        Scalar v_dot = (F - damping_c_ * v - spring_k_ * x) / mass_;
-
-        // Write derivatives to outputs
-        position_dot_val_ = x_dot;
-        velocity_dot_val_ = v_dot;
-
-        // Store in state derivative array
-        if (state_dot_ != nullptr) {
-            state_dot_[0] = x_dot;
-            state_dot_[1] = v_dot;
-        }
-    }
-
-    [[nodiscard]] std::size_t StateSize() const override { return 2; }
-
-    void BindState(Scalar *state, Scalar *state_dot, std::size_t size) override {
-        if (size != 2) {
-            throw StateSizeMismatchError(2, size);
-        }
-        state_ = state;
-        state_dot_ = state_dot;
-
-        // Apply ICs
-        state_[0] = x0_;
-        state_[1] = v0_;
-
-        // Link state pointers to local values
-        // These will be updated by the integrator
-        position_val_ = state_[0];
-        velocity_val_ = state_[1];
+        // In unified signal model, states are owned by component
+        position_dot_val_ = velocity_val_;
+        velocity_dot_val_ = (F - damping_c_ * velocity_val_ - spring_k_ * position_val_) / mass_;
     }
 
     void SetParameters(Scalar mass, Scalar spring_k, Scalar damping_c) {
@@ -136,11 +97,7 @@ template <typename Scalar> class MassSpringDamper : public Component<Scalar> {
     Scalar x0_ = 0.0;
     Scalar v0_ = 0.0;
 
-    // State pointers (bound by StateManager)
-    Scalar *state_ = nullptr;
-    Scalar *state_dot_ = nullptr;
-
-    // Local storage for outputs
+    // State storage (owned by component in Phase 6)
     Scalar position_val_ = 0.0;
     Scalar velocity_val_ = 0.0;
     Scalar position_dot_val_ = 0.0;
@@ -176,8 +133,6 @@ template <typename Scalar> class ConstantForce : public Component<Scalar> {
         // 2. The force is already set via Stage or SetForce
         // This allows Poke to modify the output for derivative computation.
     }
-
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
 
     void SetForce(Scalar value) {
         force_value_ = value;

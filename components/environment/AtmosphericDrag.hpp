@@ -51,7 +51,6 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
     [[nodiscard]] std::string Name() const override { return name_; }
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "AtmosphericDrag"; }
-    [[nodiscard]] std::size_t StateSize() const override { return 0; } // Stateless
 
     // =========================================================================
     // Lifecycle

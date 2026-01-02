@@ -156,6 +156,11 @@ struct SignalDescriptor {
     bool is_state = false;      ///< Requires integration
     bool is_optimizable = true; ///< False for Config kind
 
+    // Phase 6: Unified state model
+    bool is_integrable = false;    ///< True for state values that need integration
+    std::string derivative_signal; ///< For states: name of paired derivative signal
+    std::string integrated_signal; ///< For derivatives: name of paired value signal
+
     /// Get padded size in bytes (always 8 for wire format alignment, matching Vulcan)
     [[nodiscard]] constexpr size_t size_bytes() const { return 8; }
 };

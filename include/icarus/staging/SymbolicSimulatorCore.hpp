@@ -156,7 +156,7 @@ class SymbolicSimulatorCore {
     /**
      * @brief Get derivative vector (after ComputeDerivatives)
      */
-    [[nodiscard]] const JanusVector<Scalar> &GetDerivatives() const {
+    [[nodiscard]] JanusVector<Scalar> GetDerivatives() const {
         return state_manager_.GetDerivatives();
     }
 
@@ -191,10 +191,10 @@ class SymbolicSimulatorCore {
     }
 
     /**
-     * @brief Get state layout (component slices)
+     * @brief Get state bindings (for introspection)
      */
-    [[nodiscard]] const std::vector<StateSlice<Scalar>> &GetStateLayout() const {
-        return state_manager_.GetLayout();
+    [[nodiscard]] const std::vector<StateBinding<Scalar>> &GetStateBindings() const {
+        return state_manager_.GetBindings();
     }
 
     /**
@@ -253,8 +253,8 @@ class SymbolicSimulatorCore {
     }
 
     void AllocateState() {
-        state_manager_.AllocateState(components_);
-        state_manager_.BindComponents(components_);
+        // Phase 6: Discover states from registry instead of scanning components
+        state_manager_.DiscoverStates(registry_);
     }
 
     void StageComponents() {

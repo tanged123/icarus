@@ -104,8 +104,6 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "ForceAggregator"; }
 
-    [[nodiscard]] std::size_t StateSize() const override { return 0; }
-
     // =========================================================================
     // Lifecycle Methods
     // =========================================================================

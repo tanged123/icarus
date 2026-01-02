@@ -29,7 +29,7 @@ namespace components {
 /**
  * @brief 3-DOF point mass translational dynamics (inertial frame)
  *
- * State vector: [rx, ry, rz, vx, vy, vz] (6 variables)
+ * Phase 6: Uses unified signal model - states ARE outputs.
  *
  * Frame Assumption: This component assumes an INERTIAL reference frame.
  * - For orbital dynamics: use ECI coordinates
@@ -46,10 +46,6 @@ namespace components {
  */
 template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
   public:
-    static constexpr std::size_t kStateSize = 6;
-    static constexpr std::size_t kPosOffset = 0;
-    static constexpr std::size_t kVelOffset = 3;
-
     /**
      * @brief Construct with name and entity
      */
@@ -64,167 +60,89 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     [[nodiscard]] std::string Entity() const override { return entity_; }
     [[nodiscard]] std::string TypeName() const override { return "PointMass3DOF"; }
 
-    [[nodiscard]] std::size_t StateSize() const override { return kStateSize; }
-
     // =========================================================================
     // Lifecycle Methods
     // =========================================================================
 
     /**
-     * @brief Register outputs, inputs, and parameters
+     * @brief Register states, inputs, and parameters
+     *
+     * Phase 6: States are registered with register_state_vec3() which creates
+     * both the state value outputs AND the derivative signals. No separate
+     * output registration needed - states ARE outputs.
      */
     void Provision(Backplane<Scalar> &bp) override {
-        // === Outputs ===
-        // Position (in inertial frame: ECI for orbital, local for validation)
-        bp.template register_output_vec3<Scalar>("position", &position_, "m", "Position");
+        // === States (Phase 6: unified signal model) ===
+        // Position state with derivative (creates position.x/y/z and position_dot.x/y/z)
+        bp.template register_state_vec3<Scalar>("position", &position_, &position_dot_, "m",
+                                                "Position");
 
-        // Velocity (in same inertial frame as position)
-        bp.template register_output_vec3<Scalar>("velocity", &velocity_, "m/s", "Velocity");
+        // Velocity state with derivative (creates velocity.x/y/z and velocity_dot.x/y/z)
+        bp.template register_state_vec3<Scalar>("velocity", &velocity_, &velocity_dot_, "m/s",
+                                                "Velocity");
 
-        // === Inputs (Phase 2.4) ===
-        // Force input (from gravity and other force sources)
+        // === Inputs ===
         bp.template register_input<Scalar>("force.x", &force_x_, "N", "Applied force X");
         bp.template register_input<Scalar>("force.y", &force_y_, "N", "Applied force Y");
         bp.template register_input<Scalar>("force.z", &force_z_, "N", "Applied force Z");
 
-        // === Parameters (Phase 2.4) ===
-        // Mass is a tunable parameter AND published as output for other components to read
+        // === Parameters ===
         bp.register_param("mass", &mass_, mass_, "kg", "Point mass");
         bp.template register_output<Scalar>("mass", &mass_, "kg", "Point mass");
     }
 
     /**
      * @brief Stage phase - load config and apply initial conditions
-     *
-     * Reads from config (only if explicitly set):
-     * - scalars["mass"]: Point mass
-     * - vectors["initial_position"]: Initial position [x, y, z]
-     * - vectors["initial_velocity"]: Initial velocity [vx, vy, vz]
-     *
-     * For programmatic setup, use SetMass(), SetInitialPosition(), etc.
-     * before calling Stage() - these values won't be overwritten if
-     * not present in config.
-     *
-     * Also applies ICs to state vector if already bound (for Reset() support).
      */
     void Stage(Backplane<Scalar> &) override {
         const auto &config = this->GetConfig();
 
-        // Only override mass if explicitly set in config
+        // Load mass from config if set
         if (config.template Has<double>("mass")) {
             mass_ = static_cast<Scalar>(config.template Get<double>("mass", 1.0));
         }
 
-        // Only override position if explicitly set in config
+        // Load initial position if set
         if (config.template Has<Vec3<double>>("initial_position")) {
             auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
-            ic_position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                                        static_cast<Scalar>(pos(2))};
+            position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
+                                     static_cast<Scalar>(pos(2))};
         }
 
-        // Only override velocity if explicitly set in config
+        // Load initial velocity if set
         if (config.template Has<Vec3<double>>("initial_velocity")) {
             auto vel = config.template Get<Vec3<double>>("initial_velocity", Vec3<double>::Zero());
-            ic_velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
-                                        static_cast<Scalar>(vel(2))};
+            velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
+                                     static_cast<Scalar>(vel(2))};
         }
 
-        // Apply ICs to state vector if already bound (for Reset() support)
-        if (state_pos_ != nullptr) {
-            state_pos_[0] = ic_position_(0);
-            state_pos_[1] = ic_position_(1);
-            state_pos_[2] = ic_position_(2);
-            state_vel_[0] = ic_velocity_(0);
-            state_vel_[1] = ic_velocity_(1);
-            state_vel_[2] = ic_velocity_(2);
-
-            // Also update output signals
-            position_ = ic_position_;
-            velocity_ = ic_velocity_;
-        }
-    }
-
-    /**
-     * @brief Bind to global state vector slices
-     */
-    void BindState(Scalar *state, Scalar *state_dot, std::size_t size) override {
-        if (size != kStateSize) {
-            throw StateSizeMismatchError(kStateSize, size);
-        }
-
-        // Store pointers to state slices
-        state_pos_ = state + kPosOffset;
-        state_dot_pos_ = state_dot + kPosOffset;
-        state_vel_ = state + kVelOffset;
-        state_dot_vel_ = state_dot + kVelOffset;
-
-        // Apply initial conditions to state
-        state_pos_[0] = ic_position_(0);
-        state_pos_[1] = ic_position_(1);
-        state_pos_[2] = ic_position_(2);
-        state_vel_[0] = ic_velocity_(0);
-        state_vel_[1] = ic_velocity_(1);
-        state_vel_[2] = ic_velocity_(2);
-
-        // CRITICAL: Also initialize output signals so other components
-        // can read correct values during first derivative evaluation
-        position_ = ic_position_;
-        velocity_ = ic_velocity_;
-    }
-
-    /**
-     * @brief Publish state outputs BEFORE other components' Step() runs
-     *
-     * This is critical for correct signal propagation: Gravity needs to read
-     * the current position to compute force, but Dynamics reads force in its
-     * Step(). By publishing position in PreStep, we ensure the data flow:
-     *   PreStep: Dynamics publishes position
-     *   Step: Gravity reads position, computes force, publishes force
-     *   Step: Dynamics reads force, computes acceleration
-     */
-    void PreStep(Scalar t, Scalar dt) override {
-        (void)t;
-        (void)dt;
-
-        // Publish current state to outputs BEFORE other components read them
-        Vec3<Scalar> pos{state_pos_[0], state_pos_[1], state_pos_[2]};
-        Vec3<Scalar> vel{state_vel_[0], state_vel_[1], state_vel_[2]};
-        position_ = pos;
-        velocity_ = vel;
+        // Zero derivatives
+        position_dot_ = Vec3<Scalar>::Zero();
+        velocity_dot_ = Vec3<Scalar>::Zero();
     }
 
     /**
      * @brief Compute derivatives using Vulcan dynamics
+     *
+     * Phase 6: No PreStep/PublishOutputs needed - states ARE outputs.
+     * The integrator updates position_/velocity_ directly.
      */
     void Step(Scalar t, Scalar dt) override {
         (void)t;
         (void)dt;
 
-        // Read current state into Vec3
-        Vec3<Scalar> pos{state_pos_[0], state_pos_[1], state_pos_[2]};
-        Vec3<Scalar> vel{state_vel_[0], state_vel_[1], state_vel_[2]};
-
-        // CRITICAL: Update outputs FIRST so other components (e.g., Gravity)
-        // can read the current trial position during RK4 intermediate stages
-        position_ = pos;
-        velocity_ = vel;
-
-        // Read force input from registered InputHandles
+        // Read force input
         Vec3<Scalar> force{force_x_.get(), force_y_.get(), force_z_.get()};
 
-        // Compute acceleration using Vulcan (inertial frame: a = F/m)
+        // Compute acceleration using Vulcan (a = F/m)
         Vec3<Scalar> accel = vulcan::dynamics::point_mass_acceleration(force, mass_);
 
-        // Write derivatives
+        // Write derivatives directly to member variables
         // dr/dt = v (kinematics)
-        state_dot_pos_[0] = vel(0);
-        state_dot_pos_[1] = vel(1);
-        state_dot_pos_[2] = vel(2);
+        position_dot_ = velocity_;
 
-        // dv/dt = a = F/m (Vulcan computes this)
-        state_dot_vel_[0] = accel(0);
-        state_dot_vel_[1] = accel(1);
-        state_dot_vel_[2] = accel(2);
+        // dv/dt = a = F/m
+        velocity_dot_ = accel;
     }
 
     // =========================================================================
@@ -234,12 +152,12 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     void SetMass(Scalar mass) { mass_ = mass; }
     [[nodiscard]] Scalar GetMass() const { return mass_; }
 
-    void SetInitialPosition(const Vec3<Scalar> &pos) { ic_position_ = pos; }
-    void SetInitialPosition(Scalar x, Scalar y, Scalar z) { ic_position_ = Vec3<Scalar>{x, y, z}; }
+    void SetInitialPosition(const Vec3<Scalar> &pos) { position_ = pos; }
+    void SetInitialPosition(Scalar x, Scalar y, Scalar z) { position_ = Vec3<Scalar>{x, y, z}; }
 
-    void SetInitialVelocity(const Vec3<Scalar> &vel) { ic_velocity_ = vel; }
+    void SetInitialVelocity(const Vec3<Scalar> &vel) { velocity_ = vel; }
     void SetInitialVelocity(Scalar vx, Scalar vy, Scalar vz) {
-        ic_velocity_ = Vec3<Scalar>{vx, vy, vz};
+        velocity_ = Vec3<Scalar>{vx, vy, vz};
     }
 
     // Accessors
@@ -251,27 +169,19 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
     std::string name_;
     std::string entity_;
 
-    // Initial conditions
-    Vec3<Scalar> ic_position_ = Vec3<Scalar>::Zero();
-    Vec3<Scalar> ic_velocity_ = Vec3<Scalar>::Zero();
+    // === Phase 6: State variables (ARE the outputs) ===
+    Vec3<Scalar> position_ = Vec3<Scalar>::Zero();
+    Vec3<Scalar> position_dot_ = Vec3<Scalar>::Zero();
+    Vec3<Scalar> velocity_ = Vec3<Scalar>::Zero();
+    Vec3<Scalar> velocity_dot_ = Vec3<Scalar>::Zero();
 
-    // State pointers (bound in BindState)
-    Scalar *state_pos_ = nullptr;
-    Scalar *state_vel_ = nullptr;
-    Scalar *state_dot_pos_ = nullptr;
-    Scalar *state_dot_vel_ = nullptr;
-
-    // === Phase 2.4: Input Handles ===
+    // === Inputs ===
     InputHandle<Scalar> force_x_;
     InputHandle<Scalar> force_y_;
     InputHandle<Scalar> force_z_;
 
-    // === Phase 2.4: Parameter ===
+    // === Parameter ===
     Scalar mass_{1.0};
-
-    // Output values
-    Vec3<Scalar> position_ = Vec3<Scalar>::Zero();
-    Vec3<Scalar> velocity_ = Vec3<Scalar>::Zero();
 };
 
 } // namespace components

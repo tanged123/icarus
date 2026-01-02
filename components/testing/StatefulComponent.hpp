@@ -5,6 +5,8 @@
  * @brief Test component with integrated state for testing state management
  *
  * Implements simple exponential decay dynamics: x_dot = -x
+ *
+ * Updated for Phase 6: Uses unified signal model with register_state().
  */
 
 #include <icarus/core/Component.hpp>
@@ -22,49 +24,80 @@ namespace icarus {
 template <typename Scalar> class StatefulComponent : public Component<Scalar> {
   public:
     explicit StatefulComponent(std::string name, std::size_t state_size = 3)
-        : name_(std::move(name)), state_size_(state_size) {}
+        : name_(std::move(name)), state_size_(state_size) {
+        // Initialize state vectors with zeros
+        state_.resize(state_size_);
+        state_dot_.resize(state_size_);
+        for (std::size_t i = 0; i < state_size_; ++i) {
+            state_[i] = Scalar{0};
+            state_dot_[i] = Scalar{0};
+        }
+    }
 
     [[nodiscard]] std::string Name() const override { return name_; }
-    [[nodiscard]] std::size_t StateSize() const override { return state_size_; }
+
+    /**
+     * @brief Get the number of state variables (for testing purposes)
+     *
+     * Note: This is NOT an override - StateSize() was removed from Component base.
+     */
+    [[nodiscard]] std::size_t GetStateSize() const { return state_size_; }
 
     void Provision(Backplane<Scalar> &bp) override {
+        // Register states using the unified signal model
+        // Each scalar state creates a value output and a derivative signal
+        for (std::size_t i = 0; i < state_size_; ++i) {
+            std::string name = "state_" + std::to_string(i);
+            bp.template register_state<Scalar>(name, &state_[i], &state_dot_[i], "",
+                                               "Test state " + std::to_string(i));
+        }
+
         // Register output for observability
-        bp.register_output("state_bound", &state_bound_);
+        bp.template register_output<Scalar>("state_bound", &state_bound_, "", "State bound flag");
     }
 
     void Stage(Backplane<Scalar> &) override {
-        // Nothing beyond state binding
-    }
-
-    void BindState(Scalar *state, Scalar *state_dot, std::size_t size) override {
-        if (size != state_size_) {
-            throw StateSizeMismatchError(state_size_, size);
-        }
-        state_ptr_ = state;
-        state_dot_ptr_ = state_dot;
+        // Mark as bound (for compatibility with tests)
         state_bound_ = Scalar{1};
+        state_bound_flag_ = true;
     }
 
     void Step(Scalar /*t*/, Scalar /*dt*/) override {
         // Simple dynamics: x_dot = -x (exponential decay)
         for (std::size_t i = 0; i < state_size_; ++i) {
-            state_dot_ptr_[i] = -state_ptr_[i];
+            state_dot_[i] = -state_[i];
         }
     }
 
     // Accessors for testing
-    [[nodiscard]] Scalar *GetStatePtr() { return state_ptr_; }
-    [[nodiscard]] Scalar *GetStateDotPtr() { return state_dot_ptr_; }
-    [[nodiscard]] bool IsBound() const {
-        return state_ptr_ != nullptr && state_dot_ptr_ != nullptr;
+    [[nodiscard]] Scalar *GetStatePtr() { return state_.data(); }
+    [[nodiscard]] Scalar *GetStateDotPtr() { return state_dot_.data(); }
+
+    /**
+     * @brief Check if state has been bound (staged)
+     *
+     * Uses a plain bool flag instead of Scalar comparison to work
+     * correctly in both numeric and symbolic backends.
+     */
+    [[nodiscard]] bool IsBound() const { return state_bound_flag_; }
+
+    // Direct state access for testing
+    [[nodiscard]] const std::vector<Scalar> &GetState() const { return state_; }
+    [[nodiscard]] const std::vector<Scalar> &GetStateDot() const { return state_dot_; }
+
+    void SetState(std::size_t idx, Scalar value) {
+        if (idx < state_size_) {
+            state_[idx] = value;
+        }
     }
 
   private:
     std::string name_;
     std::size_t state_size_;
-    Scalar *state_ptr_ = nullptr;
-    Scalar *state_dot_ptr_ = nullptr;
+    std::vector<Scalar> state_;
+    std::vector<Scalar> state_dot_;
     Scalar state_bound_{0};
+    bool state_bound_flag_ = false; ///< Plain bool for IsBound() to work in symbolic mode
 };
 
 } // namespace icarus

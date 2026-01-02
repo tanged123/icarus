@@ -3,7 +3,7 @@
  * @brief Unit tests for PointMass3DOF and PointMassGravity components
  *
  * Part of Phase 2.3: First Real Component
- * Updated for Phase 4.0.7 non-templated Simulator API.
+ * Updated for Phase 6: Unified signal model (states as signals)
  */
 
 #include <gtest/gtest.h>
@@ -28,12 +28,6 @@ using namespace icarus::components;
 // PointMass3DOF Unit Tests
 // =============================================================================
 
-TEST(PointMass3DOF, StateSize) {
-    PointMass3DOF<double> pm;
-    EXPECT_EQ(pm.StateSize(), 6);
-    EXPECT_TRUE(pm.HasState());
-}
-
 TEST(PointMass3DOF, Identity) {
     PointMass3DOF<double> pm("TestMass", "Vehicle");
     EXPECT_EQ(pm.Name(), "TestMass");
@@ -55,17 +49,16 @@ TEST(PointMass3DOF, InitialConditions) {
     pm.SetInitialPosition(1.0, 2.0, 3.0);
     pm.SetInitialVelocity(4.0, 5.0, 6.0);
 
-    // Bind state manually to verify IC application
-    double state[6];
-    double state_dot[6];
-    pm.BindState(state, state_dot, 6);
+    // In Phase 6, states are registered as signals and accessible via accessors
+    auto pos = pm.GetPosition();
+    EXPECT_DOUBLE_EQ(pos(0), 1.0);
+    EXPECT_DOUBLE_EQ(pos(1), 2.0);
+    EXPECT_DOUBLE_EQ(pos(2), 3.0);
 
-    EXPECT_DOUBLE_EQ(state[0], 1.0);
-    EXPECT_DOUBLE_EQ(state[1], 2.0);
-    EXPECT_DOUBLE_EQ(state[2], 3.0);
-    EXPECT_DOUBLE_EQ(state[3], 4.0);
-    EXPECT_DOUBLE_EQ(state[4], 5.0);
-    EXPECT_DOUBLE_EQ(state[5], 6.0);
+    auto vel = pm.GetVelocity();
+    EXPECT_DOUBLE_EQ(vel(0), 4.0);
+    EXPECT_DOUBLE_EQ(vel(1), 5.0);
+    EXPECT_DOUBLE_EQ(vel(2), 6.0);
 }
 
 TEST(PointMass3DOF, InitialConditionsVec3) {
@@ -73,31 +66,16 @@ TEST(PointMass3DOF, InitialConditionsVec3) {
     pm.SetInitialPosition(Vec3<double>{1.0, 2.0, 3.0});
     pm.SetInitialVelocity(Vec3<double>{4.0, 5.0, 6.0});
 
-    double state[6];
-    double state_dot[6];
-    pm.BindState(state, state_dot, 6);
+    auto pos = pm.GetPosition();
+    EXPECT_DOUBLE_EQ(pos(0), 1.0);
 
-    EXPECT_DOUBLE_EQ(state[0], 1.0);
-    EXPECT_DOUBLE_EQ(state[3], 4.0);
-}
-
-TEST(PointMass3DOF, StateSizeMismatchThrows) {
-    PointMass3DOF<double> pm;
-    double state[4];
-    double state_dot[4];
-
-    EXPECT_THROW(pm.BindState(state, state_dot, 4), StateSizeMismatchError);
+    auto vel = pm.GetVelocity();
+    EXPECT_DOUBLE_EQ(vel(0), 4.0);
 }
 
 // =============================================================================
 // PointMassGravity Unit Tests
 // =============================================================================
-
-TEST(PointMassGravity, StateSize) {
-    PointMassGravity<double> grav;
-    EXPECT_EQ(grav.StateSize(), 0);
-    EXPECT_FALSE(grav.HasState());
-}
 
 TEST(PointMassGravity, Identity) {
     PointMassGravity<double> grav("TestGravity", "Environment");

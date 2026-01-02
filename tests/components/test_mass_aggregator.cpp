@@ -25,12 +25,6 @@ using namespace icarus::components;
 // StaticMass Unit Tests
 // =============================================================================
 
-TEST(StaticMass, StateSize) {
-    StaticMass<double> sm;
-    EXPECT_EQ(sm.StateSize(), 0);
-    EXPECT_FALSE(sm.HasState());
-}
-
 TEST(StaticMass, Identity) {
     StaticMass<double> sm("Structure", "Vehicle");
     EXPECT_EQ(sm.Name(), "Structure");
@@ -94,12 +88,6 @@ TEST(StaticMass, Provision) {
 // =============================================================================
 // MassAggregator Unit Tests
 // =============================================================================
-
-TEST(MassAggregator, StateSize) {
-    MassAggregator<double> agg;
-    EXPECT_EQ(agg.StateSize(), 0);
-    EXPECT_FALSE(agg.HasState());
-}
 
 TEST(MassAggregator, Identity) {
     MassAggregator<double> agg("MassAgg", "Vehicle");
@@ -226,12 +214,12 @@ TEST(MassAggregator, ParallelAxisTheorem) {
 // =============================================================================
 
 TEST(StaticMassSymbolic, BasicCompiles) {
-    // Verify symbolic mode compiles and creates proper structure
+    // Verify symbolic mode compiles
     StaticMass<janus::SymbolicScalar> sm;
-    EXPECT_EQ(sm.StateSize(), 0);
+    EXPECT_EQ(sm.Name(), "StaticMass");
 }
 
 TEST(MassAggregatorSymbolic, BasicCompiles) {
     MassAggregator<janus::SymbolicScalar> agg;
-    EXPECT_EQ(agg.StateSize(), 0);
+    EXPECT_EQ(agg.Name(), "MassAggregator");
 }
