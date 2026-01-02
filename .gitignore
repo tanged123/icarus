@@ -78,3 +78,6 @@ __pycache__/
 # Nix
 result
 result-*
+
+# Do not ignore beads
+!.beads
