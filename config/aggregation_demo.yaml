@@ -32,7 +32,7 @@ logging:
 
 time:
   start: 0.0
-  end: 5.0           # 5 seconds
+  end: 500.0           # 5 seconds
   dt: 0.01           # 100 Hz
 
 # =============================================================================
@@ -214,6 +214,9 @@ routes:
 # =============================================================================
 
 scheduler:
+  topology:
+    mode: automatic  # Compute execution order from signal dependencies
+    log_order: true
   groups:
     # Mass sources run first (static, just need to publish once effectively)
     - name: mass_sources

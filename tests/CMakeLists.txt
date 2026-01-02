@@ -102,6 +102,11 @@ icarus_add_test(test_scheduler
     sim/test_scheduler.cpp
 )
 
+# Phase 5: Topology analyzer tests
+icarus_add_test(test_topology_analyzer
+    sim/test_topology_analyzer.cpp
+)
+
 # Phase 4.0.7: Internal managers tests
 icarus_add_test(test_managers
     sim/test_managers.cpp

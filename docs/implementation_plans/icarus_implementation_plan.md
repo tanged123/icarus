@@ -218,18 +218,18 @@ Phase 4–7 (horizontal expansion)
 
 ### Tasks
 
-- [ ] **5.1 Extended Configuration Layers**
-  - [ ] Entity bundles (Layer A') — reusable component groups
-  - [ ] Scenario definitions (Layer B) — initial conditions, variants
-  - [ ] Include/merge support for config composition
+- [x] **5.1 Extended Configuration Layers**
+  - [x] Entity bundles (Layer A') — reusable component groups
+  - [x] Scenario definitions (Layer B) — initial conditions, variants
+  - [x] Include/merge support for config composition
 
-- [ ] **5.2 Scheduler**
-  - [ ] Topological sort from dependency graph
-  - [ ] Rate groups for multi-rate simulation (Layer D)
+- [x] **5.2 Scheduler**
+  - [-] Topological sort from dependency graph
+  - [x] Rate groups for multi-rate simulation (Layer D)
 
-- [ ] **5.3 Data Dictionary Export**
-  - [ ] Auto-generate signal catalog at Provision
-  - [ ] Export as JSON/YAML
+- [x] **5.3 Data Dictionary Export**
+  - [x] Auto-generate signal catalog at Provision
+  - [x] Export as JSON/YAML
 
 ### Architecture References
 
@@ -241,9 +241,9 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Load complex scenario with entity bundles
-- [ ] Multi-rate simulation working
-- [ ] Data Dictionary exported
+- [x] Load complex scenario with entity bundles
+- [x] Multi-rate simulation working
+- [x] Data Dictionary exported
 
 ---
 
