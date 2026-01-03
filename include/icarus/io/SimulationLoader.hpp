@@ -229,6 +229,10 @@ class SimulationLoader {
             cfg.epoch.jd = epoch_node.Get<double>("jd", cfg.epoch.jd);
             cfg.epoch.gps_week = epoch_node.Get<int>("week", cfg.epoch.gps_week);
             cfg.epoch.gps_seconds = epoch_node.Get<double>("seconds", cfg.epoch.gps_seconds);
+            // Mark GPS as configured if week was explicitly provided
+            if (epoch_node.Has("week")) {
+                cfg.epoch.gps_configured = true;
+            }
         }
     }
 

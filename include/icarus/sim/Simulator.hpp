@@ -11,7 +11,6 @@
  * Symbolic mode (casadi::MX) is used during Stage() for analysis.
  */
 
-#include <cstdio>
 #include <functional>
 #include <icarus/core/Component.hpp>
 #include <icarus/core/ComponentConfig.hpp>
@@ -33,6 +32,7 @@
 #include <icarus/staging/StagingTypes.hpp>
 #include <memory>
 #include <optional>
+#include <regex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -527,19 +527,92 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
 inline void Simulator::InitializeEpoch() {
     // Parse epoch configuration - always initialize epoch (single source of truth)
     if (config_.epoch.system == "UTC" && !config_.epoch.reference.empty()) {
-        // Parse ISO 8601 string: "2024-12-22T10:30:00Z"
-        int year, month, day, hour, min;
-        double sec = 0.0;
-        if (std::sscanf(config_.epoch.reference.c_str(), "%d-%d-%dT%d:%d:%lf", &year, &month, &day,
-                        &hour, &min, &sec) >= 5) {
-            epoch_start_ = vulcan::time::NumericEpoch::from_utc(year, month, day, hour, min, sec);
-        } else {
+        // Robust ISO 8601 parser with timezone offset and fractional seconds support
+        // Format: YYYY-MM-DDTHH:MM:SS[.fractional][Z|+HH:MM|-HH:MM|+HHMM|-HHMM]
+        static const std::regex iso8601_regex(
+            R"(^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|([+-])(\d{2}):?(\d{2}))?$)");
+        // Groups: 1=year, 2=month, 3=day, 4=hour, 5=minute, 6=whole_seconds
+        //         7=fractional_seconds (optional, includes leading '.')
+        //         8=timezone block (optional)
+        //         9=tz_sign (+ or -), 10=tz_hours, 11=tz_minutes
+
+        std::smatch match;
+        if (!std::regex_match(config_.epoch.reference, match, iso8601_regex)) {
             throw ConfigError("Invalid epoch reference format: " + config_.epoch.reference +
-                              " (expected ISO 8601: YYYY-MM-DDTHH:MM:SSZ)");
+                              " (expected ISO 8601: YYYY-MM-DDTHH:MM:SS[.sss][Z|±HH:MM])");
         }
+
+        // Extract date/time components
+        int year = std::stoi(match[1].str());
+        int month = std::stoi(match[2].str());
+        int day = std::stoi(match[3].str());
+        int hour = std::stoi(match[4].str());
+        int min = std::stoi(match[5].str());
+        double sec = std::stod(match[6].str());
+
+        // Add fractional seconds if present
+        if (match[7].matched) {
+            sec += std::stod(match[7].str());
+        }
+
+        // Parse timezone offset and convert to UTC
+        if (match[8].matched && match[8].str() != "Z") {
+            // Has explicit offset (not Z)
+            int tz_sign = (match[9].str() == "-") ? -1 : 1;
+            int tz_hours = std::stoi(match[10].str());
+            int tz_minutes = std::stoi(match[11].str());
+            int offset_minutes = tz_sign * (tz_hours * 60 + tz_minutes);
+
+            // Convert local time to UTC by subtracting the offset
+            // (positive offset = ahead of UTC, so subtract to get UTC)
+            int total_minutes = hour * 60 + min - offset_minutes;
+
+            // Handle day rollover
+            while (total_minutes < 0) {
+                total_minutes += 24 * 60;
+                day -= 1;
+            }
+            while (total_minutes >= 24 * 60) {
+                total_minutes -= 24 * 60;
+                day += 1;
+            }
+
+            hour = total_minutes / 60;
+            min = total_minutes % 60;
+
+            // Handle month/year rollover (simplified - use days in month)
+            auto days_in_month = [](int y, int m) -> int {
+                static constexpr int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+                if (m == 2) {
+                    bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+                    return leap ? 29 : 28;
+                }
+                return days[m - 1];
+            };
+
+            while (day < 1) {
+                month -= 1;
+                if (month < 1) {
+                    month = 12;
+                    year -= 1;
+                }
+                day += days_in_month(year, month);
+            }
+            while (day > days_in_month(year, month)) {
+                day -= days_in_month(year, month);
+                month += 1;
+                if (month > 12) {
+                    month = 1;
+                    year += 1;
+                }
+            }
+        }
+        // else: Z suffix or no suffix means UTC - no conversion needed
+
+        epoch_start_ = vulcan::time::NumericEpoch::from_utc(year, month, day, hour, min, sec);
     } else if (config_.epoch.system == "TAI" && config_.epoch.jd > 0.0) {
         epoch_start_ = vulcan::time::NumericEpoch::from_jd_tai(config_.epoch.jd);
-    } else if (config_.epoch.system == "GPS" && config_.epoch.gps_week > 0) {
+    } else if (config_.epoch.system == "GPS" && config_.epoch.gps_configured) {
         epoch_start_ = vulcan::time::NumericEpoch::from_gps_week(config_.epoch.gps_week,
                                                                  config_.epoch.gps_seconds);
     } else {

@@ -73,9 +73,13 @@ struct EpochConfig {
     /// GPS seconds of week (for GPS system)
     double gps_seconds = 0.0;
 
+    /// GPS configured flag (set when GPS fields are explicitly provided)
+    /// Required because gps_week=0 is a valid GPS week (Jan 6, 1980)
+    bool gps_configured = false;
+
     /// Check if epoch is configured (non-MET-only mode)
     [[nodiscard]] bool IsConfigured() const {
-        return !reference.empty() || jd > 0.0 || gps_week > 0;
+        return !reference.empty() || jd > 0.0 || gps_configured;
     }
 
     /// Create default MET-only config
