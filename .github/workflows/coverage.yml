@@ -19,6 +19,20 @@ jobs:
         name: tanged123
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-coverage-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          ccache-coverage-${{ runner.os }}-
+
+    - name: Configure ccache
+      run: |
+        mkdir -p ~/.ccache
+        echo "max_size = 500M" > ~/.ccache/ccache.conf
+        echo "compression = true" >> ~/.ccache/ccache.conf
+
     - name: Run Coverage Script
       run: nix develop --command ./scripts/coverage.sh
 

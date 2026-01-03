@@ -19,5 +19,19 @@ jobs:
         name: tanged123
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ runner.os }}-
+
+    - name: Configure ccache
+      run: |
+        mkdir -p ~/.ccache
+        echo "max_size = 500M" > ~/.ccache/ccache.conf
+        echo "compression = true" >> ~/.ccache/ccache.conf
+
     - name: Build & Test (Flake Check)
       run: ./scripts/ci.sh

@@ -257,19 +257,19 @@ Phase 4–7 (horizontal expansion)
   - [x] Unify states with signal backplane
   - [x] Remove old state API
 
-- [ ] **6.1 Phase Manager**
-  - [ ] Condition evaluation (post-Step signal values)
-  - [ ] Phase transitions, ghosting, derivative gating
-  - [ ] `OnPhaseEnter`/`OnPhaseExit` hooks
+- [x] **6.1 Phase Manager**
+  - [x] Condition evaluation (post-Step signal values)
+  - [x] Phase transitions, ghosting, derivative gating
+  - [x] `OnPhaseEnter`/`OnPhaseExit` hooks
 
-- [ ] **6.2 Recording**
-  - [ ] HDF5-based `.icarec` writer
-  - [ ] Schema versioning
-  - [ ] Time system specification (MET/TAI/UTC)
+- [x] **6.2 Recording**
+  - [x] HDF5-based `.h5` writer
+  - [x] Schema versioning
+  - [x] Time system specification (MET/TAI/UTC)
 
-- [ ] **6.3 Warmstart**
-  - [ ] Load state from recording
-  - [ ] Continue simulation from mid-flight
+- [x] **6.3 Warmstart**
+  - [x] Load state from recording
+  - [x] Continue simulation from mid-flight
 
 ### Architecture References
 
@@ -283,9 +283,9 @@ Phase 4–7 (horizontal expansion)
 
 ### Exit Criteria
 
-- [ ] Multi-phase rocket simulation with stage separation
-- [ ] Full `.icarec` recording with schema
-- [ ] Warmstart from mid-flight recording
+- [x] Multi-phase rocket simulation with stage separation
+- [x] Full `.h5` recording with schema
+- [x] Warmstart from mid-flight recording
 
 ---
 
