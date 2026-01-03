@@ -90,7 +90,7 @@ TEST(Tokenizer, Parentheses) {
 
 TEST(Tokenizer, UnexpectedCharacter) {
     Tokenizer tokenizer("x @ y");
-    EXPECT_THROW(tokenizer.Tokenize(), ConditionError);
+    EXPECT_THROW((void)tokenizer.Tokenize(), ConditionError);
 }
 
 // ============================================================================
@@ -108,12 +108,12 @@ TEST(ConditionParser, SimpleComparison) {
 TEST(ConditionParser, AllComparisonOperators) {
     ConditionParser<double> parser;
 
-    EXPECT_NO_THROW(parser.Parse("a < 1"));
-    EXPECT_NO_THROW(parser.Parse("a <= 1"));
-    EXPECT_NO_THROW(parser.Parse("a > 1"));
-    EXPECT_NO_THROW(parser.Parse("a >= 1"));
-    EXPECT_NO_THROW(parser.Parse("a == 1"));
-    EXPECT_NO_THROW(parser.Parse("a != 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a < 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a <= 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a > 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a >= 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a == 1"));
+    EXPECT_NO_THROW((void)parser.Parse("a != 1"));
 }
 
 TEST(ConditionParser, AndExpression) {
@@ -156,22 +156,22 @@ TEST(ConditionParser, SignalToSignalComparison) {
 
 TEST(ConditionParser, MissingOperator) {
     ConditionParser<double> parser;
-    EXPECT_THROW(parser.Parse("x y"), ConditionError);
+    EXPECT_THROW((void)parser.Parse("x y"), ConditionError);
 }
 
 TEST(ConditionParser, MissingRightOperand) {
     ConditionParser<double> parser;
-    EXPECT_THROW(parser.Parse("x <"), ConditionError);
+    EXPECT_THROW((void)parser.Parse("x <"), ConditionError);
 }
 
 TEST(ConditionParser, UnmatchedParenthesis) {
     ConditionParser<double> parser;
-    EXPECT_THROW(parser.Parse("(x < 1"), ConditionError);
+    EXPECT_THROW((void)parser.Parse("(x < 1"), ConditionError);
 }
 
 TEST(ConditionParser, ExtraTokens) {
     ConditionParser<double> parser;
-    EXPECT_THROW(parser.Parse("x < 1 2"), ConditionError);
+    EXPECT_THROW((void)parser.Parse("x < 1 2"), ConditionError);
 }
 
 // ============================================================================
@@ -357,13 +357,13 @@ TEST_F(ConditionEvaluationTest, SignalNotFound) {
     ConditionParser<double> parser;
     auto condition = parser.Parse("NonExistent.signal < 10");
 
-    EXPECT_THROW(condition.Evaluate(registry_), SignalNotFoundError);
+    EXPECT_THROW((void)condition.Evaluate(registry_), SignalNotFoundError);
 }
 
 TEST_F(ConditionEvaluationTest, EmptyCondition) {
     CompiledCondition<double> empty;
     EXPECT_FALSE(empty.IsValid());
-    EXPECT_THROW(empty.Evaluate(registry_), ConditionError);
+    EXPECT_THROW((void)empty.Evaluate(registry_), ConditionError);
 }
 
 // ============================================================================

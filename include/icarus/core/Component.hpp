@@ -95,16 +95,6 @@ template <typename Scalar> class Component {
     virtual void PostStep(Scalar /*t*/, Scalar /*dt*/) {}
 
     /**
-     * @brief Called when entering a new flight phase
-     */
-    virtual void OnPhaseEnter(Phase /*phase*/) {}
-
-    /**
-     * @brief Called when exiting a flight phase
-     */
-    virtual void OnPhaseExit(Phase /*phase*/) {}
-
-    /**
      * @brief Called when simulation encounters an error
      */
     virtual void OnError(const SimulationError & /*error*/) {}

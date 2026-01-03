@@ -180,10 +180,10 @@ TEST(StateManagement, StateRegistrationCreatesSignals) {
     // The StatefulComponent registers states named "state_0", "state_1", etc.
     // Signals should be "A.state_0" and "A.state_0_dot"
     // Use Peek to verify signals exist (will throw if not found)
-    EXPECT_NO_THROW(sim.Peek("A.state_0"));
-    EXPECT_NO_THROW(sim.Peek("A.state_0_dot"));
-    EXPECT_NO_THROW(sim.Peek("A.state_1"));
-    EXPECT_NO_THROW(sim.Peek("A.state_1_dot"));
+    EXPECT_NO_THROW((void)sim.Peek("A.state_0"));
+    EXPECT_NO_THROW((void)sim.Peek("A.state_0_dot"));
+    EXPECT_NO_THROW((void)sim.Peek("A.state_1"));
+    EXPECT_NO_THROW((void)sim.Peek("A.state_1_dot"));
 }
 
 // =============================================================================

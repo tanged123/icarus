@@ -16,22 +16,22 @@ TEST(Types, VersionComponents) {
     EXPECT_EQ(icarus::VersionPatch(), ICARUS_VERSION_PATCH);
 }
 
-TEST(Types, PhaseEnum) {
-    // Verify Phase enum values exist
-    auto phase = icarus::Phase::Uninitialized;
-    EXPECT_EQ(phase, icarus::Phase::Uninitialized);
+TEST(Types, LifecycleEnum) {
+    // Verify Lifecycle enum values exist
+    auto lifecycle = icarus::Lifecycle::Uninitialized;
+    EXPECT_EQ(lifecycle, icarus::Lifecycle::Uninitialized);
 
-    phase = icarus::Phase::Provisioned;
-    EXPECT_EQ(phase, icarus::Phase::Provisioned);
+    lifecycle = icarus::Lifecycle::Provisioned;
+    EXPECT_EQ(lifecycle, icarus::Lifecycle::Provisioned);
 
-    phase = icarus::Phase::Staged;
-    EXPECT_EQ(phase, icarus::Phase::Staged);
+    lifecycle = icarus::Lifecycle::Staged;
+    EXPECT_EQ(lifecycle, icarus::Lifecycle::Staged);
 
-    phase = icarus::Phase::Running;
-    EXPECT_EQ(phase, icarus::Phase::Running);
+    lifecycle = icarus::Lifecycle::Running;
+    EXPECT_EQ(lifecycle, icarus::Lifecycle::Running);
 
-    phase = icarus::Phase::Completed;
-    EXPECT_EQ(phase, icarus::Phase::Completed);
+    lifecycle = icarus::Lifecycle::Completed;
+    EXPECT_EQ(lifecycle, icarus::Lifecycle::Completed);
 }
 
 // ============================================
@@ -130,7 +130,7 @@ TEST(SignalRegistry, UnknownSignalThrows) {
 
 TEST(Simulator, DefaultConstruction) {
     icarus::Simulator sim;
-    EXPECT_EQ(sim.GetPhase(), icarus::Phase::Uninitialized);
+    EXPECT_EQ(sim.GetLifecycle(), icarus::Lifecycle::Uninitialized);
     EXPECT_EQ(sim.NumComponents(), 0);
 }
 

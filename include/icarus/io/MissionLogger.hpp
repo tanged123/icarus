@@ -36,13 +36,13 @@ namespace icarus {
  * These are string constants used with MissionLogger::BeginPhase().
  * Separate from the Phase enum in Types.hpp which tracks simulation state.
  */
-namespace SimPhase {
+namespace LifecycleStrings {
 constexpr const char *Init = "INIT";
 constexpr const char *Provision = "PROVISION";
 constexpr const char *Stage = "STAGE";
 constexpr const char *Run = "RUN";
 constexpr const char *Shutdown = "SHUTDOWN";
-} // namespace SimPhase
+} // namespace LifecycleStrings
 
 /**
  * @brief Mission Logger - Flight Recorder style logging
@@ -168,20 +168,21 @@ class MissionLogger {
     }
 
     /// Begin a lifecycle phase
-    void BeginPhase(const char *phase) {
-        current_phase_ = phase;
-        phase_start_time_ = Clock::now();
+    void BeginLifecycle(const char *lifecycle_name) {
+        current_lifecycle_ = lifecycle_name;
+        lifecycle_start_time_ = Clock::now();
 
-        std::string header = Banner::GetPhaseHeader(phase);
+        std::string header = Banner::GetLifecycleHeader(lifecycle_name);
         console_.WriteLine(header);
         WriteToFile(header);
     }
 
-    /// End current phase (pass current sim time for consistent timestamps)
-    void EndPhase(double sim_time = 0.0) {
-        auto elapsed = std::chrono::duration<double>(Clock::now() - phase_start_time_).count();
+    /// End current lifecycle phase (pass current sim time for consistent timestamps)
+    void EndLifecycle(double sim_time = 0.0) {
+        auto elapsed = std::chrono::duration<double>(Clock::now() - lifecycle_start_time_).count();
         std::ostringstream oss;
-        oss << "[SYS] " << current_phase_ << " phase complete (" << FormatDuration(elapsed) << ")";
+        oss << "[SYS] " << current_lifecycle_ << " phase complete (" << FormatDuration(elapsed)
+            << ")";
         LogTimed(LogLevel::Info, sim_time, oss.str());
     }
 
@@ -613,9 +614,9 @@ class MissionLogger {
 
     // Timing
     TimePoint startup_time_;
-    TimePoint phase_start_time_;
+    TimePoint lifecycle_start_time_;
     TimePoint run_start_wall_time_;
-    std::string current_phase_ = SimPhase::Init;
+    std::string current_lifecycle_ = LifecycleStrings::Init;
 
     // Progress display
     bool progress_enabled_ = true;

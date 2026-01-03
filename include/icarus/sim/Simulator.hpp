@@ -134,8 +134,8 @@ class Simulator {
     /// Get current simulation time
     [[nodiscard]] double Time() const { return time_; }
 
-    /// Get current simulation phase
-    [[nodiscard]] Phase GetPhase() const { return phase_; }
+    /// Get current simulation lifecycle state
+    [[nodiscard]] Lifecycle GetLifecycle() const { return lifecycle_; }
 
     /// Get current flight phase value (from PhaseManager)
     [[nodiscard]] int32_t GetFlightPhase() const { return phase_manager_.CurrentPhase(); }
@@ -146,7 +146,7 @@ class Simulator {
     }
 
     /// Check if simulation is initialized (Staged or later)
-    [[nodiscard]] bool IsInitialized() const { return phase_ >= Phase::Staged; }
+    [[nodiscard]] bool IsInitialized() const { return lifecycle_ >= Lifecycle::Staged; }
 
     /**
      * @brief Read a signal value by name
@@ -323,9 +323,9 @@ class Simulator {
     // Logging
     MissionLogger logger_;
 
-    // Time and phase
+    // Time and lifecycle
     double time_ = 0.0;
-    Phase phase_ = Phase::Uninitialized;
+    Lifecycle lifecycle_ = Lifecycle::Uninitialized;
     int frame_count_ = 0;
 
     // Symbolic results (optional, after Stage)
@@ -393,8 +393,8 @@ namespace icarus {
 
 inline Simulator::~Simulator() {
     // If we ever ran, log the debrief on destruction (RAII)
-    if (phase_ == Phase::Running) {
-        logger_.BeginPhase(SimPhase::Shutdown);
+    if (lifecycle_ == Lifecycle::Running) {
+        logger_.BeginLifecycle(LifecycleStrings::Shutdown);
         auto wall_time = std::chrono::duration<double>(logger_.WallElapsed()).count();
         logger_.LogDebrief(time_, wall_time);
     }
@@ -430,7 +430,7 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
     sim->logger_.LogPhaseConfig(config.phases);
 
     // Begin Provision phase
-    sim->logger_.BeginPhase(SimPhase::Provision);
+    sim->logger_.BeginLifecycle(LifecycleStrings::Provision);
 
     // Create components from factory
     auto &factory = ComponentFactory<double>::Instance();
@@ -459,7 +459,7 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
     auto dict = sim->GetDataDictionary();
     sim->logger_.LogManifest(dict);
 
-    sim->logger_.EndPhase();
+    sim->logger_.EndLifecycle();
 
     return sim;
 }
@@ -511,7 +511,7 @@ inline void Simulator::AddRoutes(const std::vector<signal::SignalRoute> &routes)
 }
 
 inline void Simulator::Provision() {
-    if (phase_ != Phase::Uninitialized) {
+    if (lifecycle_ != Lifecycle::Uninitialized) {
         throw LifecycleError(LifecyclePhase::Provision, "can only be called once");
     }
 
@@ -539,7 +539,7 @@ inline void Simulator::Provision() {
     // Allocate and bind state
     AllocateAndBindState();
 
-    phase_ = Phase::Provisioned;
+    lifecycle_ = Lifecycle::Provisioned;
 }
 
 inline void Simulator::ApplyRouting() { router_.ApplyRoutes(backplane_); }
@@ -567,16 +567,16 @@ inline void Simulator::ValidateWiring() {
 
 inline void Simulator::Stage() {
     // Auto-provision if components were added programmatically
-    if (phase_ == Phase::Uninitialized && !components_.empty()) {
+    if (lifecycle_ == Lifecycle::Uninitialized && !components_.empty()) {
         Provision();
     }
 
-    if (phase_ != Phase::Provisioned) {
+    if (lifecycle_ != Lifecycle::Provisioned) {
         throw LifecycleError(LifecyclePhase::Stage, "requires components to be added first");
     }
 
     // Begin Stage phase logging
-    logger_.BeginPhase(SimPhase::Stage);
+    logger_.BeginLifecycle(LifecycleStrings::Stage);
 
     // =========================================================================
     // Automatic Topology Ordering (if enabled)
@@ -733,9 +733,9 @@ inline void Simulator::Stage() {
         }
     }
 
-    logger_.EndPhase();
+    logger_.EndLifecycle();
 
-    phase_ = Phase::Staged;
+    lifecycle_ = Lifecycle::Staged;
     time_ = 0.0;
 }
 
@@ -745,14 +745,14 @@ inline void Simulator::Stage(const StageConfig &config) {
 }
 
 inline void Simulator::Step(double dt) {
-    if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+    if (lifecycle_ != Lifecycle::Staged && lifecycle_ != Lifecycle::Running) {
         throw LifecycleError(LifecyclePhase::Step, "requires prior Stage()");
     }
 
     // Auto-log RUN phase on first step
-    if (phase_ == Phase::Staged) {
-        phase_ = Phase::Running;
-        logger_.BeginPhase(SimPhase::Run);
+    if (lifecycle_ == Lifecycle::Staged) {
+        lifecycle_ = Lifecycle::Running;
+        logger_.BeginLifecycle(LifecycleStrings::Run);
         logger_.LogRunStart(time_, config_.t_end, config_.dt);
     }
 
@@ -833,7 +833,7 @@ inline void Simulator::Step(double dt) {
 inline void Simulator::Step() { Step(config_.dt); }
 
 inline void Simulator::Reset() {
-    if (phase_ < Phase::Staged) {
+    if (lifecycle_ < Lifecycle::Staged) {
         throw LifecycleError(LifecyclePhase::Reset, "requires prior Stage()");
     }
 
@@ -860,7 +860,7 @@ inline void Simulator::Reset() {
         backplane_.clear_context();
     }
 
-    phase_ = Phase::Staged;
+    lifecycle_ = Lifecycle::Staged;
 }
 
 inline void Simulator::SetInputSource(const std::string &signal_name,
@@ -911,14 +911,14 @@ inline Eigen::VectorXd Simulator::ComputeDerivatives(double t) {
 }
 
 inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
-    if (phase_ != Phase::Staged && phase_ != Phase::Running) {
+    if (lifecycle_ != Lifecycle::Staged && lifecycle_ != Lifecycle::Running) {
         throw LifecycleError(LifecyclePhase::Step, "AdaptiveStep() requires prior Stage()");
     }
 
     // Auto-log RUN phase on first step
-    if (phase_ == Phase::Staged) {
-        phase_ = Phase::Running;
-        logger_.BeginPhase(SimPhase::Run);
+    if (lifecycle_ == Lifecycle::Staged) {
+        lifecycle_ = Lifecycle::Running;
+        logger_.BeginLifecycle(LifecycleStrings::Run);
         logger_.LogRunStart(time_, config_.t_end, config_.dt);
     }
 

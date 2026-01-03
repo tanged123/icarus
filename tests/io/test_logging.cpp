@@ -365,8 +365,8 @@ TEST(Banner, SplashScreen) {
     EXPECT_TRUE(splash.find("CASADI") != std::string::npos);
 }
 
-TEST(Banner, PhaseHeader) {
-    std::string header = Banner::GetPhaseHeader("PROVISION");
+TEST(Banner, LifecycleHeader) {
+    std::string header = Banner::GetLifecycleHeader("PROVISION");
     EXPECT_TRUE(header.find("PROVISION") != std::string::npos);
     EXPECT_TRUE(header.find("───") != std::string::npos);
 }

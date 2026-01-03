@@ -95,7 +95,7 @@ concept IcarusScalar = JanusScalar<T>;
 /**
  * @brief Simulation lifecycle phases
  */
-enum class Phase : uint8_t {
+enum class Lifecycle : uint8_t {
     Uninitialized, ///< Before Provision
     Provisioned,   ///< After Provision, before Stage
     Staged,        ///< After Stage, ready to run
@@ -201,9 +201,9 @@ concept ComponentType =
  * @brief Concept for components with optional extended hooks
  */
 template <typename T, typename Scalar>
-concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, Phase phase) {
-    { c.OnPhaseEnter(phase) } -> std::same_as<void>;
-    { c.OnPhaseExit(phase) } -> std::same_as<void>;
+concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, Lifecycle lifecycle) {
+    { c.OnPhaseEnter(lifecycle) } -> std::same_as<void>;
+    { c.OnPhaseExit(lifecycle) } -> std::same_as<void>;
 };
 
 } // namespace icarus
@@ -247,10 +247,10 @@ concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, Phase pha
  * @param required Required phase for this operation
  * @param operation Name of the operation being attempted
  */
-#define ICARUS_ASSERT_LIFECYCLE(phase, required, operation)                                        \
-    ICARUS_ASSERT((phase) >= (required), std::string(operation) +                                  \
-                                             " requires lifecycle phase >= " +                     \
-                                             std::to_string(static_cast<int>(required)))
+#define ICARUS_ASSERT_LIFECYCLE(lifecycle, required, operation)                                    \
+    ICARUS_ASSERT((lifecycle) >= (required), std::string(operation) +                              \
+                                                 " requires lifecycle state >= " +                 \
+                                                 std::to_string(static_cast<int>(required)))
 
 #else // Release builds
 
@@ -258,6 +258,6 @@ concept ExtendedComponent = ComponentType<T, Scalar> && requires(T &c, Phase pha
 #define ICARUS_ASSERT(cond, msg) ((void)0)
 #define ICARUS_DEBUG_ONLY(code) ((void)0)
 #define ICARUS_ASSERT_PTR(ptr, context) ((void)0)
-#define ICARUS_ASSERT_LIFECYCLE(phase, required, operation) ((void)0)
+#define ICARUS_ASSERT_LIFECYCLE(lifecycle, required, operation) ((void)0)
 
 #endif // ICARUS_DEBUG

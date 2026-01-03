@@ -214,7 +214,7 @@ TEST(Simulator, ProvisionStage) {
 
     // Note: Provision() is now private, called via Configure/Stage
     sim.Stage();
-    EXPECT_EQ(sim.GetPhase(), Phase::Staged);
+    EXPECT_EQ(sim.GetLifecycle(), Lifecycle::Staged);
     EXPECT_TRUE(sim.GetBackplane().has_signal("Counter.counter"));
     EXPECT_TRUE(sim.GetBackplane().has_signal("Counter.time"));
 }
@@ -226,7 +226,7 @@ TEST(Simulator, Step) {
     sim.Stage();
 
     sim.Step(0.01);
-    EXPECT_EQ(sim.GetPhase(), Phase::Running);
+    EXPECT_EQ(sim.GetLifecycle(), Lifecycle::Running);
     EXPECT_DOUBLE_EQ(sim.Time(), 0.01);
 
     // Access signal through backplane

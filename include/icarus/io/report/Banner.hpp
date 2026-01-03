@@ -37,8 +37,8 @@ class Banner {
     }
 
     /// Get a section header
-    [[nodiscard]] static std::string GetPhaseHeader(const std::string &phase_name) {
-        std::string header = "─── [ PHASE: " + phase_name + " ] ";
+    [[nodiscard]] static std::string GetLifecycleHeader(const std::string &lifecycle_name) {
+        std::string header = "─── [ LIFECYCLE: " + lifecycle_name + " ] ";
         std::size_t remaining = (header.size() < 80) ? (80 - header.size()) : 0;
         for (std::size_t i = 0; i < remaining; ++i) {
             header += "─";

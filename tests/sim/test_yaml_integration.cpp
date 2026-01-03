@@ -185,7 +185,7 @@ TEST(YamlIntegration, SimulatorStageWithProgrammaticComponents) {
 
     // Stage
     simulator.Stage();
-    EXPECT_EQ(simulator.GetPhase(), Phase::Staged);
+    EXPECT_EQ(simulator.GetLifecycle(), Lifecycle::Staged);
     EXPECT_EQ(simulator.NumComponents(), 2);
 
     // Check signals registered
@@ -194,7 +194,7 @@ TEST(YamlIntegration, SimulatorStageWithProgrammaticComponents) {
 
     // Step
     simulator.Step(0.01);
-    EXPECT_EQ(simulator.GetPhase(), Phase::Running);
+    EXPECT_EQ(simulator.GetLifecycle(), Lifecycle::Running);
     EXPECT_DOUBLE_EQ(simulator.Time(), 0.01);
 
     // Verify signal values updated (scheduler may call Step() multiple times per dt)
@@ -222,7 +222,7 @@ TEST(YamlIntegration, SimulatorWithRoutes) {
 
     // Stage - wiring happens here (empty routes means no wiring validation)
     simulator.Stage();
-    EXPECT_EQ(simulator.GetPhase(), Phase::Staged);
+    EXPECT_EQ(simulator.GetLifecycle(), Lifecycle::Staged);
 
     // Verify components staged
     EXPECT_EQ(simulator.NumComponents(), 2);
@@ -246,7 +246,7 @@ TEST(YamlIntegration, MultiStepSimulation) {
     }
 
     EXPECT_DOUBLE_EQ(sim.Time(), 0.1);
-    EXPECT_EQ(sim.GetPhase(), Phase::Running);
+    EXPECT_EQ(sim.GetLifecycle(), Lifecycle::Running);
 
     // StatefulComponent has xdot = -x, so state should decay
     auto final_state = sim.GetState();
@@ -268,7 +268,7 @@ TEST(YamlIntegration, ResetAndRunAgain) {
     // Reset
     sim.Reset();
     EXPECT_DOUBLE_EQ(sim.Time(), 0.0);
-    EXPECT_EQ(sim.GetPhase(), Phase::Staged);
+    EXPECT_EQ(sim.GetLifecycle(), Lifecycle::Staged);
 
     // Run again
     sim.Step(0.05);
