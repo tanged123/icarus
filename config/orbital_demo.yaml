@@ -44,6 +44,7 @@ recording:
   path: "output/orbital_recording.h5"
   mode: outputs                # "all", "outputs", or "signals"
   include_derivatives: false   # Exclude *_dot signals
+  export_csv: true             # Export CSV copy for PlotJuggler
   # include:                   # Only used when mode = "signals"
   #   - "Satellite\\.position\\..*"
   #   - "Satellite\\.velocity\\..*"

@@ -18,7 +18,9 @@
 #include <icarus/io/data/Recorder.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
+#include <vulcan/io/CSVExport.hpp>
 #include <vulcan/io/Frame.hpp>
+#include <vulcan/io/HDF5Reader.hpp>
 #include <vulcan/io/HDF5Writer.hpp>
 #include <vulcan/io/TelemetrySchema.hpp>
 
@@ -90,11 +92,18 @@ class HDF5Recorder : public Recorder {
 
     /**
      * @brief Close recording file
+     *
+     * If export_csv is enabled in config, exports data to CSV after closing HDF5.
      */
     void Close() override {
         if (writer_) {
             writer_->close();
             writer_.reset();
+
+            // Export to CSV if configured
+            if (config_.export_csv) {
+                ExportCSV();
+            }
         }
     }
 
@@ -240,6 +249,28 @@ class HDF5Recorder : public Recorder {
                 break;
             }
         }
+    }
+
+    /**
+     * @brief Export HDF5 data to CSV format
+     *
+     * Uses Vulcan's CSVExport to convert the HDF5 file.
+     * CSV path is derived from HDF5 path by replacing extension.
+     */
+    void ExportCSV() {
+        // Derive CSV path from HDF5 path
+        std::string csv_path = config_.path;
+        auto dot_pos = csv_path.rfind('.');
+        if (dot_pos != std::string::npos) {
+            csv_path = csv_path.substr(0, dot_pos) + ".csv";
+        } else {
+            csv_path += ".csv";
+        }
+
+        // Use Vulcan's CSV export
+        vulcan::io::CSVExportOptions options;
+        options.signals = recorded_signals_;
+        vulcan::io::export_to_csv(config_.path, csv_path, options);
     }
 };
 

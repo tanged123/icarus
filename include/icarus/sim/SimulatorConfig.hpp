@@ -470,6 +470,9 @@ struct RecordingConfig {
     /// Flush interval (frames between disk flushes, 0 = auto)
     int flush_interval = 0;
 
+    /// Export CSV copy on close (for PlotJuggler, Excel, etc.)
+    bool export_csv = false;
+
     /// Create default config (recording disabled)
     [[nodiscard]] static RecordingConfig Default() { return RecordingConfig{}; }
 
