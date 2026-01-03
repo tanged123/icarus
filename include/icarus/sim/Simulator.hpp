@@ -218,6 +218,16 @@ class Simulator {
      */
     void Reset();
 
+    /**
+     * @brief Set simulation time (MET)
+     *
+     * Used by warmstart to restore time from recording.
+     * Sets epoch_ = epoch_start_ + met.
+     *
+     * @param met Mission Elapsed Time to set
+     */
+    void SetTime(double met);
+
     /// Input source callback: (signal_name) -> value
     using InputSourceCallback = std::function<double(const std::string &)>;
 
@@ -831,7 +841,11 @@ inline void Simulator::Stage() {
     }
 
     lifecycle_ = Lifecycle::Staged;
-    epoch_ = epoch_start_; // Reset to t=0 (MET derived via Time())
+
+    // Reset to t=0 unless warmstart mode restored time from recording
+    if (!config_.staging.trim.IsWarmstart()) {
+        epoch_ = epoch_start_;
+    }
 }
 
 inline void Simulator::Stage(const StageConfig &config) {
@@ -964,6 +978,12 @@ inline void Simulator::Reset() {
     }
 
     lifecycle_ = Lifecycle::Staged;
+}
+
+inline void Simulator::SetTime(double met) {
+    epoch_ = epoch_start_ + met;
+    // Estimate frame count from MET and dt
+    frame_count_ = static_cast<int>(met / config_.dt);
 }
 
 inline void Simulator::SetInputSource(const std::string &signal_name,

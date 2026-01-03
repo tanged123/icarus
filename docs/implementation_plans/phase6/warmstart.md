@@ -1,7 +1,7 @@
 # Warmstart Implementation
 
-**Status:** Proposed  
-**Phase:** 6.3  
+**Status:** In Progress
+**Phase:** 6.3
 **Related:** [20_recording.md](../../architecture/20_recording.md) | [10_entity_lifecycle.md](../../architecture/10_entity_lifecycle.md)
 
 ---
@@ -14,247 +14,251 @@ Warmstart enables resuming simulation from a recorded mid-flight state. This is 
 - Monte Carlo variations from a common waypoint
 - Hardware-in-the-loop restart after anomalies
 
-### Key Requirements
+### Key Insight: Warmstart is Just Another Trim Mode
 
-1. **Load state from recording**: Restore full simulation state at any recorded time
-2. **Schema validation**: Verify recording compatibility before attempting load
-3. **Continue simulation**: Seamlessly continue stepping from restored state
-4. **Phase continuity**: Restore correct phase and component activation states
-5. **Epoch restoration**: Reconstruct full time state including absolute epoch
+Both **trim/equilibrium** and **warmstart** are forms of **state initialization** during Stage(). The existing TrimSolver infrastructure already handles this - we just need to add warmstart as another mode.
+
+| Mode | Purpose | Method |
+|------|---------|--------|
+| `equilibrium` | Find steady-state via optimization | Newton solver (existing) |
+| `warmstart` | Restore from recording | Load from HDF5 at specified MET |
 
 ---
 
 ## Design
 
-### Warmstart Workflow
+### Extended TrimConfig
+
+Add warmstart fields to existing TrimConfig:
 
 ```cpp
-// 1. Create simulator from config (Provision happens in FromConfig)
+struct TrimConfig {
+    bool enabled = false;
+
+    /// Mode: "equilibrium" (default, existing behavior) or "warmstart"
+    std::string mode = "equilibrium";
+
+    // === Equilibrium mode settings (existing) ===
+    std::vector<std::string> zero_derivatives;
+    std::vector<std::string> control_signals;
+    double tolerance = 1e-6;
+    int max_iterations = 100;
+    std::string method = "newton";
+    std::unordered_map<std::string, double> initial_guesses;
+    std::unordered_map<std::string, std::pair<double, double>> control_bounds;
+
+    // === Warmstart mode settings (new) ===
+    std::string recording_path;       ///< Path to recording file
+    double resume_time = 0.0;         ///< MET to resume from
+    bool validate_schema = true;      ///< Validate recording compatibility
+};
+```
+
+### Workflow
+
+```cpp
+// Option 1: Normal startup (no trim)
 auto sim = Simulator::FromConfig("mission.yaml");
+sim->Stage();
+sim->Step(dt);
 
-// 2. Validate recording compatibility
-auto validation = sim->ValidateRecording("flight_001.icarec");
-if (!validation.IsValid()) {
-    for (const auto& error : validation.GetErrors()) {
-        ICARUS_ERROR("{}", error);
-    }
-    throw WarmstartError("Recording incompatible");
-}
+// Option 2: Equilibrium trim (existing behavior)
+auto sim = Simulator::FromConfig("mission.yaml");
+// config has: staging.trim.enabled=true, mode="equilibrium"
+sim->Stage();  // Solves for trim
+sim->Step(dt);
 
-// 3. Stage in warmstart mode (skips initial conditions)
-StageConfig stage_cfg;
-stage_cfg.mode = StageMode::WARMSTART;
-sim->Stage(stage_cfg);
-
-// 4. Load state from recording at specific MET
-double t_resume = 120.0;  // Resume at MET=120s
-sim->WarmstartFrom("flight_001.icarec", t_resume);
-// - State vector restored
-// - Phase signals restored
-// - Epoch restored (epoch_start_ + MET)
-// - Component internal state restored
-
-// 5. Continue simulation normally
-while (sim->Time() < t_end) {
-    sim->Step(dt);
-}
-
-// Epoch is correctly positioned:
-std::cout << "Resumed at: " << sim->ISO8601() << std::endl;
-// Output: "2024-12-22T10:32:00Z" (epoch_start + 120s)
+// Option 3: Warmstart from recording
+auto sim = Simulator::FromConfig("mission.yaml");
+// config has: staging.trim.enabled=true, mode="warmstart"
+//             staging.trim.recording_path="flight.h5", resume_time=120.0
+sim->Stage();  // Restores state from recording
+sim->Step(dt); // Continues from t=120s
 ```
 
-### State Restoration
-
-The warmstart process restores:
-
-1. **Epoch**: Reconstruct `epoch_` from recording metadata and MET
-2. **State vector**: All integrable signals (position, velocity, attitude, etc.)
-3. **Phase signals**: Current entity phases
-4. **Component internals**: Auxiliary state (e.g., integrator accumulators, filter states)
-
-```cpp
-class Simulator {
-public:
-    ValidationResult ValidateRecording(const std::string& path);
-    
-    void WarmstartFrom(const std::string& recording_path, double met);
-    
-private:
-    void RestoreEpoch(const RecordingReader& reader, double met);
-    void RestoreStateVector(const RecordingReader& reader, double met);
-    void RestorePhaseSignals(const RecordingReader& reader, double met);
-    void RestoreComponentState(const RecordingReader& reader, double met);
-};
-```
-
-### Epoch Restoration
-
-The recording stores epoch metadata (see recording.md), enabling full epoch reconstruction:
-
-```cpp
-void Simulator::RestoreEpoch(const RecordingReader& reader, double met) {
-    // Get epoch_start from recording metadata
-    auto schema = reader.GetSchema();
-    double epoch_jd_tai = schema.time.epoch_jd_tai;
-    int delta_at = schema.time.delta_at;
-    
-    // Reconstruct epoch_start_
-    epoch_start_ = vulcan::time::NumericEpoch::from_jd_tai(epoch_jd_tai, delta_at);
-    
-    // Set current epoch to epoch_start + MET
-    epoch_ = epoch_start_ + met;
-    
-    // Now Time() returns met, Epoch() returns full epoch
-}
-```
-
-### Validation Rules
-
-```cpp
-struct ValidationResult {
-    bool IsValid() const;
-    std::vector<std::string> GetErrors() const;
-    std::vector<std::string> GetWarnings() const;
-    
-    struct Issue {
-        enum Severity { ERROR, WARNING, INFO };
-        Severity severity;
-        std::string message;
-    };
-    std::vector<Issue> issues;
-};
-
-// Validation checks:
-// ERROR: Required input signal missing from recording
-// ERROR: Type mismatch between recording and current config
-// ERROR: Recording schema version incompatible
-// ERROR: Time system mismatch (e.g., GPS recording for UTC sim)
-// WARNING: Optional signal missing (will use default)
-// WARNING: Extra signals in recording (will be ignored)
-// WARNING: Leap second boundary crossed since recording
-```
-
-### Recording Requirements for Warmstart
-
-For a recording to be warmstart-compatible, it must include:
-
-1. All state signals (identified by `is_integrable` flag)
-2. All phase signals
-3. Epoch metadata (epoch_jd_tai, delta_at, time system)
-4. All component-internal state (if warmstart_compatible: true)
+### YAML Configuration
 
 ```yaml
-services:
-  recording:
-    warmstart_compatible: true  # Validates completeness at record time
+staging:
+  trim:
+    enabled: true
+    mode: warmstart  # "equilibrium" or "warmstart"
+
+    # Warmstart settings
+    recording_path: "recordings/flight_001.h5"
+    resume_time: 120.0
+    validate_schema: true
+
+    # Equilibrium settings (ignored in warmstart mode)
+    zero_derivatives: []
+    control_signals: []
+```
+
+### WarmstartSolver
+
+New TrimSolver implementation that loads state from recording:
+
+```cpp
+class WarmstartSolver : public TrimSolver {
+public:
+    TrimResult Solve(Simulator& sim, const TrimConfig& config) override {
+        TrimResult result;
+
+        // 1. Open recording
+        vulcan::io::HDF5Reader reader(config.recording_path);
+
+        // 2. Validate if requested
+        if (config.validate_schema) {
+            auto validation = ValidateRecording(sim, reader);
+            if (!validation.IsValid()) {
+                result.converged = false;
+                result.message = "Recording validation failed: " +
+                                 validation.GetErrors()[0];
+                return result;
+            }
+        }
+
+        // 3. Find frame index for resume_time
+        auto times = reader.times();
+        size_t frame_idx = FindFrameIndex(times, config.resume_time);
+
+        // 4. Restore state signals
+        RestoreState(sim, reader, frame_idx);
+
+        // 5. Restore time
+        sim.SetTime(config.resume_time);
+
+        result.converged = true;
+        result.message = "Warmstart from " + config.recording_path +
+                        " at t=" + std::to_string(config.resume_time);
+        return result;
+    }
+
+private:
+    ValidationResult ValidateRecording(const Simulator& sim,
+                                       const vulcan::io::HDF5Reader& reader);
+    size_t FindFrameIndex(const std::vector<double>& times, double target_time);
+    void RestoreState(Simulator& sim, vulcan::io::HDF5Reader& reader, size_t frame_idx);
+};
+```
+
+### Updated Factory
+
+```cpp
+std::unique_ptr<TrimSolver> CreateTrimSolver(const TrimConfig& config,
+                                              bool symbolic_enabled) {
+    // Warmstart mode
+    if (config.mode == "warmstart") {
+        return std::make_unique<WarmstartSolver>();
+    }
+
+    // Equilibrium mode (existing logic)
+    if (symbolic_enabled && config.method == "newton") {
+        return std::make_unique<SymbolicTrim>();
+    }
+    FiniteDifferenceTrim::Options opts;
+    opts.tolerance = config.tolerance;
+    opts.max_iterations = config.max_iterations;
+    return std::make_unique<FiniteDifferenceTrim>(opts);
+}
 ```
 
 ---
 
 ## Proposed Changes
 
-### Core Warmstart Infrastructure
+### [MODIFY] SimulatorConfig.hpp
 
-#### [MODIFY] [Simulator.hpp](file:///home/tanged/sources/icarus/include/icarus/sim/Simulator.hpp)
+- Add `mode` field to TrimConfig: `"equilibrium"` | `"warmstart"`
+- Add warmstart fields: `recording_path`, `resume_time`, `validate_schema`
 
-- Add `StageMode` enum (NORMAL, WARMSTART)
-- Add `Stage(config)` with mode parameter
-- Add `ValidateRecording(path)` method
-- Add `WarmstartFrom(path, met)` method
-- Add epoch restoration logic
+### [MODIFY] SimulationLoader.hpp
 
----
+- Parse new TrimConfig fields from YAML
 
-#### [MODIFY] [StateManager.hpp](file:///home/tanged/sources/icarus/include/icarus/sim/StateManager.hpp)
+### [MODIFY] TrimSolver.hpp
 
-- Add `RestoreFromRecording(reader, met)` method
-- Handle state interpolation if met between recorded frames
+- Add `WarmstartSolver` class implementing TrimSolver
+- Update `CreateTrimSolver()` factory to handle warmstart mode
 
----
+### [NEW] core/ValidationResult.hpp
 
-#### [MODIFY] [RecordingReader.hpp](file:///home/tanged/sources/icarus/include/icarus/io/RecordingReader.hpp)
+- Structured validation result for schema checking
 
-- Add `GetEpochMetadata()` for epoch reconstruction
-- Add `GetStateAt(met)` for interpolated state vector
-- Add `GetSignalAt(name, met)` for individual signals
-- Add `GetSchemaCompatibility(current_schema)` validation
+### [MODIFY] Simulator.hpp
+
+- Add `SetTime(double met)` helper for warmstart time restoration
+- Existing Stage() flow handles warmstart via TrimSolver - no changes needed
 
 ---
 
-#### [NEW] [ValidationResult.hpp](file:///home/tanged/sources/icarus/include/icarus/core/ValidationResult.hpp)
+## State Restoration Process
 
-- Structured validation result with errors/warnings
-- Helper methods for error checking
+When `mode = "warmstart"`, the WarmstartSolver:
 
----
+1. **Open Recording**
+   - Use vulcan::io::HDF5Reader
 
-### Component Interface
+2. **Validate Recording** (if `validate_schema = true`)
+   - Check all state signals exist in recording
+   - Check types match
+   - Warn on extra/missing non-state signals
 
-#### [MODIFY] [Component.hpp](file:///home/tanged/sources/icarus/include/icarus/core/Component.hpp)
+3. **Find Frame**
+   - Locate frame closest to `resume_time`
+   - Optionally interpolate between frames
 
-- Add optional `RestoreState(RecordingReader&, double met)` hook
-- Components with internal state implement this for warmstart
+4. **Restore State Vector**
+   - Read state signal values at target frame
+   - Apply via `sim.Poke()` or `sim.SetState()`
 
-```cpp
-virtual void RestoreState(const RecordingReader& reader, double met) {
-    // Default: no-op (stateless components)
-}
-```
+5. **Restore Time**
+   - Set `epoch_ = epoch_start_ + resume_time`
+
+6. **Restore Phase** (if phase signals recorded)
+   - Read phase signal values
+   - Update PhaseManager state
 
 ---
 
 ## Verification Plan
 
-### Automated Tests
+### Automated Tests: `tests/staging/test_warmstart.cpp`
 
-#### New Tests: `tests/sim/test_warmstart.cpp`
+1. `Warmstart_BasicRestore` - State restored from recording
+2. `Warmstart_TimeRestored` - Time()/Epoch() correct after warmstart
+3. `Warmstart_ValidationPass` - Compatible recording passes
+4. `Warmstart_ValidationFail` - Missing signals detected
+5. `Warmstart_ContinueSimulation` - Simulation continues correctly
+6. `Warmstart_Interpolation` - MET between frames works
 
-1. `Warmstart_ValidateCompatible` - Compatible recording passes validation
-2. `Warmstart_ValidateIncompatible` - Missing signal detected
-3. `Warmstart_ValidateTypeMismatch` - Type mismatch detected
-4. `Warmstart_RestoreState` - State vector restored correctly
-5. `Warmstart_RestorePhase` - Phase signals restored
-6. `Warmstart_RestoreEpoch` - Epoch reconstructed from metadata
-7. `Warmstart_ContinueSimulation` - Simulation continues normally
-8. `Warmstart_Interpolation` - State interpolated at non-frame MET
-9. `Warmstart_TimeConsistency` - Time() and Epoch() consistent after warmstart
+### Integration Test
 
-```bash
-./scripts/test.sh
-ctest --test-dir build -R "Warmstart" -VV
+```cpp
+// Record a trajectory
+auto sim1 = Simulator::FromConfig("test.yaml");
+sim1->Stage();
+for (int i = 0; i < 100; ++i) sim1->Step(dt);
+double pos_at_50 = sim1->Peek("position.x");  // saved at frame 50
+
+// Warmstart from frame 50
+TrimConfig warmstart_cfg;
+warmstart_cfg.enabled = true;
+warmstart_cfg.mode = "warmstart";
+warmstart_cfg.recording_path = "test.h5";
+warmstart_cfg.resume_time = 50 * dt;
+
+auto sim2 = Simulator::FromConfig("test.yaml");
+sim2->Stage();  // Uses warmstart_cfg from YAML
+
+EXPECT_NEAR(sim2->Time(), 50 * dt, 1e-10);
+EXPECT_NEAR(sim2->Peek("position.x"), pos_at_50, 1e-10);
 ```
-
-### Integration Verification
-
-1. Run simulation for 100 steps with epoch configured, record
-2. Warmstart from step 50
-3. Compare remaining trajectory with original run
-4. Verify trajectories match within floating-point tolerance
-5. Verify `Epoch()` returns correct absolute time after warmstart
-
-### Manual Verification
-
-User should:
-
-1. Record a flight with `warmstart_compatible: true`
-2. Warmstart from mid-flight
-3. Verify `ISO8601()` output shows correct absolute time
-4. Verify visual continuity in Daedalus (future)
-
----
-
-## Dependencies
-
-- Recording infrastructure (6.2) - Must be implemented first
-- Unified signal model (6.0) - State signals registered with backplane
-- Time infrastructure (6.2) - Epoch class in Simulator
 
 ---
 
 ## Open Questions
 
-1. **Interpolation method**: Linear interpolation ok, or need higher-order?
-2. **Component state scope**: Which component internals must be recorded for perfect warmstart?
-3. **Phase edge cases**: What happens if warmstart MET coincides with phase transition?
-4. **Leap second crossing**: What if recording was made before a leap second insertion?
+1. **Interpolation**: Linear interpolation sufficient for MET between frames?
+2. **Phase restoration**: How to restore PhaseManager state correctly?
+3. **Component internal state**: Do components need hooks for non-signal state?

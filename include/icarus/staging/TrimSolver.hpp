@@ -2,17 +2,16 @@
 
 /**
  * @file TrimSolver.hpp
- * @brief Trim optimization solvers (numeric and symbolic)
+ * @brief Trim/initialization solvers for state setup during Stage()
  *
- * Part of Phase 4: Staging Implementation.
- *
- * Trim finds control values that zero selected derivatives, achieving
- * equilibrium/trim conditions. Two modes:
- *   - Numeric (FiniteDifferenceTrim): Uses central differences for Jacobians
- *   - Symbolic (SymbolicTrim): Uses exact Jacobians via janus::NewtonSolver
+ * Supports multiple modes for state initialization:
+ *   - Equilibrium (FiniteDifferenceTrim): Numeric Newton with central differences
+ *   - Equilibrium (SymbolicTrim): Exact Jacobians via janus::NewtonSolver
+ *   - Warmstart (WarmstartSolver): Restore state from HDF5 recording
  */
 
 #include <icarus/core/Error.hpp>
+#include <icarus/core/ValidationResult.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/staging/StagingTypes.hpp>
 
@@ -22,12 +21,15 @@
 
 #include <janus/core/Function.hpp>
 #include <janus/math/RootFinding.hpp>
+#include <vulcan/io/HDF5Reader.hpp>
 
 #include <Eigen/Dense>
 #include <cmath>
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace icarus {
@@ -138,17 +140,55 @@ class SymbolicTrim : public TrimSolver {
 };
 
 // =============================================================================
+// WarmstartSolver
+// =============================================================================
+
+/**
+ * @brief Warmstart solver - restores state from HDF5 recording
+ *
+ * Loads simulation state from a previously recorded HDF5 file at a specified
+ * MET (Mission Elapsed Time). Used for:
+ *   - Debugging specific flight phases without re-running from start
+ *   - Monte Carlo variations from a common waypoint
+ *   - Hardware-in-the-loop restart after anomalies
+ */
+class WarmstartSolver : public TrimSolver {
+  public:
+    ::icarus::staging::TrimResult Solve(::icarus::Simulator &sim,
+                                        const TrimConfig &config) override;
+
+  private:
+    /// Validate recording compatibility with current simulation
+    ValidationResult ValidateRecording(const ::icarus::Simulator &sim,
+                                       const vulcan::io::HDF5Reader &reader);
+
+    /// Find frame index for target MET (returns closest frame)
+    size_t FindFrameIndex(const std::vector<double> &times, double target_time);
+
+    /// Restore state signals from recording at given frame
+    void RestoreState(::icarus::Simulator &sim, vulcan::io::HDF5Reader &reader, size_t frame_idx);
+};
+
+// =============================================================================
 // Factory
 // =============================================================================
 
 /**
  * @brief Create appropriate trim solver based on configuration
  *
- * Returns FiniteDifferenceTrim for numeric mode,
- * SymbolicTrim for symbolic mode (requires symbolic components).
+ * Returns:
+ *   - WarmstartSolver for mode="warmstart"
+ *   - SymbolicTrim for mode="equilibrium" with symbolic enabled
+ *   - FiniteDifferenceTrim for mode="equilibrium" (default)
  */
 inline std::unique_ptr<TrimSolver> CreateTrimSolver(const TrimConfig &config,
                                                     bool symbolic_enabled) {
+    // Warmstart mode - load from recording
+    if (config.IsWarmstart()) {
+        return std::make_unique<WarmstartSolver>();
+    }
+
+    // Equilibrium mode - solve for trim conditions
     if (symbolic_enabled && config.method == "newton") {
         return std::make_unique<SymbolicTrim>();
     }
@@ -499,6 +539,167 @@ inline janus::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore
     // Build function: F(u) -> residuals
     // Note: x and t are fixed parameters (not optimized), u is the decision variable
     return janus::Function("trim_residual", {u_mx}, {residuals});
+}
+
+// =============================================================================
+// WarmstartSolver Implementation
+// =============================================================================
+
+inline ::icarus::staging::TrimResult WarmstartSolver::Solve(::icarus::Simulator &sim,
+                                                            const TrimConfig &config) {
+    ::icarus::staging::TrimResult result;
+
+    // Validate config
+    if (config.recording_path.empty()) {
+        result.converged = false;
+        result.message = "No recording_path specified for warmstart";
+        return result;
+    }
+
+    sim.GetLogger().Log(LogLevel::Info, "[WARMSTART] Loading state from " + config.recording_path +
+                                            " at t=" + std::to_string(config.resume_time));
+
+    try {
+        // Open recording file
+        vulcan::io::HDF5Reader reader(config.recording_path);
+
+        // Validate recording if requested
+        if (config.validate_schema) {
+            auto validation = ValidateRecording(sim, reader);
+            if (!validation.IsValid()) {
+                result.converged = false;
+                result.message = "Recording validation failed: " + validation.GetErrors()[0];
+                sim.GetLogger().Log(LogLevel::Error, "[WARMSTART] " + result.message);
+                return result;
+            }
+            // Log warnings
+            for (const auto &warning : validation.GetWarnings()) {
+                sim.GetLogger().Log(LogLevel::Warning, "[WARMSTART] " + warning);
+            }
+        }
+
+        // Find frame index for resume_time
+        auto times = reader.times();
+        if (times.empty()) {
+            result.converged = false;
+            result.message = "Recording contains no frames";
+            return result;
+        }
+
+        size_t frame_idx = FindFrameIndex(times, config.resume_time);
+        double actual_time = times[frame_idx];
+
+        sim.GetLogger().Log(LogLevel::Debug, "[WARMSTART] Using frame " +
+                                                 std::to_string(frame_idx) +
+                                                 " at t=" + std::to_string(actual_time));
+
+        // Restore state signals
+        RestoreState(sim, reader, frame_idx);
+
+        // Set simulation time
+        sim.SetTime(actual_time);
+
+        result.converged = true;
+        result.iterations = 0;
+        result.residual_norm = 0.0;
+        result.message = "Warmstart complete from " + config.recording_path +
+                         " at t=" + std::to_string(actual_time);
+
+        sim.GetLogger().Log(LogLevel::Info, "[WARMSTART] State restored successfully");
+
+    } catch (const std::exception &e) {
+        result.converged = false;
+        result.message = std::string("Warmstart failed: ") + e.what();
+        sim.GetLogger().Log(LogLevel::Error, "[WARMSTART] " + result.message);
+    }
+
+    return result;
+}
+
+inline ValidationResult WarmstartSolver::ValidateRecording(const ::icarus::Simulator &sim,
+                                                           const vulcan::io::HDF5Reader &reader) {
+    ValidationResult result;
+
+    // Get recorded signal names
+    auto recorded_signals = reader.signal_names();
+    std::unordered_set<std::string> recorded_set(recorded_signals.begin(), recorded_signals.end());
+
+    // Get state pairs from registry
+    const auto &registry = sim.Registry();
+    const auto &state_pairs = registry.get_state_pairs();
+
+    // Check that all state signals exist in recording
+    for (const auto &pair : state_pairs) {
+        if (!recorded_set.contains(pair.value_name)) {
+            result.AddError("State signal missing from recording", pair.value_name);
+        }
+    }
+
+    // Check for extra signals in recording (info only)
+    auto current_signals = registry.get_all_signal_names();
+    std::unordered_set<std::string> current_set(current_signals.begin(), current_signals.end());
+
+    for (const auto &sig : recorded_signals) {
+        if (!current_set.contains(sig)) {
+            result.AddInfo("Extra signal in recording (will be ignored)", sig);
+        }
+    }
+
+    return result;
+}
+
+inline size_t WarmstartSolver::FindFrameIndex(const std::vector<double> &times,
+                                              double target_time) {
+    if (times.empty()) {
+        return 0;
+    }
+
+    // Find closest frame using binary search
+    auto it = std::lower_bound(times.begin(), times.end(), target_time);
+
+    if (it == times.end()) {
+        // target_time is beyond last frame, use last frame
+        return times.size() - 1;
+    }
+
+    if (it == times.begin()) {
+        return 0;
+    }
+
+    // Check which is closer: *it or *(it-1)
+    auto prev = it - 1;
+    if (std::abs(*it - target_time) < std::abs(*prev - target_time)) {
+        return static_cast<size_t>(std::distance(times.begin(), it));
+    }
+    return static_cast<size_t>(std::distance(times.begin(), prev));
+}
+
+inline void WarmstartSolver::RestoreState(::icarus::Simulator &sim, vulcan::io::HDF5Reader &reader,
+                                          size_t frame_idx) {
+    const auto &registry = sim.Registry();
+    const auto &state_pairs = registry.get_state_pairs();
+
+    // Build state vector in correct order
+    Eigen::VectorXd X(static_cast<Eigen::Index>(state_pairs.size()));
+
+    for (size_t i = 0; i < state_pairs.size(); ++i) {
+        const auto &pair = state_pairs[i];
+        try {
+            // Read single value at frame_idx
+            auto values = reader.read_double(pair.value_name, frame_idx, 1);
+            if (!values.empty()) {
+                X(static_cast<Eigen::Index>(i)) = values[0];
+            } else {
+                X(static_cast<Eigen::Index>(i)) = 0.0;
+            }
+        } catch (const std::exception &e) {
+            // Signal might not be in recording - use 0
+            X(static_cast<Eigen::Index>(i)) = 0.0;
+        }
+    }
+
+    // SetState updates both StateManager and registry signals
+    sim.SetState(X);
 }
 
 } // namespace icarus::staging

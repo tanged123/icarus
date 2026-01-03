@@ -145,6 +145,13 @@ icarus_add_test(test_staging
 )
 target_include_directories(test_staging PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Phase 6.3: Warmstart tests
+icarus_add_test(test_warmstart
+    staging/test_warmstart.cpp
+)
+target_include_directories(test_warmstart PRIVATE ${PROJECT_SOURCE_DIR}/components)
+target_link_libraries(test_warmstart PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>)
+
 # Phase 4: Symbolic core tests (SymbolicSimulatorCore, SymbolicStager)
 icarus_add_test(test_symbolic_core
     staging/test_symbolic_core.cpp

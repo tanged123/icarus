@@ -87,13 +87,32 @@ struct EpochConfig {
 // =============================================================================
 
 /**
- * @brief Trim optimization configuration
+ * @brief Trim configuration for state initialization
  *
- * Defines how the simulator finds equilibrium/trim conditions during Stage().
- * Uses symbolic mode internally (janus::NewtonSolver or janus::Opti/IPOPT).
+ * Defines how the simulator initializes state during Stage().
+ * Supports two modes:
+ *   - "equilibrium": Solve for trim conditions (zero derivatives)
+ *   - "warmstart": Restore state from a recording file
+ *
+ * Example YAML:
+ * @code
+ * staging:
+ *   trim:
+ *     enabled: true
+ *     mode: warmstart
+ *     recording_path: "flight_001.h5"
+ *     resume_time: 120.0
+ * @endcode
  */
 struct TrimConfig {
-    bool enabled = false; ///< Whether to run trim optimization
+    bool enabled = false; ///< Whether to run trim/initialization
+
+    /// Mode: "equilibrium" (solve for steady-state) or "warmstart" (load from recording)
+    std::string mode = "equilibrium";
+
+    // =========================================================================
+    // Equilibrium mode settings
+    // =========================================================================
 
     /// Trim targets: which derivatives should be zero?
     std::vector<std::string> zero_derivatives; // e.g., ["velocity_dot", "angular_rate_dot"]
@@ -101,7 +120,7 @@ struct TrimConfig {
     /// Trim controls: which signals can be adjusted?
     std::vector<std::string> control_signals; // e.g., ["throttle", "elevator"]
 
-    // Optimization settings
+    /// Optimization settings
     double tolerance = 1e-6;
     int max_iterations = 100;
     std::string method = "newton"; ///< "newton" or "ipopt"
@@ -112,21 +131,53 @@ struct TrimConfig {
     /// Control bounds (optional): key -> (min, max)
     std::unordered_map<std::string, std::pair<double, double>> control_bounds;
 
+    // =========================================================================
+    // Warmstart mode settings
+    // =========================================================================
+
+    /// Path to recording file (for warmstart mode)
+    std::string recording_path;
+
+    /// MET to resume from (for warmstart mode)
+    double resume_time = 0.0;
+
+    /// Validate recording schema before loading (for warmstart mode)
+    bool validate_schema = true;
+
+    // =========================================================================
+    // Methods
+    // =========================================================================
+
     /// Create default disabled config
     [[nodiscard]] static TrimConfig Default() { return TrimConfig{}; }
+
+    /// Check if this is warmstart mode
+    [[nodiscard]] bool IsWarmstart() const { return mode == "warmstart"; }
+
+    /// Check if this is equilibrium mode
+    [[nodiscard]] bool IsEquilibrium() const { return mode == "equilibrium"; }
 
     /// Validate configuration
     [[nodiscard]] std::vector<std::string> Validate() const {
         std::vector<std::string> errors;
         if (enabled) {
-            if (zero_derivatives.empty()) {
-                errors.push_back("Trim enabled but no zero_derivatives specified");
-            }
-            if (control_signals.empty()) {
-                errors.push_back("Trim enabled but no control_signals specified");
-            }
-            if (method != "newton" && method != "ipopt") {
-                errors.push_back("Unknown trim method: " + method);
+            if (mode == "equilibrium") {
+                if (zero_derivatives.empty()) {
+                    errors.push_back("Trim enabled but no zero_derivatives specified");
+                }
+                if (control_signals.empty()) {
+                    errors.push_back("Trim enabled but no control_signals specified");
+                }
+                if (method != "newton" && method != "ipopt") {
+                    errors.push_back("Unknown trim method: " + method);
+                }
+            } else if (mode == "warmstart") {
+                if (recording_path.empty()) {
+                    errors.push_back("Warmstart enabled but no recording_path specified");
+                }
+            } else {
+                errors.push_back("Unknown trim mode: " + mode +
+                                 " (expected 'equilibrium' or 'warmstart')");
             }
         }
         return errors;

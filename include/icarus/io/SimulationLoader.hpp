@@ -431,16 +431,26 @@ class SimulationLoader {
         if (node.Has("trim")) {
             auto trim = node["trim"];
             staging.trim.enabled = trim.Get<bool>("enabled", false);
+            staging.trim.mode = trim.Get<std::string>("mode", staging.trim.mode);
             staging.trim.method = trim.Get<std::string>("method", staging.trim.method);
             staging.trim.tolerance = trim.Get<double>("tolerance", staging.trim.tolerance);
             staging.trim.max_iterations =
                 trim.Get<int>("max_iterations", staging.trim.max_iterations);
+
+            // Equilibrium mode settings
             if (trim.Has("zero_derivatives")) {
                 staging.trim.zero_derivatives = trim["zero_derivatives"].ToVector<std::string>();
             }
             if (trim.Has("control_signals")) {
                 staging.trim.control_signals = trim["control_signals"].ToVector<std::string>();
             }
+
+            // Warmstart mode settings
+            staging.trim.recording_path =
+                trim.Get<std::string>("recording_path", staging.trim.recording_path);
+            staging.trim.resume_time = trim.Get<double>("resume_time", staging.trim.resume_time);
+            staging.trim.validate_schema =
+                trim.Get<bool>("validate_schema", staging.trim.validate_schema);
         }
 
         // Linearization config
