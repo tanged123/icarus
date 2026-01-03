@@ -4,6 +4,3 @@
 [submodule "references/janus"]
 	path = references/janus
 	url = https://github.com/tanged123/janus.git
-[submodule "tools/PlotJuggler"]
-	path = tools/PlotJuggler
-	url = https://github.com/facontidavide/PlotJuggler.git
