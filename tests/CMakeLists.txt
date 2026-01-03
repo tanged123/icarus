@@ -18,6 +18,11 @@ icarus_add_test(test_component
 )
 target_include_directories(test_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Phase 6.1: Condition parser tests
+icarus_add_test(test_condition_parser
+    core/test_condition_parser.cpp
+)
+
 # Signal backplane tests (Phase 1.3)
 icarus_add_test(test_signal
     signal/test_signal.cpp

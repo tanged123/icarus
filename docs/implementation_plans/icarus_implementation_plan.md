@@ -224,7 +224,7 @@ Phase 4–7 (horizontal expansion)
   - [x] Include/merge support for config composition
 
 - [x] **5.2 Scheduler**
-  - [-] Topological sort from dependency graph
+  - [x] Topological sort from dependency graph
   - [x] Rate groups for multi-rate simulation (Layer D)
 
 - [x] **5.3 Data Dictionary Export**
@@ -247,11 +247,15 @@ Phase 4–7 (horizontal expansion)
 
 ---
 
-## Phase 6: Events, Recording & Services
+## Phase 6: Events, Recording & Warmstart
 
 **Goal:** Complete simulation lifecycle.
 
 ### Tasks
+
+- [x] **6.0 State Signal Unification**
+  - [x] Unify states with signal backplane
+  - [x] Remove old state API
 
 - [ ] **6.1 Phase Manager**
   - [ ] Condition evaluation (post-Step signal values)
@@ -267,11 +271,6 @@ Phase 4–7 (horizontal expansion)
   - [ ] Load state from recording
   - [ ] Continue simulation from mid-flight
 
-- [ ] **6.4 Services**
-  - [ ] Structured logging (spdlog)
-  - [ ] Telemetry service
-  - [ ] Debug mode support
-
 ### Architecture References
 
 | Topic | Document |
@@ -280,7 +279,7 @@ Phase 4–7 (horizontal expansion)
 | Recording format | [20_recording.md](../architecture/20_recording.md) |
 | Entity lifecycle | [10_entity_lifecycle.md](../architecture/10_entity_lifecycle.md) |
 | Error handling | [18_error_handling.md](../architecture/18_error_handling.md) |
-| Services | [15_services.md](../architecture/15_services.md) |
+| State signal model | [unified_signal_model.md](../implementation_plans/phase6/unified_signal_model.md) |
 
 ### Exit Criteria
 

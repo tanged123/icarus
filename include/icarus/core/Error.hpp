@@ -368,6 +368,28 @@ class IOError : public Error {
 };
 
 // =============================================================================
+// Condition Errors
+// =============================================================================
+
+/**
+ * @brief Condition parsing and evaluation errors
+ */
+class ConditionError : public Error {
+  public:
+    explicit ConditionError(const std::string &msg)
+        : Error("Condition: " + msg, Severity::ERROR, "condition") {}
+
+    ConditionError(const std::string &condition, const std::string &reason)
+        : Error("Condition: '" + condition + "': " + reason, Severity::ERROR, "condition"),
+          condition_(condition) {}
+
+    [[nodiscard]] const std::string &condition() const { return condition_; }
+
+  private:
+    std::string condition_;
+};
+
+// =============================================================================
 // Not Implemented
 // =============================================================================
 
