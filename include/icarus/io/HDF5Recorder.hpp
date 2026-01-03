@@ -74,15 +74,24 @@ class HDF5Recorder : public Recorder {
         BuildSchema();
         writer_ = std::make_unique<vulcan::io::HDF5Writer>(config_.path, schema_);
         frame_ = std::make_unique<vulcan::io::Frame>(schema_);
+        frame_counter_ = 0; // Reset for new recording
     }
 
     /**
      * @brief Record current signal values as a frame
      * @param time Current simulation time (MET)
+     *
+     * Respects decimation setting: only writes every N frames.
      */
     void Record(double time) override {
         if (!writer_) {
             throw std::runtime_error("Recorder not open");
+        }
+
+        // Apply decimation: only record every N frames
+        ++frame_counter_;
+        if (config_.decimation > 1 && (frame_counter_ % config_.decimation) != 1) {
+            return; // Skip this frame
         }
 
         frame_->set_time(time);
@@ -140,6 +149,7 @@ class HDF5Recorder : public Recorder {
     std::unique_ptr<vulcan::io::HDF5Writer> writer_;
     std::unique_ptr<vulcan::io::Frame> frame_;
     std::vector<std::string> recorded_signals_;
+    size_t frame_counter_ = 0; ///< Frame counter for decimation
 
     /**
      * @brief Build TelemetrySchema from registry signals based on mode

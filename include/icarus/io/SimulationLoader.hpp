@@ -422,6 +422,7 @@ class SimulationLoader {
             node.Get<bool>("include_derivatives", recording.include_derivatives);
         recording.include_inputs = node.Get<bool>("include_inputs", recording.include_inputs);
         recording.flush_interval = node.Get<int>("flush_interval", recording.flush_interval);
+        recording.decimation = node.Get<int>("decimation", recording.decimation);
         recording.export_csv = node.Get<bool>("export_csv", recording.export_csv);
     }
 

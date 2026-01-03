@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
     // =========================================================================
     // Recording is automatic when enabled in YAML config
 
-    double demo_duration = 180.0; // 3 minutes (subset of full 90-min orbit)
+    double demo_duration = 5400.0; // 90 minutes (full orbit)
 
     while (sim->Time() < demo_duration) {
         sim->Step(sim->Dt());

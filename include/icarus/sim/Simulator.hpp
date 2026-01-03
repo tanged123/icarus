@@ -703,10 +703,16 @@ inline void Simulator::Stage() {
     // Log scheduler execution order (Debug level)
     scheduler_.LogExecutionOrder(&logger_);
 
+    // Set epoch reference on backplane for component binding
+    backplane_.set_epoch(&epoch_);
+
     // Stage each component (config loading, input wiring)
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
+
+        // Bind epoch to component for time-dependent calculations
+        backplane_.bind_epoch_to(*comp);
 
         try {
             comp->Stage(backplane_);

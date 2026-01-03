@@ -18,6 +18,12 @@ icarus_add_test(test_component
 )
 target_include_directories(test_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Component epoch access tests
+icarus_add_test(test_component_epoch
+    core/test_component_epoch.cpp
+)
+target_include_directories(test_component_epoch PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # Phase 6.1: Condition parser tests
 icarus_add_test(test_condition_parser
     core/test_condition_parser.cpp

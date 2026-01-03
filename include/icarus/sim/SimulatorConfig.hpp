@@ -470,6 +470,9 @@ struct RecordingConfig {
     /// Flush interval (frames between disk flushes, 0 = auto)
     int flush_interval = 0;
 
+    /// Decimation factor: record every N frames (1 = every frame, 10 = every 10th frame)
+    int decimation = 1;
+
     /// Export CSV copy on close (for PlotJuggler, Excel, etc.)
     bool export_csv = false;
 
