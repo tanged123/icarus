@@ -112,6 +112,7 @@
               janusPackage
               vulcanPackage
               treefmtEval.config.build.wrapper
+              cachix
             ];
 
           shellHook = ''

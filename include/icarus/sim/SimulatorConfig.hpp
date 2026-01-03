@@ -536,6 +536,23 @@ struct RecordingConfig {
 
     /// Check if recording is active
     [[nodiscard]] bool IsActive() const { return enabled && mode != "off"; }
+
+    /// Validate recording configuration
+    [[nodiscard]] std::vector<std::string> Validate() const {
+        std::vector<std::string> errors;
+        if (enabled) {
+            if (decimation < 1) {
+                errors.push_back("Recording decimation must be >= 1");
+            }
+            if (mode != "off" && mode != "all" && mode != "outputs" && mode != "signals") {
+                errors.push_back("Unknown recording mode: " + mode);
+            }
+            if (mode == "signals" && include.empty()) {
+                errors.push_back("Recording mode 'signals' requires include patterns");
+            }
+        }
+        return errors;
+    }
 };
 
 // =============================================================================
