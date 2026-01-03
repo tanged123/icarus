@@ -12,6 +12,7 @@
 #include <icarus/sim/SimulatorConfig.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -67,18 +68,28 @@ class Scheduler {
      * @brief Get groups that should execute on this frame
      *
      * @param frame_count Current frame number (0-indexed)
+     * @param current_phase Current flight phase (-1 to ignore phase filtering)
      * @return Vector of group names that should execute
      */
-    [[nodiscard]] std::vector<std::string> GetGroupsForFrame(int frame_count) const {
+    [[nodiscard]] std::vector<std::string> GetGroupsForFrame(int frame_count,
+                                                             int32_t current_phase = -1) const {
         std::vector<std::string> active_groups;
         for (const auto &group : config_.groups) {
+            // Check frame divisor
             auto it = config_.group_frame_divisors.find(group.name);
             if (it != config_.group_frame_divisors.end()) {
                 int divisor = it->second;
-                if (frame_count % divisor == 0) {
-                    active_groups.push_back(group.name);
+                if (frame_count % divisor != 0) {
+                    continue; // Not this frame
                 }
             }
+
+            // Check phase gating (if phase is provided)
+            if (current_phase >= 0 && !group.IsActiveInPhase(current_phase)) {
+                continue; // Not active in this phase
+            }
+
+            active_groups.push_back(group.name);
         }
         return active_groups;
     }

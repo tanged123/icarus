@@ -333,6 +333,38 @@ class Simulator {
     // Dependency tracking
     std::unordered_map<Component<double> *, std::vector<std::string>> outputs_;
     std::unordered_map<Component<double> *, std::vector<std::string>> inputs_;
+
+    // =========================================================================
+    // FRAME CONTEXT (Scheduler filtering helper)
+    // =========================================================================
+
+    /**
+     * @brief Context for component execution in a single frame
+     *
+     * Encapsulates scheduler logic for determining which components
+     * should run and which are active for derivative gating.
+     */
+    struct FrameContext {
+        std::unordered_set<std::string> active_components;
+        std::unordered_set<std::string> all_scheduled_components;
+
+        /// Check if a component should run this frame
+        [[nodiscard]] bool ShouldRun(const std::string &name) const {
+            // If component isn't registered with scheduler, run every frame
+            if (!all_scheduled_components.contains(name)) {
+                return true;
+            }
+            // Otherwise, only run if its group is active this frame
+            return active_components.contains(name);
+        }
+    };
+
+    /// Build frame context from scheduler for current frame
+    [[nodiscard]] FrameContext BuildFrameContext() const;
+
+    /// Execute component method with error handling and timing
+    void ExecComponent(Component<double> &comp, void (Component<double>::*method)(double, double),
+                       double t, double dt);
 };
 
 } // namespace icarus
@@ -709,84 +741,42 @@ inline void Simulator::Step(double dt) {
     // Invoke input sources
     InvokeInputSources();
 
-    // Get active groups for this frame
-    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
-
-    // Build set of active component names for O(1) lookup
-    std::unordered_set<std::string> active_components;
-    for (const auto &group_name : active_groups) {
-        for (const auto &comp_name : scheduler_.GetMembersForGroup(group_name)) {
-            active_components.insert(comp_name);
-        }
-    }
-
-    // Build set of all scheduled component names (to detect unscheduled components)
-    std::unordered_set<std::string> all_scheduled_components;
-    for (const auto &group : scheduler_.GetGroups()) {
-        for (const auto &member : group.members) {
-            all_scheduled_components.insert(member.component);
-        }
-    }
-
-    // Helper to check if component should run this frame
-    // A component runs if: (1) it's in an active group, OR (2) it's not in any scheduler group
-    auto should_run = [&active_components, &all_scheduled_components](const auto &comp) {
-        const std::string &name = comp->FullName();
-        // If component isn't registered with scheduler, run every frame (default behavior)
-        if (!all_scheduled_components.contains(name)) {
-            return true;
-        }
-        // Otherwise, only run if its group is active this frame
-        return active_components.contains(name);
-    };
-
-    // Helper to execute component method with error handling
-    auto exec_component = [this](auto &comp, auto method, double t, double step_dt) {
-        try {
-            logger_.BeginComponentTiming(comp->Name());
-            (comp.get()->*method)(t, step_dt);
-            logger_.EndComponentTiming();
-        } catch (const Error &e) {
-            logger_.EndComponentTiming();
-            LogError(e, t, comp->FullName());
-            throw;
-        }
-    };
+    // Build frame context (scheduler filtering)
+    auto ctx = BuildFrameContext();
 
     // If no state, just call components directly
     if (state_manager_.TotalSize() == 0) {
         for (auto &comp : components_) {
-            if (should_run(comp)) {
-                exec_component(comp, &Component<double>::PreStep, time_, dt);
+            if (ctx.ShouldRun(comp->FullName())) {
+                ExecComponent(*comp, &Component<double>::PreStep, time_, dt);
             }
         }
         for (auto &comp : components_) {
-            if (should_run(comp)) {
-                exec_component(comp, &Component<double>::Step, time_, dt);
+            if (ctx.ShouldRun(comp->FullName())) {
+                ExecComponent(*comp, &Component<double>::Step, time_, dt);
             }
         }
         for (auto &comp : components_) {
-            if (should_run(comp)) {
-                exec_component(comp, &Component<double>::PostStep, time_, dt);
+            if (ctx.ShouldRun(comp->FullName())) {
+                ExecComponent(*comp, &Component<double>::PostStep, time_, dt);
             }
         }
     } else {
         // Create derivative function for integrator
-        // Capture dt (the actual step timestep) instead of using config_.dt
-        auto deriv_func = [this, &exec_component, &should_run,
-                           dt](double t, const JanusVector<double> &x) -> JanusVector<double> {
+        auto deriv_func = [this, &ctx, dt](double t,
+                                           const JanusVector<double> &x) -> JanusVector<double> {
             state_manager_.SetState(x);
             state_manager_.ZeroDerivatives();
 
             for (auto &comp : components_) {
-                if (should_run(comp)) {
-                    exec_component(comp, &Component<double>::PreStep, t, dt);
-                    exec_component(comp, &Component<double>::Step, t, dt);
-                    exec_component(comp, &Component<double>::PostStep, t, dt);
+                if (ctx.ShouldRun(comp->FullName())) {
+                    ExecComponent(*comp, &Component<double>::PreStep, t, dt);
+                    ExecComponent(*comp, &Component<double>::Step, t, dt);
+                    ExecComponent(*comp, &Component<double>::PostStep, t, dt);
                 }
             }
 
-            return state_manager_.GetDerivatives();
+            return state_manager_.GetDerivatives(ctx.active_components);
         };
 
         // Integrate
@@ -871,28 +861,25 @@ inline Eigen::VectorXd Simulator::ComputeDerivatives(double t) {
     state_manager_.ZeroDerivatives();
 
     double dt = config_.dt;
+    auto ctx = BuildFrameContext();
 
-    // Helper to execute with error handling
-    auto exec = [this, t](auto &comp, auto method, double step_dt) {
-        try {
-            (comp.get()->*method)(t, step_dt);
-        } catch (const Error &e) {
-            LogError(e, t, comp->FullName());
-            throw;
+    for (auto &comp : components_) {
+        if (ctx.ShouldRun(comp->FullName())) {
+            ExecComponent(*comp, &Component<double>::PreStep, t, dt);
         }
-    };
+    }
+    for (auto &comp : components_) {
+        if (ctx.ShouldRun(comp->FullName())) {
+            ExecComponent(*comp, &Component<double>::Step, t, dt);
+        }
+    }
+    for (auto &comp : components_) {
+        if (ctx.ShouldRun(comp->FullName())) {
+            ExecComponent(*comp, &Component<double>::PostStep, t, dt);
+        }
+    }
 
-    for (auto &comp : components_) {
-        exec(comp, &Component<double>::PreStep, dt);
-    }
-    for (auto &comp : components_) {
-        exec(comp, &Component<double>::Step, dt);
-    }
-    for (auto &comp : components_) {
-        exec(comp, &Component<double>::PostStep, dt);
-    }
-
-    return state_manager_.GetDerivatives();
+    return state_manager_.GetDerivatives(ctx.active_components);
 }
 
 inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
@@ -900,75 +887,34 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
         throw LifecycleError(LifecyclePhase::Step, "AdaptiveStep() requires prior Stage()");
     }
 
-    // Auto-log RUN phase on first step (mirrors Step() behavior)
+    // Auto-log RUN phase on first step
     if (phase_ == Phase::Staged) {
         phase_ = Phase::Running;
         logger_.BeginPhase(SimPhase::Run);
         logger_.LogRunStart(time_, config_.t_end, config_.dt);
     }
 
-    // Invoke input sources (mirrors Step() logic)
+    // Invoke input sources
     InvokeInputSources();
 
-    // Get active groups for this frame (mirrors Step() logic)
-    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
+    // Build frame context (scheduler filtering)
+    auto ctx = BuildFrameContext();
 
-    // Build set of active component names for O(1) lookup
-    std::unordered_set<std::string> active_components;
-    for (const auto &group_name : active_groups) {
-        for (const auto &comp_name : scheduler_.GetMembersForGroup(group_name)) {
-            active_components.insert(comp_name);
-        }
-    }
-
-    // Build set of all scheduled component names (to detect unscheduled components)
-    std::unordered_set<std::string> all_scheduled_components;
-    for (const auto &group : scheduler_.GetGroups()) {
-        for (const auto &member : group.members) {
-            all_scheduled_components.insert(member.component);
-        }
-    }
-
-    // Helper to check if component should run this frame
-    // A component runs if: (1) it's in an active group, OR (2) it's not in any scheduler group
-    auto should_run = [&active_components, &all_scheduled_components](const auto &comp) {
-        const std::string &name = comp->FullName();
-        // If component isn't registered with scheduler, run every frame (default behavior)
-        if (!all_scheduled_components.contains(name)) {
-            return true;
-        }
-        // Otherwise, only run if its group is active this frame
-        return active_components.contains(name);
-    };
-
-    // Helper to execute component method with error handling
-    auto exec_component = [this](auto &comp, auto method, double t, double step_dt) {
-        try {
-            logger_.BeginComponentTiming(comp->Name());
-            (comp.get()->*method)(t, step_dt);
-            logger_.EndComponentTiming();
-        } catch (const Error &e) {
-            logger_.EndComponentTiming();
-            LogError(e, t, comp->FullName());
-            throw;
-        }
-    };
-
-    // Derivative function with scheduler filtering (mirrors Step() logic)
-    auto deriv_func = [this, &exec_component, &should_run,
+    // Derivative function with scheduler filtering
+    auto deriv_func = [this, &ctx,
                        dt_request](double t, const JanusVector<double> &x) -> JanusVector<double> {
         state_manager_.SetState(x);
         state_manager_.ZeroDerivatives();
 
         for (auto &comp : components_) {
-            if (should_run(comp)) {
-                exec_component(comp, &Component<double>::PreStep, t, dt_request);
-                exec_component(comp, &Component<double>::Step, t, dt_request);
-                exec_component(comp, &Component<double>::PostStep, t, dt_request);
+            if (ctx.ShouldRun(comp->FullName())) {
+                ExecComponent(*comp, &Component<double>::PreStep, t, dt_request);
+                ExecComponent(*comp, &Component<double>::Step, t, dt_request);
+                ExecComponent(*comp, &Component<double>::PostStep, t, dt_request);
             }
         }
 
-        return state_manager_.GetDerivatives();
+        return state_manager_.GetDerivatives(ctx.active_components);
     };
 
     JanusVector<double> X = state_manager_.GetState();
@@ -985,7 +931,7 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
         time_ += result.dt_actual;
         frame_count_++;
 
-        // Invoke output observers (mirrors Step() logic)
+        // Invoke output observers
         InvokeOutputObservers();
     }
 
@@ -1027,6 +973,43 @@ inline void Simulator::InvokeOutputObservers() {
     for (const auto &[name, callback] : output_observers_) {
         double value = registry_.GetByName(name);
         callback(name, value);
+    }
+}
+
+inline Simulator::FrameContext Simulator::BuildFrameContext() const {
+    FrameContext ctx;
+
+    // Get active groups for this frame
+    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
+
+    // Build set of active component names for O(1) lookup
+    for (const auto &group_name : active_groups) {
+        for (const auto &comp_name : scheduler_.GetMembersForGroup(group_name)) {
+            ctx.active_components.insert(comp_name);
+        }
+    }
+
+    // Build set of all scheduled component names (to detect unscheduled components)
+    for (const auto &group : scheduler_.GetGroups()) {
+        for (const auto &member : group.members) {
+            ctx.all_scheduled_components.insert(member.component);
+        }
+    }
+
+    return ctx;
+}
+
+inline void Simulator::ExecComponent(Component<double> &comp,
+                                     void (Component<double>::*method)(double, double), double t,
+                                     double dt) {
+    try {
+        logger_.BeginComponentTiming(comp.Name());
+        (comp.*method)(t, dt);
+        logger_.EndComponentTiming();
+    } catch (const Error &e) {
+        logger_.EndComponentTiming();
+        LogError(e, t, comp.FullName());
+        throw;
     }
 }
 

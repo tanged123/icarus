@@ -18,6 +18,8 @@
 #include <icarus/sim/integrators/IntegratorTypes.hpp>
 
 #include <cmath>
+#include <cstdint>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -214,9 +216,17 @@ struct SchedulerGroupConfig {
     int priority = 0;       ///< Execution order relative to other groups
     std::vector<GroupMember> members;
 
+    /// Phase gating: if non-empty, group only executes when current phase is in this set
+    std::set<int32_t> active_phases;
+
     SchedulerGroupConfig() = default;
     SchedulerGroupConfig(std::string n, double rate, int prio = 0)
         : name(std::move(n)), rate_hz(rate), priority(prio) {}
+
+    /// Check if group should execute in given phase (empty = all phases)
+    [[nodiscard]] bool IsActiveInPhase(int32_t current_phase) const {
+        return active_phases.empty() || active_phases.contains(current_phase);
+    }
 };
 
 /**

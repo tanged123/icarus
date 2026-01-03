@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace icarus {
@@ -33,6 +34,7 @@ namespace icarus {
  */
 template <typename Scalar> struct StateBinding {
     std::string name;                 ///< Signal name (for debugging)
+    std::string component_name;       ///< Owning component name (e.g., "Vehicle.Body")
     Scalar *value_ptr = nullptr;      ///< Pointer to state value
     Scalar *derivative_ptr = nullptr; ///< Pointer to derivative
 };
@@ -71,6 +73,7 @@ template <typename Scalar> class StateManager {
         for (const auto &pair : pairs) {
             StateBinding<Scalar> binding;
             binding.name = pair.value_name;
+            binding.component_name = ExtractComponentName(pair.value_name);
             binding.value_ptr = static_cast<Scalar *>(pair.value_ptr);
             binding.derivative_ptr = static_cast<Scalar *>(pair.derivative_ptr);
             bindings_.push_back(binding);
@@ -140,6 +143,31 @@ template <typename Scalar> class StateManager {
     }
 
     /**
+     * @brief Get derivatives with phase-based gating
+     *
+     * Returns derivatives for active components, zeros for inactive ones.
+     * This "freezes" states for components not active in the current phase.
+     *
+     * @param active_components Set of component names that are active.
+     *                          Empty set means all components are active.
+     * @return Derivative vector with zeros for inactive components
+     */
+    [[nodiscard]] JanusVector<Scalar>
+    GetDerivatives(const std::unordered_set<std::string> &active_components) const {
+        JanusVector<Scalar> X_dot(static_cast<Eigen::Index>(bindings_.size()));
+        for (std::size_t i = 0; i < bindings_.size(); ++i) {
+            bool is_active = active_components.empty() ||
+                             active_components.contains(bindings_[i].component_name);
+            if (is_active) {
+                X_dot(static_cast<Eigen::Index>(i)) = *bindings_[i].derivative_ptr;
+            } else {
+                X_dot(static_cast<Eigen::Index>(i)) = Scalar{0}; // Freeze state
+            }
+        }
+        return X_dot;
+    }
+
+    /**
      * @brief Get state bindings (for introspection)
      */
     [[nodiscard]] const std::vector<StateBinding<Scalar>> &GetBindings() const { return bindings_; }
@@ -152,6 +180,24 @@ template <typename Scalar> class StateManager {
   private:
     std::vector<StateBinding<Scalar>> bindings_; ///< Pointers to state/derivative pairs
     bool discovered_ = false;                    ///< True after DiscoverStates() called
+
+    /**
+     * @brief Extract component name from signal path
+     *
+     * For "Entity.Component.signal", returns "Entity.Component".
+     * For "Component.signal", returns "Component".
+     *
+     * @param signal_name Full signal path
+     * @return Component name portion
+     */
+    [[nodiscard]] static std::string ExtractComponentName(const std::string &signal_name) {
+        // Find the last dot - everything before it is the component path
+        auto last_dot = signal_name.rfind('.');
+        if (last_dot == std::string::npos) {
+            return signal_name; // No dot, entire name is component
+        }
+        return signal_name.substr(0, last_dot);
+    }
 };
 
 } // namespace icarus

@@ -12,6 +12,8 @@
 #include <icarus/core/Error.hpp>
 #include <icarus/signal/Backplane.hpp>
 
+#include <cstdint>
+#include <set>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -24,6 +26,7 @@ namespace signal {
  *
  * Routes connect a component's input port to another component's output.
  * Optional gain, offset, and delay allow unit conversion, bias, and transport delay.
+ * Phase gating allows routes to be active only during specific flight phases.
  */
 struct SignalRoute {
     std::string input_path;  ///< Full path: Entity.Component.signal (destination)
@@ -34,11 +37,31 @@ struct SignalRoute {
     double offset = 0.0; ///< Bias added after gain
     double delay = 0.0;  ///< Transport delay in seconds
 
+    /// Phase gating: if non-empty, route only active when current phase is in this set
+    std::set<int32_t> active_phases;
+
     SignalRoute() = default;
     SignalRoute(std::string input, std::string output, double g = 1.0, double o = 0.0,
                 double d = 0.0)
         : input_path(std::move(input)), output_path(std::move(output)), gain(g), offset(o),
           delay(d) {}
+
+    /// Get effective gain considering phase gating
+    /// Returns 0.0 if route is inactive in current phase (output zeroed)
+    [[nodiscard]] double EffectiveGain(int32_t current_phase) const {
+        if (active_phases.empty()) {
+            return gain; // No phase restriction - always active
+        }
+        if (active_phases.contains(current_phase)) {
+            return gain; // Active in this phase
+        }
+        return 0.0; // Inactive: zero the output
+    }
+
+    /// Check if route is active in given phase
+    [[nodiscard]] bool IsActiveInPhase(int32_t current_phase) const {
+        return active_phases.empty() || active_phases.contains(current_phase);
+    }
 
     /// Validate route paths
     [[nodiscard]] std::vector<std::string> Validate() const {

@@ -228,5 +228,109 @@ TEST(SchedulerTest, GetFrameDivisor) {
     EXPECT_EQ(scheduler.GetFrameDivisor("slow"), 8);
 }
 
+// =============================================================================
+// Phase Gating Tests
+// =============================================================================
+
+TEST(SchedulerGroupConfigTest, IsActiveInPhaseEmptyMeansAllPhases) {
+    SchedulerGroupConfig group{"test", 400.0, 1};
+    // Empty active_phases = runs in all phases
+
+    EXPECT_TRUE(group.IsActiveInPhase(0));
+    EXPECT_TRUE(group.IsActiveInPhase(1));
+    EXPECT_TRUE(group.IsActiveInPhase(99));
+}
+
+TEST(SchedulerGroupConfigTest, IsActiveInPhaseWithFilter) {
+    SchedulerGroupConfig group{"propulsion", 400.0, 1};
+    group.active_phases = {1, 2}; // Only active in phases 1 and 2 (BOOST, COAST)
+
+    EXPECT_FALSE(group.IsActiveInPhase(0)); // GROUND - not active
+    EXPECT_TRUE(group.IsActiveInPhase(1));  // BOOST - active
+    EXPECT_TRUE(group.IsActiveInPhase(2));  // COAST - active
+    EXPECT_FALSE(group.IsActiveInPhase(3)); // DESCENT - not active
+}
+
+TEST(SchedulerTest, GetGroupsForFrameWithPhaseFiltering) {
+    SchedulerConfig cfg;
+
+    // Propulsion group: only runs in BOOST (phase 1)
+    SchedulerGroupConfig propulsion{"propulsion", 400.0, 1};
+    propulsion.active_phases = {1};
+    cfg.groups.push_back(propulsion);
+
+    // Navigation group: runs in all phases
+    SchedulerGroupConfig nav{"navigation", 400.0, 2};
+    // Leave active_phases empty = all phases
+    cfg.groups.push_back(nav);
+
+    Scheduler scheduler;
+    scheduler.Configure(cfg, 400.0);
+
+    // In GROUND (phase 0): only navigation runs
+    auto groups_ground = scheduler.GetGroupsForFrame(0, 0);
+    ASSERT_EQ(groups_ground.size(), 1u);
+    EXPECT_EQ(groups_ground[0], "navigation");
+
+    // In BOOST (phase 1): both run
+    auto groups_boost = scheduler.GetGroupsForFrame(0, 1);
+    ASSERT_EQ(groups_boost.size(), 2u);
+
+    // In COAST (phase 2): only navigation runs
+    auto groups_coast = scheduler.GetGroupsForFrame(0, 2);
+    ASSERT_EQ(groups_coast.size(), 1u);
+    EXPECT_EQ(groups_coast[0], "navigation");
+}
+
+TEST(SchedulerTest, GetGroupsForFrameNoPhaseProvided) {
+    SchedulerConfig cfg;
+
+    SchedulerGroupConfig group{"test", 400.0, 1};
+    group.active_phases = {1}; // Only phase 1
+    cfg.groups.push_back(group);
+
+    Scheduler scheduler;
+    scheduler.Configure(cfg, 400.0);
+
+    // No phase provided (default -1): phase filtering is ignored
+    auto groups = scheduler.GetGroupsForFrame(0);
+    ASSERT_EQ(groups.size(), 1u);
+    EXPECT_EQ(groups[0], "test");
+}
+
+// =============================================================================
+// SignalRoute Phase Gating Tests
+// =============================================================================
+
+TEST(SignalRouteTest, EffectiveGainNoPhaseRestriction) {
+    signal::SignalRoute route;
+    route.gain = 2.5;
+    // Leave active_phases empty = no restriction
+
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(0), 2.5);
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(1), 2.5);
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(99), 2.5);
+}
+
+TEST(SignalRouteTest, EffectiveGainWithPhaseRestriction) {
+    signal::SignalRoute route;
+    route.gain = 1.0;
+    route.active_phases = {1, 2}; // Only active in phases 1 and 2
+
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(0), 0.0); // Inactive - zero gain
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(1), 1.0); // Active
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(2), 1.0); // Active
+    EXPECT_DOUBLE_EQ(route.EffectiveGain(3), 0.0); // Inactive - zero gain
+}
+
+TEST(SignalRouteTest, IsActiveInPhase) {
+    signal::SignalRoute route;
+    route.active_phases = {1};
+
+    EXPECT_FALSE(route.IsActiveInPhase(0));
+    EXPECT_TRUE(route.IsActiveInPhase(1));
+    EXPECT_FALSE(route.IsActiveInPhase(2));
+}
+
 } // namespace
 } // namespace icarus
