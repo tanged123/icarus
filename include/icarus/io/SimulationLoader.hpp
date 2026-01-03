@@ -215,7 +215,16 @@ class SimulationLoader {
         cfg.t_start = node.Get<double>("start", cfg.t_start);
         cfg.t_end = node.Get<double>("end", cfg.t_end);
         cfg.dt = node.Get<double>("dt", cfg.dt);
-        cfg.reference_epoch_jd = node.Get<double>("reference_epoch_jd", cfg.reference_epoch_jd);
+
+        // Parse epoch configuration if present
+        if (node.Has("epoch")) {
+            auto epoch_node = node["epoch"];
+            cfg.epoch.system = epoch_node.Get<std::string>("system", cfg.epoch.system);
+            cfg.epoch.reference = epoch_node.Get<std::string>("reference", cfg.epoch.reference);
+            cfg.epoch.jd = epoch_node.Get<double>("jd", cfg.epoch.jd);
+            cfg.epoch.gps_week = epoch_node.Get<int>("week", cfg.epoch.gps_week);
+            cfg.epoch.gps_seconds = epoch_node.Get<double>("seconds", cfg.epoch.gps_seconds);
+        }
     }
 
     static void ParseComponentList(std::vector<ComponentConfig> &components,

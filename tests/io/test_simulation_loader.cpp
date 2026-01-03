@@ -49,7 +49,9 @@ time:
   start: 10.0
   end: 200.0
   dt: 0.001
-  reference_epoch_jd: 2451550.0
+  epoch:
+    system: TAI
+    jd: 2451550.0
 components:
   - type: Test
     name: T1
@@ -58,7 +60,8 @@ components:
     EXPECT_DOUBLE_EQ(cfg.t_start, 10.0);
     EXPECT_DOUBLE_EQ(cfg.t_end, 200.0);
     EXPECT_DOUBLE_EQ(cfg.dt, 0.001);
-    EXPECT_DOUBLE_EQ(cfg.reference_epoch_jd, 2451550.0);
+    EXPECT_EQ(cfg.epoch.system, "TAI");
+    EXPECT_DOUBLE_EQ(cfg.epoch.jd, 2451550.0);
 }
 
 TEST(SimulationLoaderTest, ParseComponentWithScalars) {

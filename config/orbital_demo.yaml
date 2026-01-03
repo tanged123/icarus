@@ -31,6 +31,9 @@ time:
   start: 0.0
   end: 5400.0          # 90 minutes (one orbit period for LEO)
   dt: 0.1              # 10 Hz timestep (better accuracy)
+  epoch:
+    system: UTC
+    reference: "2024-12-22T12:00:00Z"  # Simulation start epoch
 
 # =============================================================================
 # Integrator Configuration

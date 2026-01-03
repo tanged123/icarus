@@ -33,6 +33,7 @@ namespace icarus {
 // Forward Declarations
 // =============================================================================
 
+struct EpochConfig;
 struct TrimConfig;
 struct LinearizationConfig;
 struct SymbolicsConfig;
@@ -40,6 +41,46 @@ struct StageConfig;
 struct SchedulerConfig;
 struct OutputConfig;
 struct SimulatorConfig;
+
+// =============================================================================
+// EpochConfig
+// =============================================================================
+
+/**
+ * @brief Time epoch configuration for absolute time support
+ *
+ * Configures the simulation's reference epoch for time-varying models.
+ * When configured, Vulcan's Epoch class provides conversions between
+ * time scales (UTC, TAI, TT, GPS) and calendar representations.
+ *
+ * If not configured (empty reference), the simulation runs in MET-only mode
+ * with an arbitrary J2000.0 reference epoch.
+ */
+struct EpochConfig {
+    /// Time system: "MET" (default), "UTC", "TAI", "GPS"
+    std::string system = "MET";
+
+    /// Reference time as ISO 8601 string (for UTC system)
+    /// Example: "2024-12-22T10:30:00Z"
+    std::string reference;
+
+    /// Julian Date (for TAI/TT systems when reference is empty)
+    double jd = 0.0;
+
+    /// GPS week number (for GPS system)
+    int gps_week = 0;
+
+    /// GPS seconds of week (for GPS system)
+    double gps_seconds = 0.0;
+
+    /// Check if epoch is configured (non-MET-only mode)
+    [[nodiscard]] bool IsConfigured() const {
+        return !reference.empty() || jd > 0.0 || gps_week > 0;
+    }
+
+    /// Create default MET-only config
+    [[nodiscard]] static EpochConfig Default() { return EpochConfig{}; }
+};
 
 // =============================================================================
 // TrimConfig
@@ -506,9 +547,9 @@ struct SimulatorConfig {
     double t_end = 100.0;
     double dt = 0.01; ///< Note: may be auto-derived from scheduler
 
-    /// Reference epoch for time-varying models (atmosphere, gravity, etc.)
-    /// Components that need absolute time can read this.
-    double reference_epoch_jd = 2451545.0; ///< J2000.0 default
+    /// Epoch configuration for absolute time support
+    /// When configured, enables time scale conversions (UTC, TAI, GPS, etc.)
+    EpochConfig epoch;
 
     // =========================================================================
     // Components (flattened from entity expansion)
