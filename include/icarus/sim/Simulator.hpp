@@ -24,6 +24,7 @@
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/SignalRouter.hpp>
 #include <icarus/sim/IntegrationManager.hpp>
+#include <icarus/sim/PhaseManager.hpp>
 #include <icarus/sim/Scheduler.hpp>
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/sim/StateManager.hpp>
@@ -135,6 +136,14 @@ class Simulator {
 
     /// Get current simulation phase
     [[nodiscard]] Phase GetPhase() const { return phase_; }
+
+    /// Get current flight phase value (from PhaseManager)
+    [[nodiscard]] int32_t GetFlightPhase() const { return phase_manager_.CurrentPhase(); }
+
+    /// Get current flight phase name (from PhaseManager)
+    [[nodiscard]] std::string GetFlightPhaseName() const {
+        return phase_manager_.CurrentPhaseName();
+    }
 
     /// Check if simulation is initialized (Staged or later)
     [[nodiscard]] bool IsInitialized() const { return phase_ >= Phase::Staged; }
@@ -309,6 +318,7 @@ class Simulator {
     StateManager<double> state_manager_;
     IntegrationManager<double> integration_manager_;
     Scheduler scheduler_;
+    PhaseManager<double> phase_manager_;
 
     // Logging
     MissionLogger logger_;
@@ -416,6 +426,9 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
     sim->logger_.LogTimeConfig(config.t_start, config.t_end, config.dt);
     sim->logger_.LogIntegrator(config.integrator.type);
 
+    // Log phase configuration
+    sim->logger_.LogPhaseConfig(config.phases);
+
     // Begin Provision phase
     sim->logger_.BeginPhase(SimPhase::Provision);
 
@@ -474,6 +487,11 @@ inline void Simulator::Configure(const SimulatorConfig &config) {
         throw ConfigError("Scheduler timing validation failed: " + timing_errors[0]);
     }
     scheduler_.Configure(config_.scheduler, sim_rate);
+
+    // Configure phase manager (if phases defined)
+    if (!config_.phases.definitions.empty()) {
+        phase_manager_.Configure(config_.phases);
+    }
 }
 
 inline void Simulator::AddComponent(std::unique_ptr<Component<double>> component) {
@@ -793,6 +811,16 @@ inline void Simulator::Step(double dt) {
     time_ += dt;
     frame_count_++;
 
+    // Evaluate phase transitions
+    phase_manager_.EvaluateTransitions(registry_);
+    if (phase_manager_.PhaseChangedThisStep()) {
+        logger_.Log(LogLevel::Info,
+                    "[PHASE] Transition: " +
+                        phase_manager_.GetConfig().GetPhaseName(phase_manager_.PreviousPhase()) +
+                        " → " + phase_manager_.CurrentPhaseName() +
+                        " at t=" + std::to_string(time_) + "s");
+    }
+
     // Periodic progress logging (e.g., every 100 frames)
     if (logger_.IsProgressEnabled() && (frame_count_ % 100 == 0)) {
         logger_.LogRunProgress(time_, config_.t_end);
@@ -979,8 +1007,9 @@ inline void Simulator::InvokeOutputObservers() {
 inline Simulator::FrameContext Simulator::BuildFrameContext() const {
     FrameContext ctx;
 
-    // Get active groups for this frame
-    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_);
+    // Get active groups for this frame AND current flight phase
+    int32_t current_phase = phase_manager_.CurrentPhase();
+    auto active_groups = scheduler_.GetGroupsForFrame(frame_count_, current_phase);
 
     // Build set of active component names for O(1) lookup
     for (const auto &group_name : active_groups) {

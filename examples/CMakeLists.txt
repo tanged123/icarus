@@ -44,3 +44,8 @@ icarus_add_example(topology_demo
     topology_demo.cpp
 )
 
+# Phase Switching Demo
+# Demonstrates: PhaseManager for multi-phase flight simulation
+icarus_add_example(phase_switching_demo
+    phase_switching_demo.cpp
+)

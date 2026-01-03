@@ -1,0 +1,177 @@
+# Icarus Simulation Configuration
+# Phase Switching Demo - Multi-Phase Orbital Maneuver with Phase Gating
+#
+# Demonstrates phase-based component activation:
+# - COAST_1: Initial orbit (gravity only)
+# - BURN: Thrust group activated 
+# - COAST_2: Post-burn coast (thrust group deactivated)
+#
+# The thrust component is in a scheduler group with active_phases: [1]
+# so it ONLY runs during BURN phase (phase value 1).
+
+simulation:
+  name: "Phase Switching Demo"
+  version: "1.0.0"
+  description: |
+    Demonstrates PhaseManager for multi-phase orbital maneuver.
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  console_level: debug       # trace, debug, info, warning, error
+  file_enabled: true      # Set to true to write log file
+  file_path: "phase_demo.log"
+  file_level: debug
+  progress_enabled: true
+  profiling_enabled: true
+
+
+# =============================================================================
+# Time Configuration  
+# =============================================================================
+
+time:
+  start: 0.0
+  end: 60.0       # 1 minute simulation
+  dt: 0.1         # 10 Hz
+
+# =============================================================================
+# Integrator Configuration
+# =============================================================================
+
+integrator:
+  type: RK4
+
+# =============================================================================
+# Phase Configuration
+# =============================================================================
+
+phases:
+  definitions:
+    COAST_1: 0    # Initial coasting
+    BURN: 1       # Engine firing
+    COAST_2: 2    # Post-burn coast
+  
+  initial: COAST_1
+  
+  transitions:
+    # Check if the satellite has moved by seeing if position.y changed from 0
+    # After 1 step, vy * dt = 7612 * 0.1 = 761.2 m
+    # So position.y should be > 700 very quickly
+    - from: COAST_1
+      to: BURN
+      condition: "Satellite.position.y > 3000"  # After ~0.4s
+
+    # Transition to COAST_2 when position.y > 15000 (after ~2s)
+    - from: BURN
+      to: COAST_2
+      condition: "Satellite.position.y > 15000"
+
+# =============================================================================
+# Components
+# =============================================================================
+
+components:
+  # Satellite dynamics (3DOF point mass)
+  - type: PointMass3DOF
+    name: Satellite
+    scalars:
+      mass: 100.0       # 100 kg satellite
+    vectors:
+      initial_position: [6.871e6, 0.0, 0.0]     # 500 km altitude [m]
+      initial_velocity: [0.0, 7612.0, 0.0]      # Circular orbit velocity [m/s]
+
+  # Earth gravity (inverse-square law) - runs in ALL phases
+  - type: PointMassGravity
+    name: Gravity
+    scalars:
+      mu: 3.986004418e14   # Earth GM [m³/s²]
+    integers:
+      model: 1             # Inverse-square law
+
+  # Thrust force (using PointMassGravity with constant model)
+  # Note: This is just for demo - in reality we'd have a proper Thruster component
+  - type: PointMassGravity
+    name: Thrust
+    scalars:
+      mu: 0.0              # Not used in constant model
+    integers:
+      model: 0             # Constant model - provides constant force
+
+# =============================================================================
+# Signal Routing
+# =============================================================================
+
+routes:
+  # Gravity reads satellite position
+  - input: Gravity.position.x
+    output: Satellite.position.x
+  - input: Gravity.position.y
+    output: Satellite.position.y
+  - input: Gravity.position.z
+    output: Satellite.position.z
+  - input: Gravity.mass
+    output: Satellite.mass
+
+  # Thrust reads satellite position
+  - input: Thrust.position.x
+    output: Satellite.position.x
+  - input: Thrust.position.y
+    output: Satellite.position.y
+  - input: Thrust.position.z
+    output: Satellite.position.z
+  - input: Thrust.mass
+    output: Satellite.mass
+
+  # Satellite receives gravity force
+  - input: Satellite.force.x
+    output: Gravity.force.x
+  - input: Satellite.force.y
+    output: Gravity.force.y
+  - input: Satellite.force.z
+    output: Gravity.force.z
+
+# =============================================================================
+# Scheduler Configuration with Phase Gating
+# =============================================================================
+
+scheduler:
+  groups:
+    # Environment group - runs in ALL phases
+    - name: environment
+      rate_hz: 10.0
+      priority: 1
+      members:
+        - component: Gravity
+          priority: 1
+
+    # Thrust group - ONLY runs during BURN phase (phase value 1)
+    - name: propulsion
+      rate_hz: 10.0
+      priority: 2
+      active_phases: [1]    # <-- Phase gating! Only active during BURN
+      members:
+        - component: Thrust
+          priority: 1
+
+    # Dynamics group - runs in ALL phases
+    - name: dynamics
+      rate_hz: 10.0
+      priority: 3
+      members:
+        - component: Satellite
+          priority: 1
+
+# =============================================================================
+# Staging Configuration
+# =============================================================================
+
+staging:
+  trim:
+    enabled: false
+  linearization:
+    enabled: false
+  symbolics:
+    enabled: false

@@ -191,12 +191,13 @@ template <typename Scalar> class StateManager {
      * @return Component name portion
      */
     [[nodiscard]] static std::string ExtractComponentName(const std::string &signal_name) {
-        // Find the last dot - everything before it is the component path
-        auto last_dot = signal_name.rfind('.');
-        if (last_dot == std::string::npos) {
+        // Find the first dot - component name is the first segment
+        // e.g., "Satellite.position.x" -> "Satellite"
+        auto first_dot = signal_name.find('.');
+        if (first_dot == std::string::npos) {
             return signal_name; // No dot, entire name is component
         }
-        return signal_name.substr(0, last_dot);
+        return signal_name.substr(0, first_dot);
     }
 };
 

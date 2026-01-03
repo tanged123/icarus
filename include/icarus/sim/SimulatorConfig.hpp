@@ -15,6 +15,7 @@
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/io/log/LogService.hpp>
 #include <icarus/signal/SignalRouter.hpp>
+#include <icarus/sim/PhaseManager.hpp>
 #include <icarus/sim/integrators/IntegratorTypes.hpp>
 
 #include <cmath>
@@ -528,6 +529,11 @@ struct SimulatorConfig {
     // Staging (Trim + Linearization + Symbolics)
     // =========================================================================
     StageConfig staging;
+
+    // =========================================================================
+    // Phase Management
+    // =========================================================================
+    PhaseConfig phases;
 
     // =========================================================================
     // Integrator

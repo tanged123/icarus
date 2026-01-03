@@ -188,6 +188,11 @@ class SimulationLoader {
             ParseStaging(cfg.staging, root["staging"]);
         }
 
+        // Parse phases
+        if (root.Has("phases")) {
+            ParsePhases(cfg.phases, root["phases"]);
+        }
+
         // Parse output
         if (root.Has("output")) {
             ParseOutput(cfg.output, root["output"]);
@@ -318,6 +323,12 @@ class SimulationLoader {
                     });
                 }
 
+                // Parse active_phases for phase-based gating
+                if (group_node.Has("active_phases")) {
+                    auto phases = group_node["active_phases"].ToVector<int32_t>();
+                    group.active_phases = std::set<int32_t>(phases.begin(), phases.end());
+                }
+
                 scheduler.groups.push_back(group);
             });
         }
@@ -437,6 +448,60 @@ class SimulationLoader {
         output.telemetry_format =
             node.Get<std::string>("telemetry_format", output.telemetry_format);
         output.timing_report = node.Get<bool>("timing_report", output.timing_report);
+    }
+
+    static void ParsePhases(PhaseConfig &phases, const vulcan::io::YamlNode &node) {
+        // Parse phase definitions: name -> integer value
+        if (node.Has("definitions")) {
+            node["definitions"].ForEachEntry(
+                [&](const std::string &name, const vulcan::io::YamlNode &val) {
+                    phases.definitions[name] = val.As<int32_t>();
+                });
+        }
+
+        // Parse initial phase
+        phases.initial_phase = node.Get<std::string>("initial", "");
+
+        // Parse entity prefix (optional)
+        phases.entity_prefix = node.Get<std::string>("entity_prefix", "");
+
+        // Parse transitions
+        if (node.Has("transitions")) {
+            node["transitions"].ForEach([&](const vulcan::io::YamlNode &trans_node) {
+                PhaseTransition trans;
+
+                // Parse 'from' phase (can be string name or -1 for any)
+                if (trans_node.Has("from")) {
+                    auto from_str = trans_node.Get<std::string>("from", "");
+                    if (from_str == "*" || from_str == "any") {
+                        trans.from_phase = -1;
+                    } else {
+                        auto it = phases.definitions.find(from_str);
+                        if (it != phases.definitions.end()) {
+                            trans.from_phase = it->second;
+                        } else {
+                            // Try parsing as integer
+                            trans.from_phase = std::stoi(from_str);
+                        }
+                    }
+                }
+
+                // Parse 'to' phase
+                auto to_str = trans_node.Require<std::string>("to");
+                auto to_it = phases.definitions.find(to_str);
+                if (to_it != phases.definitions.end()) {
+                    trans.to_phase = to_it->second;
+                } else {
+                    // Try parsing as integer
+                    trans.to_phase = std::stoi(to_str);
+                }
+
+                // Parse condition
+                trans.condition = trans_node.Get<std::string>("condition", "");
+
+                phases.transitions.push_back(trans);
+            });
+        }
     }
 
     // =========================================================================

@@ -156,6 +156,17 @@ class MissionLogger {
     /// Log integrator type (enum version)
     void LogIntegrator(IntegratorType type) { LogIntegrator(to_string(type)); }
 
+    /// Log phase configuration
+    void LogPhaseConfig(const PhaseConfig &config) {
+        if (config.definitions.empty()) {
+            return;
+        }
+        std::ostringstream oss;
+        oss << "[PHASE] Configured with " << config.definitions.size()
+            << " phases, initial: " << config.initial_phase;
+        Log(LogLevel::Debug, oss.str());
+    }
+
     /// Begin a lifecycle phase
     void BeginPhase(const char *phase) {
         current_phase_ = phase;
