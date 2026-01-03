@@ -45,6 +45,9 @@
 // Vulcan time infrastructure
 #include <vulcan/time/Epoch.hpp>
 
+// Recording
+#include <icarus/io/HDF5Recorder.hpp>
+
 // Forward declarations for staging
 namespace icarus::staging {
 class TrimSolver;
@@ -187,6 +190,9 @@ class Simulator {
 
     /// Get data dictionary for the simulation
     [[nodiscard]] DataDictionary GetDataDictionary() const;
+
+    /// Get signal registry (for recording, introspection)
+    [[nodiscard]] const SignalRegistry<double> &Registry() const { return registry_; }
 
     // =========================================================================
     // CONTROL INTERFACE (Runtime modification)
@@ -364,6 +370,9 @@ class Simulator {
     std::optional<janus::Function> dynamics_graph_;
     std::optional<janus::Function> jacobian_;
 
+    // Recording (optional, when enabled in config)
+    std::unique_ptr<HDF5Recorder> recorder_;
+
     // Staging results (optional, after Stage)
     std::optional<staging::TrimResult> trim_result_;
     std::optional<staging::LinearModel> linear_model_;
@@ -424,6 +433,15 @@ class Simulator {
 namespace icarus {
 
 inline Simulator::~Simulator() {
+    // Close recorder and log summary
+    if (recorder_) {
+        size_t frames = recorder_->FrameCount();
+        recorder_->Close();
+        logger_.Log(LogLevel::Info, "[REC] Recording complete: " + std::to_string(frames) +
+                                        " frames written to " + config_.recording.path);
+        recorder_.reset();
+    }
+
     // If we ever ran, log the debrief on destruction (RAII)
     if (lifecycle_ == Lifecycle::Running) {
         logger_.BeginLifecycle(LifecycleStrings::Shutdown);
@@ -797,6 +815,15 @@ inline void Simulator::Stage() {
 
     logger_.EndLifecycle();
 
+    // Initialize recording if enabled
+    if (config_.recording.IsActive()) {
+        recorder_ = std::make_unique<HDF5Recorder>(registry_, config_.recording);
+        recorder_->Open("");
+        logger_.Log(LogLevel::Info, "[REC] Recording " +
+                                        std::to_string(recorder_->RecordedSignals().size()) +
+                                        " signals to " + config_.recording.path);
+    }
+
     lifecycle_ = Lifecycle::Staged;
     epoch_ = epoch_start_; // Reset to t=0 (MET derived via Time())
 }
@@ -893,6 +920,11 @@ inline void Simulator::Step(double dt) {
 
     // Invoke output observers
     InvokeOutputObservers();
+
+    // Record frame if enabled
+    if (recorder_) {
+        recorder_->Record(Time());
+    }
 }
 
 inline void Simulator::Step() { Step(config_.dt); }

@@ -102,6 +102,11 @@ icarus_add_test(test_simulation_loader
     io/test_simulation_loader.cpp
 )
 
+# Phase 6.2: Recording tests
+icarus_add_test(test_recorder
+    io/test_recorder.cpp
+)
+
 # Phase 4.0.7: Scheduler tests
 icarus_add_test(test_scheduler
     sim/test_scheduler.cpp

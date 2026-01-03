@@ -36,6 +36,21 @@ time:
     reference: "2024-12-22T12:00:00Z"  # Simulation start epoch
 
 # =============================================================================
+# Recording Configuration (HDF5 telemetry)
+# =============================================================================
+
+recording:
+  enabled: true
+  path: "output/orbital_recording.h5"
+  mode: outputs                # "all", "outputs", or "signals"
+  include_derivatives: false   # Exclude *_dot signals
+  # include:                   # Only used when mode = "signals"
+  #   - "Satellite\\.position\\..*"
+  #   - "Satellite\\.velocity\\..*"
+  # exclude:
+  #   - ".*internal.*"
+
+# =============================================================================
 # Integrator Configuration
 # =============================================================================
 

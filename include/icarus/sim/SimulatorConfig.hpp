@@ -417,6 +417,67 @@ struct OutputConfig {
 };
 
 // =============================================================================
+// RecordingConfig
+// =============================================================================
+
+/**
+ * @brief HDF5 recording configuration
+ *
+ * Controls automatic signal recording to HDF5 files.
+ * Supports flexible signal selection via mode and pattern matching.
+ *
+ * Modes:
+ * - "off"     : No recording (default)
+ * - "all"     : Record all signals (outputs, inputs, params, config)
+ * - "outputs" : Record only output signals
+ * - "signals" : Record signals matching include patterns
+ *
+ * Example YAML:
+ * @code
+ * recording:
+ *   enabled: true
+ *   path: "output/recording.h5"
+ *   mode: signals
+ *   include:
+ *     - "Satellite.position.*"
+ *     - "Satellite.velocity.*"
+ *   exclude:
+ *     - "*_dot*"
+ * @endcode
+ */
+struct RecordingConfig {
+    /// Enable recording
+    bool enabled = false;
+
+    /// Output file path
+    std::string path = "output/recording.h5";
+
+    /// Recording mode: "off", "all", "outputs", "signals"
+    std::string mode = "outputs";
+
+    /// Include patterns (regex) - used when mode = "signals"
+    std::vector<std::string> include;
+
+    /// Exclude patterns (regex) - applied after include
+    std::vector<std::string> exclude;
+
+    /// Include derivative signals (*_dot*)
+    bool include_derivatives = false;
+
+    /// Include input signals (only meaningful with mode = "all")
+    bool include_inputs = false;
+
+    /// Flush interval (frames between disk flushes, 0 = auto)
+    int flush_interval = 0;
+
+    /// Create default config (recording disabled)
+    [[nodiscard]] static RecordingConfig Default() { return RecordingConfig{}; }
+
+    /// Check if recording is active
+    [[nodiscard]] bool IsActive() const { return enabled && mode != "off"; }
+};
+
+// =============================================================================
 // EntityTemplate
 // =============================================================================
 
@@ -585,6 +646,11 @@ struct SimulatorConfig {
     // Logging
     // =========================================================================
     LogConfig logging;
+
+    // =========================================================================
+    // Recording (HDF5 telemetry)
+    // =========================================================================
+    RecordingConfig recording;
 
     // =========================================================================
     // Output

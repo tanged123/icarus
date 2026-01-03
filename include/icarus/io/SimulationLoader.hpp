@@ -183,6 +183,11 @@ class SimulationLoader {
             ParseLogging(cfg.logging, root["logging"]);
         }
 
+        // Parse recording
+        if (root.Has("recording")) {
+            ParseRecording(cfg.recording, root["recording"]);
+        }
+
         // Parse staging
         if (root.Has("staging")) {
             ParseStaging(cfg.staging, root["staging"]);
@@ -396,6 +401,27 @@ class SimulationLoader {
         if (node.Has("telemetry_signals")) {
             logging.telemetry_signals = node["telemetry_signals"].ToVector<std::string>();
         }
+    }
+
+    static void ParseRecording(RecordingConfig &recording, const vulcan::io::YamlNode &node) {
+        recording.enabled = node.Get<bool>("enabled", recording.enabled);
+        recording.path = node.Get<std::string>("path", recording.path);
+        recording.mode = node.Get<std::string>("mode", recording.mode);
+
+        // Include patterns
+        if (node.Has("include")) {
+            recording.include = node["include"].ToVector<std::string>();
+        }
+
+        // Exclude patterns
+        if (node.Has("exclude")) {
+            recording.exclude = node["exclude"].ToVector<std::string>();
+        }
+
+        recording.include_derivatives =
+            node.Get<bool>("include_derivatives", recording.include_derivatives);
+        recording.include_inputs = node.Get<bool>("include_inputs", recording.include_inputs);
+        recording.flush_interval = node.Get<int>("flush_interval", recording.flush_interval);
     }
 
     static void ParseStaging(StageConfig &staging, const vulcan::io::YamlNode &node) {

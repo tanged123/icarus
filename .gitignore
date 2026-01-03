@@ -64,6 +64,7 @@ cmake-build-*/
 *.dict
 *datadict*.yaml
 *.html
+*.h5
 
 # Ignore 
 !docs/images/*.png
