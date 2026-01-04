@@ -14,6 +14,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "Running examples..."
 
+# Ensure output directory exists for examples that record data
+mkdir -p "$PROJECT_ROOT/output"
+
 # Find and run all examples in the build directory
 EXAMPLES_DIR="$PROJECT_ROOT/build/examples"
 
