@@ -20,16 +20,16 @@
 
 // Version info from CMake
 #ifndef ICARUS_VERSION_STRING
-#define ICARUS_VERSION_STRING "0.5.1"
+#define ICARUS_VERSION_STRING "0.6.0"
 #endif
 #ifndef ICARUS_VERSION_MAJOR
 #define ICARUS_VERSION_MAJOR 0
 #endif
 #ifndef ICARUS_VERSION_MINOR
-#define ICARUS_VERSION_MINOR 5
+#define ICARUS_VERSION_MINOR 6
 #endif
 #ifndef ICARUS_VERSION_PATCH
-#define ICARUS_VERSION_PATCH 1
+#define ICARUS_VERSION_PATCH 0
 #endif
 
 // =============================================================================

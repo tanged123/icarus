@@ -63,7 +63,7 @@
       {
         packages.default = stdenv.mkDerivation {
           pname = "icarus";
-          version = "0.5.1";
+          version = "0.6.0";
           src = ./.;
 
           nativeBuildInputs = [

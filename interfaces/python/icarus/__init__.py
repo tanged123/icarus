@@ -39,8 +39,8 @@ State Vector (for Monte Carlo)::
 
 Version Info::
 
-    print(icarus.__version__)      # "0.5.1"
-    print(icarus.version_info)     # (0, 5, 1)
+    print(icarus.__version__)      # "0.6.0"
+    print(icarus.version_info)     # (0, 6, 0)
 """
 
 from ._icarus import (
