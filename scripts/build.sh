@@ -12,6 +12,8 @@ fi
 # Handle arguments
 CLEAN=false
 BUILD_TYPE="${BUILD_TYPE:-Debug}"  # Default to Debug for local development
+BUILD_INTERFACES="${BUILD_INTERFACES:-OFF}"  # C API bindings
+BUILD_PYTHON="${BUILD_PYTHON:-OFF}"  # Python bindings (requires pybind11)
 
 # Default jobs: half of available cores, minimum 2
 # This prevents OOM on 32GB systems with heavy template code (CasADi/Janus)
@@ -48,6 +50,12 @@ for arg in "$@"; do
         --relwithdebinfo)
             BUILD_TYPE="RelWithDebInfo"
             ;;
+        --interfaces)
+            BUILD_INTERFACES="ON"
+            ;;
+        --python)
+            BUILD_PYTHON="ON"
+            ;;
         --jobs=*|-j=*)
             JOBS="${arg#*=}"
             ;;
@@ -80,7 +88,7 @@ if [ "$CLEAN" = true ]; then
     "$SCRIPT_DIR/clean.sh"
 fi
 
-echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS)"
+echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS, interfaces: $BUILD_INTERFACES, python: $BUILD_PYTHON)"
 
 # Show ccache stats before build
 if command -v ccache &> /dev/null; then
@@ -90,7 +98,10 @@ if command -v ccache &> /dev/null; then
 fi
 
 # Create build directory if it doesn't exist or reconfigure
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    -DBUILD_INTERFACES="$BUILD_INTERFACES" \
+    -DBUILD_PYTHON="$BUILD_PYTHON"
 
 # Build the project with limited parallelism to prevent OOM
 ninja -C build -j "$JOBS"

@@ -289,39 +289,71 @@ Phase 4–7 (horizontal expansion)
 
 ---
 
-## Phase 7: Trim & External Interfaces
+## Phase 7: External Interfaces
 
-**Goal:** Production-ready entry points.
+**Goal:** Production-ready entry points for external consumers.
+
+> **Note:** Trim Solver (originally 7.1) deferred to Phase 8 pending better component models.
 
 ### Tasks
 
-- [ ] **7.1 Trim Solver**
-  - [ ] Symbolic NLP formulation
-  - [ ] Integration with `janus::Opti` / IPOPT
+- [x] **7.1 C API**
+  - [x] `icarus_create()`, `icarus_step()`, `icarus_get_signal()`
+  - [x] FFI-compatible types
+  - [x] Bulk state access for Monte Carlo
 
-- [ ] **7.2 C API**
-  - [ ] `icarus_create()`, `icarus_step()`, `icarus_get_signal()`
-  - [ ] FFI-compatible types
+- [x] **7.2 Python Bindings**
+  - [x] PyBind11 wrapper
+  - [x] `import icarus` workflow
+  - [x] numpy integration
 
-- [ ] **7.3 Python Bindings**
-  - [ ] PyBind11 wrapper
-  - [ ] `import icarus` workflow
+- [ ] **7.3 MATLAB Bindings** (optional)
+  - [ ] loadlibrary wrapper using C API
+  - [ ] Simulink S-Function
 
-- [ ] **7.4 MATLAB Bindings** (optional)
-  - [ ] MEX interface or Python bridge
+### Architecture References
+
+| Topic | Document |
+|:------|:---------|
+| External bindings | [16_external_bindings.md](../architecture/16_external_bindings.md) |
+
+### Exit Criteria
+
+- [ ] Python script runs simulation end-to-end
+- [ ] Export results to pandas DataFrame
+- [ ] C API usable from external FSW code
+
+---
+
+## Phase 8: Advanced Trim & Optimization
+
+**Goal:** NLP-based trim and optimization workflows.
+
+> **Prerequisite:** Richer component models for meaningful trim scenarios.
+
+### Tasks
+
+- [ ] **8.1 OptiTrim Solver**
+  - [ ] Symbolic NLP formulation using `janus::Opti`
+  - [ ] IPOPT integration for constrained optimization
+  - [ ] Weighted residuals for over-determined systems
+  - [ ] Optimal trim (minimize fuel, maximize range)
+
+- [ ] **8.2 Trajectory Optimization** (stretch)
+  - [ ] Direct collocation interface
+  - [ ] Multi-phase trajectory support
 
 ### Architecture References
 
 | Topic | Document |
 |:------|:---------|
 | Trim solver | [14_trim_optimization.md](../architecture/14_trim_optimization.md) |
-| External bindings | [16_external_bindings.md](../architecture/16_external_bindings.md) |
 
 ### Exit Criteria
 
-- [ ] Python script runs trimmed simulation
-- [ ] Export results to pandas DataFrame
-- [ ] C API usable from external FSW code
+- [ ] Python script runs trimmed 6DOF simulation
+- [ ] Optimal trim finds minimum-fuel cruise condition
+- [ ] Symbolic Jacobians verified against finite differences
 
 ---
 

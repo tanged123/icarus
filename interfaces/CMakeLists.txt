@@ -1,15 +1,18 @@
 # External Interfaces (C API, Python, MATLAB)
-# Currently placeholder - implementations added in Phase 7
+# Phase 7 implementation
 
-# C API
-# add_library(icarus_c SHARED
-#   c_api/icarus_c.cpp
-# )
-# target_link_libraries(icarus_c PRIVATE icarus)
+# C API (always built when BUILD_INTERFACES is ON)
+add_subdirectory(c_api)
 
-# Python bindings (pybind11)
-# find_package(pybind11 QUIET)
-# if(pybind11_FOUND)
-#   pybind11_add_module(py_icarus python/py_icarus.cpp)
-#   target_link_libraries(py_icarus PRIVATE icarus)
-# endif()
+# Python bindings (pybind11) - Phase 7.2
+if(BUILD_PYTHON)
+    find_package(pybind11 QUIET)
+    if(pybind11_FOUND)
+        add_subdirectory(python)
+    else()
+        message(WARNING "pybind11 not found - Python bindings disabled")
+    endif()
+endif()
+
+# MATLAB bindings - Phase 7.3 (optional)
+# add_subdirectory(matlab)

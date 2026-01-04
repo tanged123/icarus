@@ -25,5 +25,12 @@ LOG_FILE="logs/tests_${TIMESTAMP}.log"
 
 ctest --test-dir build -VV 2>&1 | tee "$LOG_FILE"
 
+# Run Python tests if Python bindings were built
+if [ -d "build/python/icarus" ]; then
+    echo ""
+    echo "=== Python Tests ==="
+    PYTHONPATH=build/python pytest tests/python -v 2>&1 | tee -a "$LOG_FILE"
+fi
+
 # Create symlink to latest
 ln -sf "tests_${TIMESTAMP}.log" logs/tests.log

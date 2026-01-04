@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: icarus
+Description: Icarus 6DOF Simulation Framework C API
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -licarus_c
+Cflags: -I${includedir}

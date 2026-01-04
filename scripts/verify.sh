@@ -13,12 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 MODE="all"
+BUILD_INTERFACES=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --debug) MODE="debug" ;;
         --release) MODE="release" ;;
         --all) MODE="all" ;;
+        --interfaces) BUILD_INTERFACES="--interfaces" ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -28,13 +30,13 @@ mkdir -p "$PROJECT_ROOT/logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$PROJECT_ROOT/logs/verify_${TIMESTAMP}.log"
 
-echo "Starting verification (Mode: $MODE)..." | tee "$LOG_FILE"
+echo "Starting verification (Mode: $MODE, interfaces: ${BUILD_INTERFACES:-OFF})..." | tee "$LOG_FILE"
 
 cd "$PROJECT_ROOT"
 (
     if [[ "$MODE" == "debug" || "$MODE" == "all" ]]; then
         echo '=== Debug Build ==='
-        ./scripts/build.sh --clean --debug
+        ./scripts/build.sh --clean --debug $BUILD_INTERFACES
         echo '=== Debug Tests ==='
         ./scripts/test.sh --debug
         echo '=== Debug Examples ==='
@@ -47,7 +49,7 @@ cd "$PROJECT_ROOT"
 
     if [[ "$MODE" == "release" || "$MODE" == "all" ]]; then
         echo '=== Release Build ==='
-        ./scripts/build.sh --clean --release
+        ./scripts/build.sh --clean --release $BUILD_INTERFACES
         echo '=== Release Tests ==='
         ./scripts/test.sh --release
         echo '=== Release Examples ==='

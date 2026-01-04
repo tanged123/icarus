@@ -13,6 +13,16 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Parse arguments
+BUILD_INTERFACES=""
+for arg in "$@"; do
+    case $arg in
+        --interfaces)
+            BUILD_INTERFACES="--interfaces"
+            ;;
+    esac
+done
+
 # Ensure logs directory exists
 mkdir -p "$PROJECT_ROOT/logs"
 
@@ -21,9 +31,9 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="$PROJECT_ROOT/logs/ci_${TIMESTAMP}.log"
 
 # Run build and test scripts (CI uses Release by default for performance)
-echo "Running CI (Release build)..."
+echo "Running CI (Release build, interfaces: ${BUILD_INTERFACES:-OFF})..."
 cd "$PROJECT_ROOT"
-(./scripts/build.sh --clean --release && ./scripts/test.sh --release) 2>&1 | tee "$LOG_FILE"
+(./scripts/build.sh --clean --release $BUILD_INTERFACES && ./scripts/test.sh --release) 2>&1 | tee "$LOG_FILE"
 
 # Create symlink to latest
 ln -sf "ci_${TIMESTAMP}.log" "$PROJECT_ROOT/logs/ci.log"

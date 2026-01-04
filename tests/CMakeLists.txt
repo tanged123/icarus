@@ -164,3 +164,18 @@ icarus_add_test(test_tumbling_body
 )
 target_include_directories(test_tumbling_body PRIVATE ${PROJECT_SOURCE_DIR}/components)
 target_link_libraries(test_tumbling_body PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>)
+
+# Phase 7.1: C API tests (only when BUILD_INTERFACES is ON)
+if(BUILD_INTERFACES)
+    add_executable(test_c_api interfaces/test_c_api.cpp)
+    target_link_libraries(test_c_api PRIVATE
+        icarus_c
+        icarus
+        GTest::gtest_main
+    )
+    target_include_directories(test_c_api PRIVATE
+        ${PROJECT_SOURCE_DIR}/interfaces/c_api
+        ${PROJECT_SOURCE_DIR}/components
+    )
+    gtest_discover_tests(test_c_api)
+endif()

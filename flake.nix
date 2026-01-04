@@ -45,6 +45,13 @@
         janusPackage = janus.packages.${system}.default;
         vulcanPackage = vulcan.packages.${system}.default;
 
+        # Python environment with all required packages
+        pythonEnv = pkgs.python3.withPackages (ps: [
+          ps.pybind11
+          ps.numpy
+          ps.pytest
+        ]);
+
         # Treefmt configuration
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
@@ -104,9 +111,10 @@
               graphviz
               lcov
               llvmPackages_latest.llvm
-              # Python bindings dependencies (optional)
-              python3
-              python3Packages.pybind11
+            ]
+            ++ [
+              # Python environment with all required packages
+              pythonEnv
             ]
             ++ [
               janusPackage
@@ -116,7 +124,7 @@
             ];
 
           shellHook = ''
-            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${janusPackage}:${vulcanPackage}
+            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${pythonEnv}/${pkgs.python3.sitePackages}/pybind11:${janusPackage}:${vulcanPackage}
           '';
         };
 
