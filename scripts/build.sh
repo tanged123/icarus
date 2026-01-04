@@ -12,7 +12,7 @@ fi
 # Handle arguments
 CLEAN=false
 BUILD_TYPE="${BUILD_TYPE:-Debug}"  # Default to Debug for local development
-BUILD_INTERFACES="${BUILD_INTERFACES:-OFF}"  # C API bindings
+BUILD_C_API="${BUILD_C_API:-OFF}"  # C API bindings
 BUILD_PYTHON="${BUILD_PYTHON:-OFF}"  # Python bindings (requires pybind11)
 
 # Default jobs: half of available cores, minimum 2
@@ -23,6 +23,44 @@ JOBS="${JOBS:-$DEFAULT_JOBS}"
 
 # Argument parsing state
 NEXT_IS_JOBS=false
+
+show_help() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Build the Icarus project.
+
+Build Type Options:
+  --debug           Build with debug symbols (default)
+  --release         Build with optimizations
+  --relwithdebinfo  Build with optimizations and debug info
+  --clean           Clean build directory before building
+
+Interface Options:
+  --c-api           Build C API interface
+  --python          Build Python bindings (requires pybind11)
+  --all-interfaces  Build all interfaces (C API + Python)
+  --interfaces      Alias for --c-api (deprecated)
+
+Other Options:
+  -j, --jobs N      Number of parallel build jobs (default: half of cores)
+  -h, --help        Show this help message
+
+Environment Variables:
+  BUILD_TYPE        Override build type
+  BUILD_C_API       Set to ON to enable C API
+  BUILD_PYTHON      Set to ON to enable Python bindings
+  JOBS              Override parallel job count
+
+Examples:
+  ./scripts/build.sh                    # Debug build, no interfaces
+  ./scripts/build.sh --release          # Release build
+  ./scripts/build.sh --python           # Debug build with Python bindings
+  ./scripts/build.sh --all-interfaces   # Build all interfaces
+  ./scripts/build.sh --release --c-api  # Release build with C API
+EOF
+    exit 0
+}
 
 for arg in "$@"; do
     # If previous arg was -j/--jobs, this arg should be the job count
@@ -38,6 +76,9 @@ for arg in "$@"; do
     fi
 
     case $arg in
+        -h|--help)
+            show_help
+            ;;
         --clean)
             CLEAN=true
             ;;
@@ -50,10 +91,14 @@ for arg in "$@"; do
         --relwithdebinfo)
             BUILD_TYPE="RelWithDebInfo"
             ;;
-        --interfaces)
-            BUILD_INTERFACES="ON"
+        --c-api|--interfaces)
+            BUILD_C_API="ON"
             ;;
         --python)
+            BUILD_PYTHON="ON"
+            ;;
+        --all-interfaces)
+            BUILD_C_API="ON"
             BUILD_PYTHON="ON"
             ;;
         --jobs=*|-j=*)
@@ -88,7 +133,13 @@ if [ "$CLEAN" = true ]; then
     "$SCRIPT_DIR/clean.sh"
 fi
 
-echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS, interfaces: $BUILD_INTERFACES, python: $BUILD_PYTHON)"
+# Build interface summary
+INTERFACE_SUMMARY=""
+[ "$BUILD_C_API" = "ON" ] && INTERFACE_SUMMARY="${INTERFACE_SUMMARY}c-api "
+[ "$BUILD_PYTHON" = "ON" ] && INTERFACE_SUMMARY="${INTERFACE_SUMMARY}python "
+[ -z "$INTERFACE_SUMMARY" ] && INTERFACE_SUMMARY="none"
+
+echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS, interfaces: $INTERFACE_SUMMARY)"
 
 # Show ccache stats before build
 if command -v ccache &> /dev/null; then
@@ -100,7 +151,7 @@ fi
 # Create build directory if it doesn't exist or reconfigure
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DBUILD_INTERFACES="$BUILD_INTERFACES" \
+    -DBUILD_INTERFACES="$BUILD_C_API" \
     -DBUILD_PYTHON="$BUILD_PYTHON"
 
 # Build the project with limited parallelism to prevent OOM
