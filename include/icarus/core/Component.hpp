@@ -13,6 +13,7 @@
 #include <icarus/core/Error.hpp>
 #include <string>
 #include <vector>
+#include <vulcan/time/Epoch.hpp>
 
 namespace icarus {
 
@@ -196,18 +197,34 @@ template <typename Scalar> class Component {
      */
     [[nodiscard]] const ComponentConfig &GetConfig() const { return config_; }
 
+    /**
+     * @brief Get simulation epoch (read-only)
+     *
+     * Provides access to the simulator's authoritative time.
+     * Available after Stage(). Use for time-dependent calculations
+     * (e.g., lunar ephemeris via jd_tt()).
+     *
+     * @return Pointer to current epoch, or nullptr if not yet staged
+     */
+    [[nodiscard]] const vulcan::time::Epoch<Scalar> *GetEpoch() const { return epoch_; }
+
   protected:
     // Called by Simulator to track lifecycle state
     void MarkProvisioned() { provisioned_ = true; }
     void MarkStaged() { staged_ = true; }
     void ResetStaged() { staged_ = false; }
 
+    // Called by Backplane during Stage() to bind epoch reference
+    void BindEpoch(const vulcan::time::Epoch<Scalar> *epoch) { epoch_ = epoch; }
+
     // Allow Simulator to call Mark* methods
     template <typename S> friend class Simulator;
     friend class Simulator; // Non-templated Simulator (Phase 4.0.7)
+    template <typename S> friend class Backplane;
 
   private:
     ComponentConfig config_;
+    const vulcan::time::Epoch<Scalar> *epoch_ = nullptr;
     bool provisioned_ = false;
     bool staged_ = false;
 };

@@ -44,7 +44,9 @@
 #include <icarus/staging/StagingTypes.hpp>
 
 // I/O
+#include <icarus/io/HDF5Recorder.hpp>
 #include <icarus/io/MissionLogger.hpp>
+#include <icarus/io/RecordingReader.hpp>
 #include <icarus/io/SimulationLoader.hpp>
 #include <icarus/io/data/DataDictionary.hpp>
 #include <icarus/io/data/Playback.hpp>

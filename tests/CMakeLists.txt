@@ -18,6 +18,12 @@ icarus_add_test(test_component
 )
 target_include_directories(test_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Component epoch access tests
+icarus_add_test(test_component_epoch
+    core/test_component_epoch.cpp
+)
+target_include_directories(test_component_epoch PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # Phase 6.1: Condition parser tests
 icarus_add_test(test_condition_parser
     core/test_condition_parser.cpp
@@ -102,6 +108,11 @@ icarus_add_test(test_simulation_loader
     io/test_simulation_loader.cpp
 )
 
+# Phase 6.2: Recording tests
+icarus_add_test(test_recorder
+    io/test_recorder.cpp
+)
+
 # Phase 4.0.7: Scheduler tests
 icarus_add_test(test_scheduler
     sim/test_scheduler.cpp
@@ -133,6 +144,13 @@ icarus_add_test(test_staging
     staging/test_staging.cpp
 )
 target_include_directories(test_staging PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Phase 6.3: Warmstart tests
+icarus_add_test(test_warmstart
+    staging/test_warmstart.cpp
+)
+target_include_directories(test_warmstart PRIVATE ${PROJECT_SOURCE_DIR}/components)
+target_link_libraries(test_warmstart PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,icarus_components>)
 
 # Phase 4: Symbolic core tests (SymbolicSimulatorCore, SymbolicStager)
 icarus_add_test(test_symbolic_core

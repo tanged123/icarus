@@ -78,43 +78,19 @@ int main(int argc, char *argv[]) {
     // =========================================================================
     // Run simulation
     // =========================================================================
+    // Recording is automatic when enabled in YAML config
 
-    double demo_duration = 180.0; // 3 minutes (subset of full 90-min orbit)
-    // std::cout << "Running for " << demo_duration << " s...\n";
-    // std::cout << "─────────────────────────────────────────────────────────────\n";
-    // std::cout << std::setw(10) << "Time [s]" << std::setw(15) << "Altitude [km]" << std::setw(15)
-    //           << "Speed [km/s]" << "\n";
-    // std::cout << "─────────────────────────────────────────────────────────────\n";
-
-    const double R_earth = 6.371e6; // Earth radius [m]
-    int step = 0;
+    double demo_duration = 5400.0; // 90 minutes (full orbit)
 
     while (sim->Time() < demo_duration) {
         sim->Step(sim->Dt());
-
-        // Print every 30 seconds
-        if (++step % static_cast<int>(30.0 / sim->Dt()) == 0) {
-            auto state = sim->GetState();
-            double x = state[0], y = state[1], z = state[2];
-            double vx = state[3], vy = state[4], vz = state[5];
-
-            double r = std::sqrt(x * x + y * y + z * z);
-            double altitude = (r - R_earth) / 1000.0;                       // km
-            double speed = std::sqrt(vx * vx + vy * vy + vz * vz) / 1000.0; // km/s
-
-            // std::cout << std::fixed << std::setprecision(1);
-            // std::cout << std::setw(10) << sim->Time() << std::setw(15) << altitude <<
-            // std::setw(15)
-            //           << speed << "\n";
-        }
     }
-
-    // std::cout << "─────────────────────────────────────────────────────────────\n\n";
 
     // =========================================================================
     // Results
     // =========================================================================
 
+    constexpr double R_earth = 6.371e6; // Earth radius [m]
     auto final_state = sim->GetState();
     double x = final_state[0], y = final_state[1], z = final_state[2];
     double r_final = std::sqrt(x * x + y * y + z * z);

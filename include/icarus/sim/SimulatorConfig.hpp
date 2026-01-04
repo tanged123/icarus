@@ -33,6 +33,7 @@ namespace icarus {
 // Forward Declarations
 // =============================================================================
 
+struct EpochConfig;
 struct TrimConfig;
 struct LinearizationConfig;
 struct SymbolicsConfig;
@@ -42,17 +43,80 @@ struct OutputConfig;
 struct SimulatorConfig;
 
 // =============================================================================
+// EpochConfig
+// =============================================================================
+
+/**
+ * @brief Time epoch configuration for absolute time support
+ *
+ * Configures the simulation's reference epoch for time-varying models.
+ * When configured, Vulcan's Epoch class provides conversions between
+ * time scales (UTC, TAI, TT, GPS) and calendar representations.
+ *
+ * If not configured (empty reference), the simulation runs in MET-only mode
+ * with an arbitrary J2000.0 reference epoch.
+ */
+struct EpochConfig {
+    /// Time system: "MET" (default), "UTC", "TAI", "GPS"
+    std::string system = "MET";
+
+    /// Reference time as ISO 8601 string (for UTC system)
+    /// Example: "2024-12-22T10:30:00Z"
+    std::string reference;
+
+    /// Julian Date (for TAI/TT systems when reference is empty)
+    double jd = 0.0;
+
+    /// GPS week number (for GPS system)
+    int gps_week = 0;
+
+    /// GPS seconds of week (for GPS system)
+    double gps_seconds = 0.0;
+
+    /// GPS configured flag (set when GPS fields are explicitly provided)
+    /// Required because gps_week=0 is a valid GPS week (Jan 6, 1980)
+    bool gps_configured = false;
+
+    /// Check if epoch is configured (non-MET-only mode)
+    [[nodiscard]] bool IsConfigured() const {
+        return !reference.empty() || jd > 0.0 || gps_configured;
+    }
+
+    /// Create default MET-only config
+    [[nodiscard]] static EpochConfig Default() { return EpochConfig{}; }
+};
+
+// =============================================================================
 // TrimConfig
 // =============================================================================
 
 /**
- * @brief Trim optimization configuration
+ * @brief Trim configuration for state initialization
  *
- * Defines how the simulator finds equilibrium/trim conditions during Stage().
- * Uses symbolic mode internally (janus::NewtonSolver or janus::Opti/IPOPT).
+ * Defines how the simulator initializes state during Stage().
+ * Supports two modes:
+ *   - "equilibrium": Solve for trim conditions (zero derivatives)
+ *   - "warmstart": Restore state from a recording file
+ *
+ * Example YAML:
+ * @code
+ * staging:
+ *   trim:
+ *     enabled: true
+ *     mode: warmstart
+ *     recording_path: "flight_001.h5"
+ *     resume_time: 120.0
+ * @endcode
  */
 struct TrimConfig {
-    bool enabled = false; ///< Whether to run trim optimization
+    bool enabled = false; ///< Whether to run trim/initialization
+
+    /// Mode: "equilibrium" (solve for steady-state) or "warmstart" (load from recording)
+    std::string mode = "equilibrium";
+
+    // =========================================================================
+    // Equilibrium mode settings
+    // =========================================================================
 
     /// Trim targets: which derivatives should be zero?
     std::vector<std::string> zero_derivatives; // e.g., ["velocity_dot", "angular_rate_dot"]
@@ -60,7 +124,7 @@ struct TrimConfig {
     /// Trim controls: which signals can be adjusted?
     std::vector<std::string> control_signals; // e.g., ["throttle", "elevator"]
 
-    // Optimization settings
+    /// Optimization settings
     double tolerance = 1e-6;
     int max_iterations = 100;
     std::string method = "newton"; ///< "newton" or "ipopt"
@@ -71,21 +135,53 @@ struct TrimConfig {
     /// Control bounds (optional): key -> (min, max)
     std::unordered_map<std::string, std::pair<double, double>> control_bounds;
 
+    // =========================================================================
+    // Warmstart mode settings
+    // =========================================================================
+
+    /// Path to recording file (for warmstart mode)
+    std::string recording_path;
+
+    /// MET to resume from (for warmstart mode)
+    double resume_time = 0.0;
+
+    /// Validate recording schema before loading (for warmstart mode)
+    bool validate_schema = true;
+
+    // =========================================================================
+    // Methods
+    // =========================================================================
+
     /// Create default disabled config
     [[nodiscard]] static TrimConfig Default() { return TrimConfig{}; }
+
+    /// Check if this is warmstart mode
+    [[nodiscard]] bool IsWarmstart() const { return mode == "warmstart"; }
+
+    /// Check if this is equilibrium mode
+    [[nodiscard]] bool IsEquilibrium() const { return mode == "equilibrium"; }
 
     /// Validate configuration
     [[nodiscard]] std::vector<std::string> Validate() const {
         std::vector<std::string> errors;
         if (enabled) {
-            if (zero_derivatives.empty()) {
-                errors.push_back("Trim enabled but no zero_derivatives specified");
-            }
-            if (control_signals.empty()) {
-                errors.push_back("Trim enabled but no control_signals specified");
-            }
-            if (method != "newton" && method != "ipopt") {
-                errors.push_back("Unknown trim method: " + method);
+            if (mode == "equilibrium") {
+                if (zero_derivatives.empty()) {
+                    errors.push_back("Trim enabled but no zero_derivatives specified");
+                }
+                if (control_signals.empty()) {
+                    errors.push_back("Trim enabled but no control_signals specified");
+                }
+                if (method != "newton" && method != "ipopt") {
+                    errors.push_back("Unknown trim method: " + method);
+                }
+            } else if (mode == "warmstart") {
+                if (recording_path.empty()) {
+                    errors.push_back("Warmstart enabled but no recording_path specified");
+                }
+            } else {
+                errors.push_back("Unknown trim mode: " + mode +
+                                 " (expected 'equilibrium' or 'warmstart')");
             }
         }
         return errors;
@@ -376,6 +472,90 @@ struct OutputConfig {
 };
 
 // =============================================================================
+// RecordingConfig
+// =============================================================================
+
+/**
+ * @brief HDF5 recording configuration
+ *
+ * Controls automatic signal recording to HDF5 files.
+ * Supports flexible signal selection via mode and pattern matching.
+ *
+ * Modes:
+ * - "off"     : No recording (default)
+ * - "all"     : Record all signals (outputs, inputs, params, config)
+ * - "outputs" : Record only output signals
+ * - "signals" : Record signals matching include patterns
+ *
+ * Example YAML:
+ * @code
+ * recording:
+ *   enabled: true
+ *   path: "output/recording.h5"
+ *   mode: signals
+ *   include:
+ *     - "Satellite.position.*"
+ *     - "Satellite.velocity.*"
+ *   exclude:
+ *     - "*_dot*"
+ * @endcode
+ */
+struct RecordingConfig {
+    /// Enable recording
+    bool enabled = false;
+
+    /// Output file path
+    std::string path = "output/recording.h5";
+
+    /// Recording mode: "off", "all", "outputs", "signals"
+    std::string mode = "outputs";
+
+    /// Include patterns (regex) - used when mode = "signals"
+    std::vector<std::string> include;
+
+    /// Exclude patterns (regex) - applied after include
+    std::vector<std::string> exclude;
+
+    /// Include derivative signals (*_dot*)
+    bool include_derivatives = false;
+
+    /// Include input signals (only meaningful with mode = "all")
+    bool include_inputs = false;
+
+    /// Flush interval (frames between disk flushes, 0 = auto)
+    int flush_interval = 0;
+
+    /// Decimation factor: record every N frames (1 = every frame, 10 = every 10th frame)
+    int decimation = 1;
+
+    /// Export CSV copy on close (for PlotJuggler, Excel, etc.)
+    bool export_csv = false;
+
+    /// Create default config (recording disabled)
+    [[nodiscard]] static RecordingConfig Default() { return RecordingConfig{}; }
+
+    /// Check if recording is active
+    [[nodiscard]] bool IsActive() const { return enabled && mode != "off"; }
+
+    /// Validate recording configuration
+    [[nodiscard]] std::vector<std::string> Validate() const {
+        std::vector<std::string> errors;
+        if (enabled) {
+            if (decimation < 1) {
+                errors.push_back("Recording decimation must be >= 1");
+            }
+            if (mode != "off" && mode != "all" && mode != "outputs" && mode != "signals") {
+                errors.push_back("Unknown recording mode: " + mode);
+            }
+            if (mode == "signals" && include.empty()) {
+                errors.push_back("Recording mode 'signals' requires include patterns");
+            }
+        }
+        return errors;
+    }
+};
+
+// =============================================================================
 // EntityTemplate
 // =============================================================================
 
@@ -506,9 +686,9 @@ struct SimulatorConfig {
     double t_end = 100.0;
     double dt = 0.01; ///< Note: may be auto-derived from scheduler
 
-    /// Reference epoch for time-varying models (atmosphere, gravity, etc.)
-    /// Components that need absolute time can read this.
-    double reference_epoch_jd = 2451545.0; ///< J2000.0 default
+    /// Epoch configuration for absolute time support
+    /// When configured, enables time scale conversions (UTC, TAI, GPS, etc.)
+    EpochConfig epoch;
 
     // =========================================================================
     // Components (flattened from entity expansion)
@@ -544,6 +724,11 @@ struct SimulatorConfig {
     // Logging
     // =========================================================================
     LogConfig logging;
+
+    // =========================================================================
+    // Recording (HDF5 telemetry)
+    // =========================================================================
+    RecordingConfig recording;
 
     // =========================================================================
     // Output

@@ -82,8 +82,22 @@ fi
 
 echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS)"
 
+# Show ccache stats before build
+if command -v ccache &> /dev/null; then
+    echo ""
+    echo "=== ccache stats (before build) ==="
+    ccache -s | grep -E "(Hits|Misses|Hit rate|Cache size)" || ccache -s | head -10
+fi
+
 # Create build directory if it doesn't exist or reconfigure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
 # Build the project with limited parallelism to prevent OOM
 ninja -C build -j "$JOBS"
+
+# Show ccache stats after build
+if command -v ccache &> /dev/null; then
+    echo ""
+    echo "=== ccache stats (after build) ==="
+    ccache -s | grep -E "(Hits|Misses|Hit rate|Cache size)" || ccache -s | head -10
+fi

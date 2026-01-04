@@ -62,8 +62,8 @@ if [ -f "$FLAKE_FILE" ]; then
     echo "Updated $FLAKE_FILE"
 fi
 
-# 5. Update Types.hpp version macros (if exists)
-TYPES_FILE="include/icarus/core/Types.hpp"
+# 5. Update CoreTypes.hpp version macros (if exists)
+TYPES_FILE="include/icarus/core/CoreTypes.hpp"
 if [ -f "$TYPES_FILE" ]; then
     $SED "s/#define ICARUS_VERSION_MAJOR [0-9]*/#define ICARUS_VERSION_MAJOR $MAJOR/" "$TYPES_FILE"
     $SED "s/#define ICARUS_VERSION_MINOR [0-9]*/#define ICARUS_VERSION_MINOR $MINOR/" "$TYPES_FILE"

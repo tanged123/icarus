@@ -15,6 +15,7 @@
 #include <icarus/signal/VecHandle.hpp>
 #include <string>
 #include <vector>
+#include <vulcan/time/Epoch.hpp>
 
 namespace icarus {
 
@@ -45,6 +46,23 @@ template <typename Scalar> class Backplane {
         entity_ = entity;
         component_ = component;
         registry_.set_current_component(full_prefix());
+    }
+
+    /**
+     * @brief Set epoch reference for component binding
+     *
+     * Called by Simulator before Stage() to make epoch available to components.
+     */
+    void set_epoch(const vulcan::time::Epoch<Scalar> *epoch) { epoch_ = epoch; }
+
+    /**
+     * @brief Bind epoch reference to a component
+     *
+     * Called during Stage() to give the component read-only access to epoch.
+     * Component can then use GetEpoch()->jd_tt() etc. for time-dependent calcs.
+     */
+    template <typename ComponentType> void bind_epoch_to(ComponentType &comp) {
+        comp.BindEpoch(epoch_);
     }
 
     /**
@@ -490,6 +508,7 @@ template <typename Scalar> class Backplane {
     std::vector<std::string> resolved_inputs_;
     std::vector<std::string> registered_params_; // Phase 2.4
     std::vector<std::string> registered_config_; // Phase 2.4
+    const vulcan::time::Epoch<Scalar> *epoch_ = nullptr;
 };
 
 } // namespace icarus

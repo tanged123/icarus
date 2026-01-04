@@ -32,6 +32,7 @@
 #include <icarus/staging/StagingTypes.hpp>
 #include <memory>
 #include <optional>
+#include <regex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -40,6 +41,12 @@
 // Janus includes for symbolic graph generation
 #include <janus/core/Function.hpp>
 #include <janus/core/JanusTypes.hpp>
+
+// Vulcan time infrastructure
+#include <vulcan/time/Epoch.hpp>
+
+// Recording
+#include <icarus/io/HDF5Recorder.hpp>
 
 // Forward declarations for staging
 namespace icarus::staging {
@@ -131,8 +138,32 @@ class Simulator {
     /// Get configured end time
     [[nodiscard]] double EndTime() const { return config_.t_end; }
 
-    /// Get current simulation time
-    [[nodiscard]] double Time() const { return time_; }
+    /// Get current simulation time (MET - derived from epoch)
+    [[nodiscard]] double Time() const { return epoch_ - epoch_start_; }
+
+    /// Get current epoch (single source of truth for time)
+    [[nodiscard]] const vulcan::time::NumericEpoch &Epoch() const { return epoch_; }
+
+    /// Get Julian Date in UTC scale
+    [[nodiscard]] double JD_UTC() const { return epoch_.jd_utc(); }
+
+    /// Get Julian Date in TAI scale
+    [[nodiscard]] double JD_TAI() const { return epoch_.jd_tai(); }
+
+    /// Get Julian Date in TT scale
+    [[nodiscard]] double JD_TT() const { return epoch_.jd_tt(); }
+
+    /// Get Julian Date in GPS scale
+    [[nodiscard]] double JD_GPS() const { return epoch_.jd_gps(); }
+
+    /// Get GPS week number
+    [[nodiscard]] int GPSWeek() const { return epoch_.gps_week(); }
+
+    /// Get GPS seconds of week
+    [[nodiscard]] double GPSSecondsOfWeek() const { return epoch_.gps_seconds_of_week(); }
+
+    /// Get current time as ISO 8601 string
+    [[nodiscard]] std::string ISO8601() const { return epoch_.to_iso_string(); }
 
     /// Get current simulation lifecycle state
     [[nodiscard]] Lifecycle GetLifecycle() const { return lifecycle_; }
@@ -160,6 +191,9 @@ class Simulator {
     /// Get data dictionary for the simulation
     [[nodiscard]] DataDictionary GetDataDictionary() const;
 
+    /// Get signal registry (for recording, introspection)
+    [[nodiscard]] const SignalRegistry<double> &Registry() const { return registry_; }
+
     // =========================================================================
     // CONTROL INTERFACE (Runtime modification)
     // =========================================================================
@@ -183,6 +217,16 @@ class Simulator {
      * Re-applies ICs, resets time to 0.
      */
     void Reset();
+
+    /**
+     * @brief Set simulation time (MET)
+     *
+     * Used by warmstart to restore time from recording.
+     * Sets epoch_ = epoch_start_ + met.
+     *
+     * @param met Mission Elapsed Time to set
+     */
+    void SetTime(double met);
 
     /// Input source callback: (signal_name) -> value
     using InputSourceCallback = std::function<double(const std::string &)>;
@@ -300,6 +344,9 @@ class Simulator {
     /// Invoke output observer callbacks after Step
     void InvokeOutputObservers();
 
+    /// Initialize epoch from configuration
+    void InitializeEpoch();
+
     // =========================================================================
     // PRIVATE DATA
     // =========================================================================
@@ -324,13 +371,17 @@ class Simulator {
     MissionLogger logger_;
 
     // Time and lifecycle
-    double time_ = 0.0;
+    vulcan::time::NumericEpoch epoch_;       ///< Current epoch (THE time - single source of truth)
+    vulcan::time::NumericEpoch epoch_start_; ///< Reference epoch at t=0 (for MET derivation)
     Lifecycle lifecycle_ = Lifecycle::Uninitialized;
     int frame_count_ = 0;
 
     // Symbolic results (optional, after Stage)
     std::optional<janus::Function> dynamics_graph_;
     std::optional<janus::Function> jacobian_;
+
+    // Recording (optional, when enabled in config)
+    std::unique_ptr<HDF5Recorder> recorder_;
 
     // Staging results (optional, after Stage)
     std::optional<staging::TrimResult> trim_result_;
@@ -392,11 +443,20 @@ class Simulator {
 namespace icarus {
 
 inline Simulator::~Simulator() {
+    // Close recorder and log summary
+    if (recorder_) {
+        size_t frames = recorder_->FrameCount();
+        recorder_->Close();
+        logger_.Log(LogLevel::Info, "[REC] Recording complete: " + std::to_string(frames) +
+                                        " frames written to " + config_.recording.path);
+        recorder_.reset();
+    }
+
     // If we ever ran, log the debrief on destruction (RAII)
     if (lifecycle_ == Lifecycle::Running) {
         logger_.BeginLifecycle(LifecycleStrings::Shutdown);
         auto wall_time = std::chrono::duration<double>(logger_.WallElapsed()).count();
-        logger_.LogDebrief(time_, wall_time);
+        logger_.LogDebrief(Time(), wall_time);
     }
 }
 
@@ -464,6 +524,106 @@ inline std::unique_ptr<Simulator> Simulator::FromConfig(const SimulatorConfig &c
     return sim;
 }
 
+inline void Simulator::InitializeEpoch() {
+    // Parse epoch configuration - always initialize epoch (single source of truth)
+    if (config_.epoch.system == "UTC" && !config_.epoch.reference.empty()) {
+        // Robust ISO 8601 parser with timezone offset and fractional seconds support
+        // Format: YYYY-MM-DDTHH:MM:SS[.fractional][Z|+HH:MM|-HH:MM|+HHMM|-HHMM]
+        static const std::regex iso8601_regex(
+            R"(^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|([+-])(\d{2}):?(\d{2}))?$)");
+        // Groups: 1=year, 2=month, 3=day, 4=hour, 5=minute, 6=whole_seconds
+        //         7=fractional_seconds (optional, includes leading '.')
+        //         8=timezone block (optional)
+        //         9=tz_sign (+ or -), 10=tz_hours, 11=tz_minutes
+
+        std::smatch match;
+        if (!std::regex_match(config_.epoch.reference, match, iso8601_regex)) {
+            throw ConfigError("Invalid epoch reference format: " + config_.epoch.reference +
+                              " (expected ISO 8601: YYYY-MM-DDTHH:MM:SS[.sss][Z|±HH:MM])");
+        }
+
+        // Extract date/time components
+        int year = std::stoi(match[1].str());
+        int month = std::stoi(match[2].str());
+        int day = std::stoi(match[3].str());
+        int hour = std::stoi(match[4].str());
+        int min = std::stoi(match[5].str());
+        double sec = std::stod(match[6].str());
+
+        // Add fractional seconds if present
+        if (match[7].matched) {
+            sec += std::stod(match[7].str());
+        }
+
+        // Parse timezone offset and convert to UTC
+        if (match[8].matched && match[8].str() != "Z") {
+            // Has explicit offset (not Z)
+            int tz_sign = (match[9].str() == "-") ? -1 : 1;
+            int tz_hours = std::stoi(match[10].str());
+            int tz_minutes = std::stoi(match[11].str());
+            int offset_minutes = tz_sign * (tz_hours * 60 + tz_minutes);
+
+            // Convert local time to UTC by subtracting the offset
+            // (positive offset = ahead of UTC, so subtract to get UTC)
+            int total_minutes = hour * 60 + min - offset_minutes;
+
+            // Handle day rollover
+            while (total_minutes < 0) {
+                total_minutes += 24 * 60;
+                day -= 1;
+            }
+            while (total_minutes >= 24 * 60) {
+                total_minutes -= 24 * 60;
+                day += 1;
+            }
+
+            hour = total_minutes / 60;
+            min = total_minutes % 60;
+
+            // Handle month/year rollover (simplified - use days in month)
+            auto days_in_month = [](int y, int m) -> int {
+                static constexpr int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+                if (m == 2) {
+                    bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+                    return leap ? 29 : 28;
+                }
+                return days[m - 1];
+            };
+
+            while (day < 1) {
+                month -= 1;
+                if (month < 1) {
+                    month = 12;
+                    year -= 1;
+                }
+                day += days_in_month(year, month);
+            }
+            while (day > days_in_month(year, month)) {
+                day -= days_in_month(year, month);
+                month += 1;
+                if (month > 12) {
+                    month = 1;
+                    year += 1;
+                }
+            }
+        }
+        // else: Z suffix or no suffix means UTC - no conversion needed
+
+        epoch_start_ = vulcan::time::NumericEpoch::from_utc(year, month, day, hour, min, sec);
+    } else if (config_.epoch.system == "TAI" && config_.epoch.jd > 0.0) {
+        epoch_start_ = vulcan::time::NumericEpoch::from_jd_tai(config_.epoch.jd);
+    } else if (config_.epoch.system == "GPS" && config_.epoch.gps_configured) {
+        epoch_start_ = vulcan::time::NumericEpoch::from_gps_week(config_.epoch.gps_week,
+                                                                 config_.epoch.gps_seconds);
+    } else {
+        // MET-only mode or default: use J2000.0 as arbitrary reference
+        epoch_start_ = vulcan::time::NumericEpoch();
+    }
+
+    // Current epoch starts at epoch_start_ (MET = 0)
+    epoch_ = epoch_start_;
+}
+
 inline void Simulator::Configure(const SimulatorConfig &config) {
     config_ = config;
 
@@ -492,6 +652,9 @@ inline void Simulator::Configure(const SimulatorConfig &config) {
     if (!config_.phases.definitions.empty()) {
         phase_manager_.Configure(config_.phases);
     }
+
+    // Initialize epoch from configuration
+    InitializeEpoch();
 }
 
 inline void Simulator::AddComponent(std::unique_ptr<Component<double>> component) {
@@ -623,10 +786,16 @@ inline void Simulator::Stage() {
     // Log scheduler execution order (Debug level)
     scheduler_.LogExecutionOrder(&logger_);
 
+    // Set epoch reference on backplane for component binding
+    backplane_.set_epoch(&epoch_);
+
     // Stage each component (config loading, input wiring)
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
         backplane_.clear_tracking();
+
+        // Bind epoch to component for time-dependent calculations
+        backplane_.bind_epoch_to(*comp);
 
         try {
             comp->Stage(backplane_);
@@ -735,8 +904,21 @@ inline void Simulator::Stage() {
 
     logger_.EndLifecycle();
 
+    // Initialize recording if enabled
+    if (config_.recording.IsActive()) {
+        recorder_ = std::make_unique<HDF5Recorder>(registry_, config_.recording);
+        recorder_->Open("");
+        logger_.Log(LogLevel::Info, "[REC] Recording " +
+                                        std::to_string(recorder_->RecordedSignals().size()) +
+                                        " signals to " + config_.recording.path);
+    }
+
     lifecycle_ = Lifecycle::Staged;
-    time_ = 0.0;
+
+    // Reset to t=0 unless warmstart mode restored time from recording
+    if (!config_.staging.trim.IsWarmstart()) {
+        epoch_ = epoch_start_;
+    }
 }
 
 inline void Simulator::Stage(const StageConfig &config) {
@@ -753,7 +935,7 @@ inline void Simulator::Step(double dt) {
     if (lifecycle_ == Lifecycle::Staged) {
         lifecycle_ = Lifecycle::Running;
         logger_.BeginLifecycle(LifecycleStrings::Run);
-        logger_.LogRunStart(time_, config_.t_end, config_.dt);
+        logger_.LogRunStart(Time(), config_.t_end, config_.dt);
     }
 
     // Invoke input sources
@@ -762,21 +944,24 @@ inline void Simulator::Step(double dt) {
     // Build frame context (scheduler filtering)
     auto ctx = BuildFrameContext();
 
+    // Cache current time for this step
+    double t = Time();
+
     // If no state, just call components directly
     if (state_manager_.TotalSize() == 0) {
         for (auto &comp : components_) {
             if (ctx.ShouldRun(comp->FullName())) {
-                ExecComponent(*comp, &Component<double>::PreStep, time_, dt);
+                ExecComponent(*comp, &Component<double>::PreStep, t, dt);
             }
         }
         for (auto &comp : components_) {
             if (ctx.ShouldRun(comp->FullName())) {
-                ExecComponent(*comp, &Component<double>::Step, time_, dt);
+                ExecComponent(*comp, &Component<double>::Step, t, dt);
             }
         }
         for (auto &comp : components_) {
             if (ctx.ShouldRun(comp->FullName())) {
-                ExecComponent(*comp, &Component<double>::PostStep, time_, dt);
+                ExecComponent(*comp, &Component<double>::PostStep, t, dt);
             }
         }
     } else {
@@ -800,15 +985,15 @@ inline void Simulator::Step(double dt) {
         // Integrate
         try {
             JanusVector<double> X = state_manager_.GetState();
-            JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, time_, dt);
+            JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, t, dt);
             state_manager_.SetState(X_new);
         } catch (const Error &e) {
-            LogError(e, time_, "Integrator");
+            LogError(e, t, "Integrator");
             throw;
         }
     }
 
-    time_ += dt;
+    epoch_ += dt; // Single source of truth - MET is derived via Time()
     frame_count_++;
 
     // Evaluate phase transitions
@@ -818,16 +1003,21 @@ inline void Simulator::Step(double dt) {
                     "[PHASE] Transition: " +
                         phase_manager_.GetConfig().GetPhaseName(phase_manager_.PreviousPhase()) +
                         " → " + phase_manager_.CurrentPhaseName() +
-                        " at t=" + std::to_string(time_) + "s");
+                        " at t=" + std::to_string(Time()) + "s");
     }
 
     // Periodic progress logging (e.g., every 100 frames)
     if (logger_.IsProgressEnabled() && (frame_count_ % 100 == 0)) {
-        logger_.LogRunProgress(time_, config_.t_end);
+        logger_.LogRunProgress(Time(), config_.t_end);
     }
 
     // Invoke output observers
     InvokeOutputObservers();
+
+    // Record frame if enabled
+    if (recorder_) {
+        recorder_->Record(Time());
+    }
 }
 
 inline void Simulator::Step() { Step(config_.dt); }
@@ -837,7 +1027,7 @@ inline void Simulator::Reset() {
         throw LifecycleError(LifecyclePhase::Reset, "requires prior Stage()");
     }
 
-    time_ = 0.0;
+    epoch_ = epoch_start_; // Reset to t=0 (MET derived via Time())
     frame_count_ = 0;
 
     // Zero state
@@ -861,6 +1051,12 @@ inline void Simulator::Reset() {
     }
 
     lifecycle_ = Lifecycle::Staged;
+}
+
+inline void Simulator::SetTime(double met) {
+    epoch_ = epoch_start_ + met;
+    // Estimate frame count from MET and dt
+    frame_count_ = static_cast<int>(met / config_.dt);
 }
 
 inline void Simulator::SetInputSource(const std::string &signal_name,
@@ -919,7 +1115,7 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     if (lifecycle_ == Lifecycle::Staged) {
         lifecycle_ = Lifecycle::Running;
         logger_.BeginLifecycle(LifecycleStrings::Run);
-        logger_.LogRunStart(time_, config_.t_end, config_.dt);
+        logger_.LogRunStart(Time(), config_.t_end, config_.dt);
     }
 
     // Invoke input sources
@@ -927,6 +1123,9 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
 
     // Build frame context (scheduler filtering)
     auto ctx = BuildFrameContext();
+
+    // Cache current time
+    double t = Time();
 
     // Derivative function with scheduler filtering
     auto deriv_func = [this, &ctx,
@@ -948,15 +1147,15 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     JanusVector<double> X = state_manager_.GetState();
     AdaptiveStepResult<double> result;
     try {
-        result = integration_manager_.AdaptiveStep(deriv_func, X, time_, dt_request);
+        result = integration_manager_.AdaptiveStep(deriv_func, X, t, dt_request);
     } catch (const Error &e) {
-        LogError(e, time_, "Integrator");
+        LogError(e, t, "Integrator");
         throw;
     }
 
     if (result.accepted) {
         state_manager_.SetState(result.state);
-        time_ += result.dt_actual;
+        epoch_ += result.dt_actual; // Single source of truth
         frame_count_++;
 
         // Invoke output observers

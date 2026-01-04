@@ -31,6 +31,26 @@ time:
   start: 0.0
   end: 5400.0          # 90 minutes (one orbit period for LEO)
   dt: 0.1              # 10 Hz timestep (better accuracy)
+  epoch:
+    system: UTC
+    reference: "2024-12-22T12:00:00Z"  # Simulation start epoch
+
+# =============================================================================
+# Recording Configuration (HDF5 telemetry)
+# =============================================================================
+
+recording:
+  enabled: true
+  path: "output/orbital_recording.h5"
+  mode: outputs                # "all", "outputs", or "signals"
+  include_derivatives: false   # Exclude *_dot signals
+  export_csv: true             # Export CSV copy for PlotJuggler
+  decimation: 10               # Record every 10th frame
+  # include:                   # Only used when mode = "signals"
+  #   - "Satellite\\.position\\..*"
+  #   - "Satellite\\.velocity\\..*"
+  # exclude:
+  #   - ".*internal.*"
 
 # =============================================================================
 # Integrator Configuration

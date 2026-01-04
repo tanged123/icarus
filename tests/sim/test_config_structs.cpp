@@ -181,7 +181,7 @@ TEST(SimulatorConfigTest, DefaultValues) {
     EXPECT_DOUBLE_EQ(cfg.t_start, 0.0);
     EXPECT_DOUBLE_EQ(cfg.t_end, 100.0);
     EXPECT_DOUBLE_EQ(cfg.dt, 0.01);
-    EXPECT_DOUBLE_EQ(cfg.reference_epoch_jd, 2451545.0); // J2000.0
+    EXPECT_EQ(cfg.epoch.system, "MET"); // Default is MET-only mode
 }
 
 TEST(SimulatorConfigTest, ValidateReturnsEmptyForDefault) {

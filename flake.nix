@@ -1,6 +1,13 @@
 {
   description = "Icarus: 6DOF Simulation Engine";
 
+  nixConfig = {
+    extra-substituters = [ "https://tanged123.cachix.org" ];
+    extra-trusted-public-keys = [
+      "tanged123.cachix.org-1:S79iH77XKs7/Ap+z9oaafrhmrw6lQ21QDzxyNqg1UVI="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
@@ -49,7 +56,7 @@
       {
         packages.default = stdenv.mkDerivation {
           pname = "icarus";
-          version = "0.4.0";
+          version = "0.5.1";
           src = ./.;
 
           nativeBuildInputs = [
@@ -105,6 +112,7 @@
               janusPackage
               vulcanPackage
               treefmtEval.config.build.wrapper
+              cachix
             ];
 
           shellHook = ''

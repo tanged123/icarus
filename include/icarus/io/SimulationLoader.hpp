@@ -183,6 +183,11 @@ class SimulationLoader {
             ParseLogging(cfg.logging, root["logging"]);
         }
 
+        // Parse recording
+        if (root.Has("recording")) {
+            ParseRecording(cfg.recording, root["recording"]);
+        }
+
         // Parse staging
         if (root.Has("staging")) {
             ParseStaging(cfg.staging, root["staging"]);
@@ -215,7 +220,20 @@ class SimulationLoader {
         cfg.t_start = node.Get<double>("start", cfg.t_start);
         cfg.t_end = node.Get<double>("end", cfg.t_end);
         cfg.dt = node.Get<double>("dt", cfg.dt);
-        cfg.reference_epoch_jd = node.Get<double>("reference_epoch_jd", cfg.reference_epoch_jd);
+
+        // Parse epoch configuration if present
+        if (node.Has("epoch")) {
+            auto epoch_node = node["epoch"];
+            cfg.epoch.system = epoch_node.Get<std::string>("system", cfg.epoch.system);
+            cfg.epoch.reference = epoch_node.Get<std::string>("reference", cfg.epoch.reference);
+            cfg.epoch.jd = epoch_node.Get<double>("jd", cfg.epoch.jd);
+            cfg.epoch.gps_week = epoch_node.Get<int>("week", cfg.epoch.gps_week);
+            cfg.epoch.gps_seconds = epoch_node.Get<double>("seconds", cfg.epoch.gps_seconds);
+            // Mark GPS as configured if week was explicitly provided
+            if (epoch_node.Has("week")) {
+                cfg.epoch.gps_configured = true;
+            }
+        }
     }
 
     static void ParseComponentList(std::vector<ComponentConfig> &components,
@@ -389,21 +407,54 @@ class SimulationLoader {
         }
     }
 
+    static void ParseRecording(RecordingConfig &recording, const vulcan::io::YamlNode &node) {
+        recording.enabled = node.Get<bool>("enabled", recording.enabled);
+        recording.path = node.Get<std::string>("path", recording.path);
+        recording.mode = node.Get<std::string>("mode", recording.mode);
+
+        // Include patterns
+        if (node.Has("include")) {
+            recording.include = node["include"].ToVector<std::string>();
+        }
+
+        // Exclude patterns
+        if (node.Has("exclude")) {
+            recording.exclude = node["exclude"].ToVector<std::string>();
+        }
+
+        recording.include_derivatives =
+            node.Get<bool>("include_derivatives", recording.include_derivatives);
+        recording.include_inputs = node.Get<bool>("include_inputs", recording.include_inputs);
+        recording.flush_interval = node.Get<int>("flush_interval", recording.flush_interval);
+        recording.decimation = node.Get<int>("decimation", recording.decimation);
+        recording.export_csv = node.Get<bool>("export_csv", recording.export_csv);
+    }
+
     static void ParseStaging(StageConfig &staging, const vulcan::io::YamlNode &node) {
         // Trim config
         if (node.Has("trim")) {
             auto trim = node["trim"];
             staging.trim.enabled = trim.Get<bool>("enabled", false);
+            staging.trim.mode = trim.Get<std::string>("mode", staging.trim.mode);
             staging.trim.method = trim.Get<std::string>("method", staging.trim.method);
             staging.trim.tolerance = trim.Get<double>("tolerance", staging.trim.tolerance);
             staging.trim.max_iterations =
                 trim.Get<int>("max_iterations", staging.trim.max_iterations);
+
+            // Equilibrium mode settings
             if (trim.Has("zero_derivatives")) {
                 staging.trim.zero_derivatives = trim["zero_derivatives"].ToVector<std::string>();
             }
             if (trim.Has("control_signals")) {
                 staging.trim.control_signals = trim["control_signals"].ToVector<std::string>();
             }
+
+            // Warmstart mode settings
+            staging.trim.recording_path =
+                trim.Get<std::string>("recording_path", staging.trim.recording_path);
+            staging.trim.resume_time = trim.Get<double>("resume_time", staging.trim.resume_time);
+            staging.trim.validate_schema =
+                trim.Get<bool>("validate_schema", staging.trim.validate_schema);
         }
 
         // Linearization config
