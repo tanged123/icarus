@@ -71,11 +71,39 @@ if [ -f "$TYPES_FILE" ]; then
     echo "Updated $TYPES_FILE"
 fi
 
-echo "Bumping to: $NEW_VERSION"
+# 6. Update C API fallback version (icarus_c.cpp)
+C_API_FILE="interfaces/c_api/icarus_c.cpp"
+if [ -f "$C_API_FILE" ]; then
+    $SED "s/#define ICARUS_VERSION_STRING \"[0-9]*\.[0-9]*\.[0-9]*\"/#define ICARUS_VERSION_STRING \"$NEW_VERSION\"/" "$C_API_FILE"
+    $SED "s/#define ICARUS_VERSION_MAJOR [0-9]*/#define ICARUS_VERSION_MAJOR $MAJOR/" "$C_API_FILE"
+    $SED "s/#define ICARUS_VERSION_MINOR [0-9]*/#define ICARUS_VERSION_MINOR $MINOR/" "$C_API_FILE"
+    $SED "s/#define ICARUS_VERSION_PATCH [0-9]*/#define ICARUS_VERSION_PATCH $PATCH/" "$C_API_FILE"
+    echo "Updated $C_API_FILE"
+fi
+
+# 7. Update Python bindings fallback version (icarus_python.cpp)
+PYTHON_API_FILE="interfaces/python/icarus_python.cpp"
+if [ -f "$PYTHON_API_FILE" ]; then
+    $SED "s/#define ICARUS_VERSION_STRING \"[0-9]*\.[0-9]*\.[0-9]*\"/#define ICARUS_VERSION_STRING \"$NEW_VERSION\"/" "$PYTHON_API_FILE"
+    $SED "s/#define ICARUS_VERSION_MAJOR [0-9]*/#define ICARUS_VERSION_MAJOR $MAJOR/" "$PYTHON_API_FILE"
+    $SED "s/#define ICARUS_VERSION_MINOR [0-9]*/#define ICARUS_VERSION_MINOR $MINOR/" "$PYTHON_API_FILE"
+    $SED "s/#define ICARUS_VERSION_PATCH [0-9]*/#define ICARUS_VERSION_PATCH $PATCH/" "$PYTHON_API_FILE"
+    echo "Updated $PYTHON_API_FILE"
+fi
+
+# 8. Update Python __init__.py docstring example
+PYTHON_INIT_FILE="interfaces/python/icarus/__init__.py"
+if [ -f "$PYTHON_INIT_FILE" ]; then
+    $SED "s/print(icarus.__version__).*# \"[0-9]*\.[0-9]*\.[0-9]*\"/print(icarus.__version__)      # \"$NEW_VERSION\"/" "$PYTHON_INIT_FILE"
+    $SED "s/print(icarus.version_info).*# ([0-9]*, [0-9]*, [0-9]*)/print(icarus.version_info)     # ($MAJOR, $MINOR, $PATCH)/" "$PYTHON_INIT_FILE"
+    echo "Updated $PYTHON_INIT_FILE"
+fi
+
+echo "Bumped to: $NEW_VERSION"
 
 # Optional: Git tag suggestion
 echo ""
 echo "Don't forget to commit and tag:"
-echo "  git add $CMAKE_FILE $FLAKE_FILE $TYPES_FILE"
+echo "  git add -u"
 echo "  git commit -m \"chore: bump version to $NEW_VERSION\""
 echo "  git tag v$NEW_VERSION"
