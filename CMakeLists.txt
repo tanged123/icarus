@@ -59,6 +59,7 @@ endif()
 # --- Options ---
 option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
 option(BUILD_INTERFACES "Build language bindings (C, Python, MATLAB)" OFF)
+option(BUILD_PYTHON "Build Python bindings (requires pybind11)" ON)
 option(BUILD_TESTING "Build test suite" ON)
 option(BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_COMPONENTS "Build standard component models" ON)
