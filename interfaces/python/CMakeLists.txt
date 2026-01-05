@@ -4,6 +4,11 @@
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
+# Allow overriding Python install path (for Nix builds)
+if(NOT ICARUS_PYTHON_INSTALL_DIR)
+    set(ICARUS_PYTHON_INSTALL_DIR "${Python_SITEARCH}")
+endif()
+
 # Build the extension module
 pybind11_add_module(_icarus MODULE
     icarus_python.cpp
@@ -35,13 +40,13 @@ add_custom_command(TARGET _icarus POST_BUILD
 
 # Install to Python site-packages (for pip install)
 install(TARGETS _icarus
-    LIBRARY DESTINATION "${Python_SITEARCH}/icarus"
+    LIBRARY DESTINATION "${ICARUS_PYTHON_INSTALL_DIR}/icarus"
 )
 
 install(FILES
     icarus/__init__.py
     icarus/py.typed
-    DESTINATION "${Python_SITEARCH}/icarus"
+    DESTINATION "${ICARUS_PYTHON_INSTALL_DIR}/icarus"
 )
 
 message(STATUS "Python bindings enabled (Python ${Python_VERSION})")
