@@ -993,8 +993,10 @@ inline void Simulator::Step(double dt) {
         }
     }
 
-    epoch_ += dt; // Single source of truth - MET is derived via Time()
+    // Compute time from frame count to avoid floating-point drift
+    // (accumulating dt compounds rounding errors; multiplying has only one)
     frame_count_++;
+    epoch_ = epoch_start_ + frame_count_ * dt;
 
     // Evaluate phase transitions
     phase_manager_.EvaluateTransitions(registry_);
