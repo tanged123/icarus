@@ -142,6 +142,27 @@ INTERFACE_SUMMARY=""
 
 echo "Building with CMAKE_BUILD_TYPE=$BUILD_TYPE (jobs: $JOBS, interfaces: $INTERFACE_SUMMARY)"
 
+# Check if we need to reconfigure due to interface flag changes
+# CMake caches variables, so changing flags requires explicit reconfigure
+NEED_RECONFIGURE=false
+if [ -f "build/CMakeCache.txt" ]; then
+    CACHED_PYTHON=$(grep -E "^BUILD_PYTHON:" build/CMakeCache.txt 2>/dev/null | cut -d= -f2 || echo "OFF")
+    CACHED_C_API=$(grep -E "^BUILD_INTERFACES:" build/CMakeCache.txt 2>/dev/null | cut -d= -f2 || echo "OFF")
+
+    if [ "$BUILD_PYTHON" = "ON" ] && [ "$CACHED_PYTHON" != "ON" ]; then
+        echo "Python bindings requested but not in current build config - forcing reconfigure..."
+        NEED_RECONFIGURE=true
+    fi
+    if [ "$BUILD_C_API" = "ON" ] && [ "$CACHED_C_API" != "ON" ]; then
+        echo "C API requested but not in current build config - forcing reconfigure..."
+        NEED_RECONFIGURE=true
+    fi
+
+    if [ "$NEED_RECONFIGURE" = true ]; then
+        rm -f build/CMakeCache.txt
+    fi
+fi
+
 # Show ccache stats before build
 if command -v ccache &> /dev/null; then
     echo ""
