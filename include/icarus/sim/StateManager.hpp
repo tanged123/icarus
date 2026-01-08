@@ -191,13 +191,18 @@ template <typename Scalar> class StateManager {
      * @return Component name portion
      */
     [[nodiscard]] static std::string ExtractComponentName(const std::string &signal_name) {
-        // Find the first dot - component name is the first segment
-        // e.g., "Satellite.position.x" -> "Satellite"
+        // Signal name format: "Entity.Component.signal" or "Entity.Component.signal.axis"
+        // We need to extract "Entity.Component" for scheduler matching
+        // e.g., "Rocket.FuelTank.fuel_mass" -> "Rocket.FuelTank"
         auto first_dot = signal_name.find('.');
         if (first_dot == std::string::npos) {
             return signal_name; // No dot, entire name is component
         }
-        return signal_name.substr(0, first_dot);
+        auto second_dot = signal_name.find('.', first_dot + 1);
+        if (second_dot == std::string::npos) {
+            return signal_name.substr(0, first_dot); // Only one dot
+        }
+        return signal_name.substr(0, second_dot);
     }
 };
 

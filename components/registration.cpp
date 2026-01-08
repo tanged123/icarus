@@ -21,6 +21,8 @@
 #include <environment/AtmosphericDrag.hpp>
 #include <environment/PointMassGravity.hpp>
 #include <mass/StaticMass.hpp>
+#include <propulsion/FuelTank.hpp>
+#include <propulsion/RocketEngine.hpp>
 
 namespace {
 
@@ -84,6 +86,21 @@ const bool registered_numeric = []() {
         return comp;
     });
 
+    // Propulsion components
+    factory.Register("RocketEngine", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::RocketEngine<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("FuelTank", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::FuelTank<janus::NumericScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
     return true;
 }();
 
@@ -139,6 +156,21 @@ const bool registered_symbolic = []() {
 
     factory.Register("RigidBody6DOF", [](const ::icarus::ComponentConfig &config) {
         auto comp = std::make_unique<::icarus::components::RigidBody6DOF<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    // Propulsion components
+    factory.Register("RocketEngine", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::RocketEngine<janus::SymbolicScalar>>(
+            config.name, config.entity);
+        comp->SetConfig(config);
+        return comp;
+    });
+
+    factory.Register("FuelTank", [](const ::icarus::ComponentConfig &config) {
+        auto comp = std::make_unique<::icarus::components::FuelTank<janus::SymbolicScalar>>(
             config.name, config.entity);
         comp->SetConfig(config);
         return comp;

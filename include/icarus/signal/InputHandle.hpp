@@ -25,50 +25,60 @@ template <typename Scalar> class SignalRegistry;
  * Registered at Provision, wired to a source at Stage.
  * Provides type-safe access to the wired signal value.
  *
+ * Inputs have their own storage buffer that:
+ * - Is initialized to zero (default)
+ * - Can be poked for external injection (e.g., from Hermes)
+ * - Is overridden when wired (wired source takes precedence)
+ *
  * @tparam T The value type (Scalar, Vec3<Scalar>, etc.)
  */
 template <typename T> class InputHandle {
   public:
-    InputHandle() = default;
+    InputHandle() : default_value_{} {}
 
     /**
-     * @brief Get the current value from the wired source (with gain applied)
+     * @brief Get the current value (from wired source or default buffer)
      *
-     * If a gain was set via wire_with_gain(), the source value is scaled.
-     * For Scalar types: returns source * gain
-     * For vector types: gain is not currently applied (use gain=1.0)
+     * Priority:
+     * 1. If wired: returns source value (with gain applied)
+     * 2. If unwired: returns default_value_ (can be set via set())
      *
-     * @throws UnwiredInputError if not wired
-     * @return Value by value (scaled if gain != 1.0)
+     * @return Current value
      */
     [[nodiscard]] T get() const {
         if (!source_) {
-            throw UnwiredInputError(name_);
+            // Unwired: return the pokeable default value
+            return default_value_;
         }
-        // Apply gain for scalar types; for vectors, gain should be 1.0
-        // (wire_input_with_gain only supports Scalar)
+        // Wired: read from source (with gain for scalars)
         if constexpr (std::is_arithmetic_v<T>) {
             return static_cast<T>(*source_ * gain_);
         } else {
-            // For vector types, return as-is (gain should be 1.0)
             return *source_;
         }
     }
 
     /**
-     * @brief Dereference operator for convenience (without gain)
+     * @brief Set the default value (for external injection when unwired)
      *
-     * Note: For direct source access without gain, use operator*.
-     * For scaled value, use get().
+     * This value is used when the input is not wired.
+     * Allows external systems (Hermes, tests) to inject values.
      *
-     * @throws UnwiredInputError if not wired
+     * @param value The value to set
      */
-    [[nodiscard]] const T &operator*() const {
-        if (!source_) {
-            throw UnwiredInputError(name_);
-        }
-        return *source_;
-    }
+    void set(const T &value) { default_value_ = value; }
+
+    /**
+     * @brief Dereference operator (same as get())
+     */
+    [[nodiscard]] T operator*() const { return get(); }
+
+    /**
+     * @brief Get pointer to the default value buffer (for registry)
+     *
+     * Used by SignalRegistry to enable poke via sim.set("signal", value)
+     */
+    [[nodiscard]] T *data_ptr() { return &default_value_; }
 
     /**
      * @brief Check if this input has been wired
@@ -133,6 +143,7 @@ template <typename T> class InputHandle {
     std::string wired_to_;      // Source signal name
     const T *source_ = nullptr; // Pointer to source value
     double gain_ = 1.0;         // Scale factor (Phase 4.0)
+    T default_value_{};         // Default/poke buffer (used when unwired)
 
     // Metadata
     std::string units_;

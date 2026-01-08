@@ -632,6 +632,21 @@ template <typename Scalar> class SignalRegistry {
         entry.info.owner_component = current_component_;
 
         inputs_[name] = std::move(entry);
+
+        // Also register input in signal lookup for poke support
+        // The data_ptr points to the input's default value buffer
+        SignalDescriptor desc;
+        desc.name = name;
+        desc.unit = units;
+        desc.description = description;
+        desc.kind = SignalKind::Input;
+        desc.semantic = typeid(T).name();
+        desc.owner_component = current_component_;
+        desc.data_ptr = static_cast<void *>(handle->data_ptr());
+
+        SignalIndex index = signals_.size();
+        signals_.push_back(std::move(desc));
+        name_to_index_[name] = index;
     }
 
     // =========================================================================
