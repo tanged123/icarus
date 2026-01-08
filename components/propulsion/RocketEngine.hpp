@@ -92,20 +92,16 @@ template <typename Scalar> class RocketEngine : public Component<Scalar> {
     }
 
     void Stage(Backplane<Scalar> &) override {
+        // Read engine parameters using config helpers
+        // Pass current values as defaults to preserve programmatic configuration
+        max_thrust_ = this->template read_param<double>("max_thrust", max_thrust_);
+        isp_vacuum_ = this->template read_param<double>("isp_vacuum", isp_vacuum_);
+
+        // Read and normalize thrust direction (using double math since config is always double)
         const auto &config = this->GetConfig();
-
-        // Read engine parameters
-        if (config.template Has<double>("max_thrust")) {
-            max_thrust_ = config.template Get<double>("max_thrust", 50000.0);
-        }
-        if (config.template Has<double>("isp_vacuum")) {
-            isp_vacuum_ = config.template Get<double>("isp_vacuum", 300.0);
-        }
-
-        // Read thrust direction
         if (config.template Has<Vec3<double>>("thrust_direction")) {
-            auto dir = config.template Get<Vec3<double>>("thrust_direction", Vec3<double>{0, 0, 1});
-            // Normalize direction
+            Vec3<double> dir =
+                config.template Get<Vec3<double>>("thrust_direction", Vec3<double>{0, 0, 1});
             double norm = dir.norm();
             if (norm > 1e-10) {
                 dir /= norm;
@@ -116,12 +112,7 @@ template <typename Scalar> class RocketEngine : public Component<Scalar> {
         }
 
         // Read nozzle position
-        if (config.template Has<Vec3<double>>("nozzle_position")) {
-            auto pos = config.template Get<Vec3<double>>("nozzle_position", Vec3<double>::Zero());
-            nozzle_position_ =
-                Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                             static_cast<Scalar>(pos(2))};
-        }
+        nozzle_position_ = this->read_param_vec3("nozzle_position", nozzle_position_);
 
         // Pre-compute exhaust velocity
         exhaust_velocity_ = vulcan::propulsion::rocket::exhaust_velocity(

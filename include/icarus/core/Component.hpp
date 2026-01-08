@@ -209,6 +209,86 @@ template <typename Scalar> class Component {
     [[nodiscard]] const vulcan::time::Epoch<Scalar> *GetEpoch() const { return epoch_; }
 
   protected:
+    // =========================================================================
+    // Configuration Helpers
+    // =========================================================================
+    // These simplify reading config values in Stage() by:
+    // - Eliminating redundant Has/Get patterns
+    // - Automatically handling double→Scalar conversion for vectors
+    // - Providing a clean one-liner API
+
+    /**
+     * @brief Read a scalar config parameter with default
+     *
+     * Usage: mass_ = read_param("mass", 100.0);
+     */
+    template <typename T> T read_param(const std::string &key, const T &default_val) const {
+        return config_.template Get<T>(key, default_val);
+    }
+
+    /**
+     * @brief Read a required scalar config parameter (throws if missing)
+     *
+     * Usage: mass_ = require_param<double>("mass");
+     */
+    template <typename T> T require_param(const std::string &key) const {
+        return config_.template Require<T>(key);
+    }
+
+    /**
+     * @brief Read a Vec3 config parameter with automatic double→Scalar conversion
+     *
+     * Usage: position_ = read_param_vec3("initial_position", Vec3<Scalar>::Zero());
+     */
+    Vec3<Scalar> read_param_vec3(const std::string &key, const Vec3<Scalar> &default_val) const {
+        if (!config_.template Has<Vec3<double>>(key)) {
+            return default_val;
+        }
+        auto v = config_.template Get<Vec3<double>>(key, Vec3<double>::Zero());
+        return Vec3<Scalar>{static_cast<Scalar>(v(0)), static_cast<Scalar>(v(1)),
+                            static_cast<Scalar>(v(2))};
+    }
+
+    /**
+     * @brief Read a required Vec3 config parameter (throws if missing)
+     *
+     * Usage: position_ = require_param_vec3("initial_position");
+     */
+    Vec3<Scalar> require_param_vec3(const std::string &key) const {
+        auto v = config_.template Require<Vec3<double>>(key);
+        return Vec3<Scalar>{static_cast<Scalar>(v(0)), static_cast<Scalar>(v(1)),
+                            static_cast<Scalar>(v(2))};
+    }
+
+    /**
+     * @brief Read a Vec4 config parameter with automatic double→Scalar conversion
+     *
+     * Usage: attitude_ = read_param_vec4("initial_attitude", Vec4<Scalar>{1, 0, 0, 0});
+     */
+    Vec4<Scalar> read_param_vec4(const std::string &key, const Vec4<Scalar> &default_val) const {
+        if (!config_.template Has<Vec4<double>>(key)) {
+            return default_val;
+        }
+        auto v = config_.template Get<Vec4<double>>(key, Vec4<double>::Zero());
+        return Vec4<Scalar>{static_cast<Scalar>(v(0)), static_cast<Scalar>(v(1)),
+                            static_cast<Scalar>(v(2)), static_cast<Scalar>(v(3))};
+    }
+
+    /**
+     * @brief Read a required Vec4 config parameter (throws if missing)
+     *
+     * Usage: attitude_ = require_param_vec4("initial_attitude");
+     */
+    Vec4<Scalar> require_param_vec4(const std::string &key) const {
+        auto v = config_.template Require<Vec4<double>>(key);
+        return Vec4<Scalar>{static_cast<Scalar>(v(0)), static_cast<Scalar>(v(1)),
+                            static_cast<Scalar>(v(2)), static_cast<Scalar>(v(3))};
+    }
+
+    // =========================================================================
+    // Lifecycle State Management
+    // =========================================================================
+
     // Called by Simulator to track lifecycle state
     void MarkProvisioned() { provisioned_ = true; }
     void MarkStaged() { staged_ = true; }

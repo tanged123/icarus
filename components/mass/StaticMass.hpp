@@ -76,41 +76,27 @@ template <typename Scalar> class StaticMass : public Component<Scalar> {
     }
 
     void Stage(Backplane<Scalar> &) override {
-        const auto &config = this->GetConfig();
-
-        // Read mass from config
-        if (config.template Has<double>("mass")) {
-            mass_ = static_cast<Scalar>(config.template Get<double>("mass", 1.0));
-        }
-
-        // Read CG position from config
-        if (config.template Has<Vec3<double>>("cg")) {
-            auto cg = config.template Get<Vec3<double>>("cg", Vec3<double>::Zero());
-            cg_ = Vec3<Scalar>{static_cast<Scalar>(cg(0)), static_cast<Scalar>(cg(1)),
-                               static_cast<Scalar>(cg(2))};
-        }
+        // Read mass properties using config helpers
+        // Pass current values as defaults to preserve programmatic configuration
+        mass_ = static_cast<Scalar>(
+            this->template read_param<double>("mass", static_cast<double>(mass_)));
+        cg_ = this->read_param_vec3("cg", cg_);
 
         // Read diagonal inertia
-        if (config.template Has<double>("inertia_xx")) {
-            inertia_xx_ = static_cast<Scalar>(config.template Get<double>("inertia_xx", 1.0));
-        }
-        if (config.template Has<double>("inertia_yy")) {
-            inertia_yy_ = static_cast<Scalar>(config.template Get<double>("inertia_yy", 1.0));
-        }
-        if (config.template Has<double>("inertia_zz")) {
-            inertia_zz_ = static_cast<Scalar>(config.template Get<double>("inertia_zz", 1.0));
-        }
+        inertia_xx_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_xx", static_cast<double>(inertia_xx_)));
+        inertia_yy_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_yy", static_cast<double>(inertia_yy_)));
+        inertia_zz_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_zz", static_cast<double>(inertia_zz_)));
 
-        // Read products of inertia (default to 0)
-        if (config.template Has<double>("inertia_xy")) {
-            inertia_xy_ = static_cast<Scalar>(config.template Get<double>("inertia_xy", 0.0));
-        }
-        if (config.template Has<double>("inertia_xz")) {
-            inertia_xz_ = static_cast<Scalar>(config.template Get<double>("inertia_xz", 0.0));
-        }
-        if (config.template Has<double>("inertia_yz")) {
-            inertia_yz_ = static_cast<Scalar>(config.template Get<double>("inertia_yz", 0.0));
-        }
+        // Read products of inertia
+        inertia_xy_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_xy", static_cast<double>(inertia_xy_)));
+        inertia_xz_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_xz", static_cast<double>(inertia_xz_)));
+        inertia_yz_ = static_cast<Scalar>(
+            this->template read_param<double>("inertia_yz", static_cast<double>(inertia_yz_)));
     }
 
     void Step(Scalar t, Scalar dt) override {

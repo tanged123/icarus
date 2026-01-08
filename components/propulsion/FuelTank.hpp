@@ -101,29 +101,15 @@ template <typename Scalar> class FuelTank : public Component<Scalar> {
     }
 
     void Stage(Backplane<Scalar> &) override {
-        const auto &config = this->GetConfig();
-
-        // Read tank parameters
-        if (config.template Has<double>("initial_fuel_mass")) {
-            initial_fuel_mass_ = config.template Get<double>("initial_fuel_mass", 1000.0);
-            fuel_mass_ = Scalar(initial_fuel_mass_);
-        }
-        if (config.template Has<double>("dry_mass")) {
-            dry_mass_ = config.template Get<double>("dry_mass", 50.0);
-        }
-        if (config.template Has<double>("tank_radius")) {
-            tank_radius_ = config.template Get<double>("tank_radius", 0.5);
-        }
-        if (config.template Has<double>("tank_length")) {
-            tank_length_ = config.template Get<double>("tank_length", 2.0);
-        }
-
-        // Read CG position
-        if (config.template Has<Vec3<double>>("tank_cg")) {
-            auto pos = config.template Get<Vec3<double>>("tank_cg", Vec3<double>::Zero());
-            cg_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                               static_cast<Scalar>(pos(2))};
-        }
+        // Read tank parameters using config helpers
+        // Pass current values as defaults to preserve programmatic configuration
+        initial_fuel_mass_ =
+            this->template read_param<double>("initial_fuel_mass", initial_fuel_mass_);
+        fuel_mass_ = Scalar(initial_fuel_mass_);
+        dry_mass_ = this->template read_param<double>("dry_mass", dry_mass_);
+        tank_radius_ = this->template read_param<double>("tank_radius", tank_radius_);
+        tank_length_ = this->template read_param<double>("tank_length", tank_length_);
+        cg_ = this->read_param_vec3("tank_cg", cg_);
 
         // Initialize outputs
         UpdateMassProperties();

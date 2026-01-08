@@ -129,8 +129,42 @@ Vec4<Scalar> require_param_vec4(const std::string& key) const;
 
 ---
 
-## Implementation
+## Important: Preserving Programmatic Configuration
 
-1. Add helpers to `Component.hpp` (protected methods)
-2. Test in `tests/core/test_component_config_helpers.cpp`
-3. Migrate existing components (optional, backward compatible)
+When using `read_param*` helpers, **pass the current member value as the default** to preserve values set programmatically before `Stage()`:
+
+```cpp
+// CORRECT: Preserves programmatic values
+void Stage(Backplane<Scalar> &) override {
+    mass_ = static_cast<Scalar>(this->template read_param<double>("mass", static_cast<double>(mass_)));
+    position_ = this->read_param_vec3("initial_position", position_);
+}
+
+// WRONG: Overwrites programmatic values with hardcoded defaults
+void Stage(Backplane<Scalar> &) override {
+    mass_ = static_cast<Scalar>(this->template read_param<double>("mass", 1.0));  // BAD!
+    position_ = this->read_param_vec3("initial_position", Vec3<Scalar>::Zero());  // BAD!
+}
+```
+
+This is important because tests often configure components programmatically:
+```cpp
+auto comp = std::make_unique<PointMass3DOF<double>>("PM");
+comp->SetMass(10.0);           // Set programmatically
+comp->SetInitialPosition(...); // Set programmatically
+sim.Stage();                   // Stage() must preserve these values
+```
+
+---
+
+## Implementation Status: COMPLETE
+
+Implemented in `include/icarus/core/Component.hpp` and applied to all components:
+- `RigidBody6DOF.hpp`
+- `PointMass3DOF.hpp`
+- `StaticMass.hpp`
+- `FuelTank.hpp`
+- `RocketEngine.hpp`
+- `PointMassGravity.hpp`
+
+All 504 tests passing.

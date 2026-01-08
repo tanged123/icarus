@@ -122,39 +122,12 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
      * @brief Stage phase - load config and apply initial conditions
      */
     void Stage(Backplane<Scalar> &) override {
-        const auto &config = this->GetConfig();
-
-        // Load initial position
-        if (config.template Has<Vec3<double>>("initial_position")) {
-            auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
-            position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                                     static_cast<Scalar>(pos(2))};
-        }
-
-        // Load initial velocity (body frame)
-        if (config.template Has<Vec3<double>>("initial_velocity_body")) {
-            auto vel =
-                config.template Get<Vec3<double>>("initial_velocity_body", Vec3<double>::Zero());
-            velocity_body_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
-                                          static_cast<Scalar>(vel(2))};
-        }
-
-        // Load initial attitude quaternion [w, x, y, z]
-        if (config.template Has<Vec4<double>>("initial_attitude")) {
-            Vec4<double> default_quat;
-            default_quat << 1.0, 0.0, 0.0, 0.0; // Identity quaternion
-            auto quat = config.template Get<Vec4<double>>("initial_attitude", default_quat);
-            attitude_ = Vec4<Scalar>{static_cast<Scalar>(quat(0)), static_cast<Scalar>(quat(1)),
-                                     static_cast<Scalar>(quat(2)), static_cast<Scalar>(quat(3))};
-        }
-
-        // Load initial angular velocity (body frame)
-        if (config.template Has<Vec3<double>>("initial_omega_body")) {
-            auto omega =
-                config.template Get<Vec3<double>>("initial_omega_body", Vec3<double>::Zero());
-            omega_body_ = Vec3<Scalar>{static_cast<Scalar>(omega(0)), static_cast<Scalar>(omega(1)),
-                                       static_cast<Scalar>(omega(2))};
-        }
+        // Load initial conditions using config helpers
+        // Pass current values as defaults to preserve programmatic configuration
+        position_ = this->read_param_vec3("initial_position", position_);
+        velocity_body_ = this->read_param_vec3("initial_velocity_body", velocity_body_);
+        attitude_ = this->read_param_vec4("initial_attitude", attitude_);
+        omega_body_ = this->read_param_vec3("initial_omega_body", omega_body_);
 
         // Compute derived output
         janus::Quaternion<Scalar> q{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
