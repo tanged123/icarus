@@ -102,9 +102,10 @@ components:
     name: EOM
     entity: Rocket
     vectors:
-      initial_position: [6.471e6, 0, 0]     # ~100km altitude, X-axis
+      # Testing both LLA and Euler angles
+      initial_lla: [0.0, 0.0, 100000.0]     # Equator, prime meridian, 100km altitude
       initial_velocity_body: [0, 0, 0]      # Starting from rest
-      initial_attitude: [1, 0, 0, 0]        # Identity quaternion
+      initial_euler_zyx: [0.0, 90.0, 0.0]   # 90 degree pitch up (vertical)
       initial_omega_body: [0, 0, 0]         # No initial rotation
 
 # =============================================================================
