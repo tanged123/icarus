@@ -35,11 +35,11 @@ components:
     entity: Rocket
     scalars:
       mass: 500.0
-      inertia_xx: 100.0
+      inertia_xx: 50.0
       inertia_yy: 100.0
-      inertia_zz: 50.0
+      inertia_zz: 100.0
     vectors:
-      cg: [0, 0, 2.0]
+      cg: [2.0, 0, 0]
 
   # Propellant tank (depleting mass)
   - type: FuelTank
@@ -51,7 +51,7 @@ components:
       tank_radius: 0.5
       tank_length: 2.0
     vectors:
-      tank_cg: [0, 0, 1.0]
+      tank_cg: [1.0, 0, 0]
 
   # ---------------------------------------------------------------------------
   # Mass Aggregator
@@ -82,7 +82,7 @@ components:
       max_thrust: 50000.0   # 50 kN
       isp_vacuum: 311.0     # Merlin-1D like
     vectors:
-      thrust_direction: [0, 0, 1]    # +Z body = up
+      thrust_direction: [1, 0, 0]    # +X body (nose direction)
       nozzle_position: [0, 0, 0]
 
   # ---------------------------------------------------------------------------
@@ -92,7 +92,8 @@ components:
   - type: ForceAggregator
     name: Forces
     entity: Rocket
-    sources: [Gravity, Engine]
+    body_sources: [Engine]      # Forces in body frame
+    ecef_sources: [Gravity]     # Forces in ECEF frame (transformed to body)
 
   # ---------------------------------------------------------------------------
   # 6DOF Dynamics
@@ -101,11 +102,13 @@ components:
   - type: RigidBody6DOF
     name: EOM
     entity: Rocket
+    strings:
+      position_init_mode: lla           # "lla" or "ecef"
+      attitude_init_mode: euler_zyx     # "euler_zyx" or "quaternion"
     vectors:
-      # Testing both LLA and Euler angles
-      initial_lla: [0.0, 0.0, 100000.0]     # Equator, prime meridian, 100km altitude
+      initial_lla: [0.0, 0.0, 100000.0]     # [lat_deg, lon_deg, alt_m]
       initial_velocity_body: [0, 0, 0]      # Starting from rest
-      initial_euler_zyx: [0.0, 90.0, 0.0]   # 90 degree pitch up (vertical)
+      initial_euler_zyx: [0.0, 90.0, 0.0]   # [yaw, pitch, roll] deg - 90 pitch = vertical
       initial_omega_body: [0, 0, 0]         # No initial rotation
 
 # =============================================================================
@@ -140,6 +143,15 @@ routes:
     output: Rocket.Mass.cg.y
   - input: Rocket.Forces.cg.z
     output: Rocket.Mass.cg.z
+  # Attitude for ECEF→body transformation
+  - input: Rocket.Forces.attitude.w
+    output: Rocket.EOM.attitude.w
+  - input: Rocket.Forces.attitude.x
+    output: Rocket.EOM.attitude.x
+  - input: Rocket.Forces.attitude.y
+    output: Rocket.EOM.attitude.y
+  - input: Rocket.Forces.attitude.z
+    output: Rocket.EOM.attitude.z
 
   # --- EOM inputs ---
   # Forces
@@ -179,6 +191,7 @@ scheduler:
   topology:
     mode: automatic
     log_order: true
+    cycle_detection: warn    # Accept one-step lag for EOM↔Forces cycle
   groups:
     - name: mass
       rate_hz: 100.0

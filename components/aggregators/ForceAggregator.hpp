@@ -6,6 +6,7 @@
  *
  * Combines forces from multiple source components, handling:
  * - Force summation in body frame
+ * - Frame transformation (ECEF → body) for sources in different frames
  * - Moment transfer about CG for offset application points: M_cg = M_app + r × F
  *
  * Part of Phase 4: Aggregation & 6DOF
@@ -17,6 +18,8 @@
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
+#include <janus/math/Quaternion.hpp>
+
 #include <vector>
 
 namespace icarus {
@@ -26,8 +29,8 @@ namespace components {
  * @brief Force source handle bundle
  *
  * Holds SignalHandles needed to read a force source's outputs.
- * Forces are assumed to be in body frame; moment transfer is computed
- * if application_point differs from CG.
+ * Frame information is tracked separately by ForceAggregator.
+ * Moment transfer is computed if application_point differs from CG.
  */
 template <typename Scalar> struct ForceSourceHandles {
     std::string name;
@@ -75,15 +78,22 @@ template <typename Scalar> struct ForceSourceHandles {
  * @brief Aggregates forces and moments from multiple sources
  *
  * Reads forces from configured source components and sums them.
+ * Supports forces in different coordinate frames:
+ * - body_sources: Forces already in body frame (direct summation)
+ * - ecef_sources: Forces in ECEF frame (transformed to body using attitude)
+ *
  * Computes moment transfer for forces applied at points offset from CG:
  *   M_total = Σ(M_i + r_i × F_i)
  * where r_i is the vector from CG to application point.
  *
  * Configuration:
- * - sources: List of component names to aggregate from
+ * - body_sources: List of component names outputting body-frame forces
+ * - ecef_sources: List of component names outputting ECEF-frame forces
+ * - sources: Legacy - treated as body_sources for backwards compatibility
  *
  * Inputs:
  * - cg.x, cg.y, cg.z [m] - CG position for moment transfer
+ * - attitude.w, .x, .y, .z [-] - Body-to-ECEF quaternion (for ECEF→body transform)
  *
  * Outputs:
  * - total_force.x, .y, .z [N]
@@ -121,29 +131,39 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
         bp.template register_input<Scalar>("cg.x", &cg_x_, "m", "CG X position");
         bp.template register_input<Scalar>("cg.y", &cg_y_, "m", "CG Y position");
         bp.template register_input<Scalar>("cg.z", &cg_z_, "m", "CG Z position");
+
+        // Input: Attitude quaternion (body-to-ECEF) for ECEF→body transformation
+        bp.template register_input<Scalar>("attitude.w", &att_w_, "-", "Attitude quat W");
+        bp.template register_input<Scalar>("attitude.x", &att_x_, "-", "Attitude quat X");
+        bp.template register_input<Scalar>("attitude.y", &att_y_, "-", "Attitude quat Y");
+        bp.template register_input<Scalar>("attitude.z", &att_z_, "-", "Attitude quat Z");
     }
 
     void Stage(Backplane<Scalar> &bp) override {
         const auto &config = this->GetConfig();
 
-        // Get list of source component names from config (if provided)
-        if (!config.sources.empty()) {
-            source_names_ = config.sources;
+        // Get source lists from config, falling back to programmatic setup
+        // Priority: config > programmatic
+        std::vector<std::string> body_names =
+            !config.body_sources.empty() ? config.body_sources : body_source_names_;
+        std::vector<std::string> ecef_names =
+            !config.ecef_sources.empty() ? config.ecef_sources : ecef_source_names_;
+
+        // Legacy support: "sources" → body_sources (if neither config nor programmatic set)
+        if (!config.sources.empty() && body_names.empty()) {
+            body_names = config.sources;
         }
 
         // If no sources configured, we're done
-        if (source_names_.empty()) {
+        if (body_names.empty() && ecef_names.empty()) {
             return;
         }
 
         // Build entity prefix for signal resolution
         std::string prefix = entity_.empty() ? "" : entity_ + ".";
 
-        // Create handles for each source
-        sources_.clear();
-        sources_.reserve(source_names_.size());
-
-        for (const auto &source_name : source_names_) {
+        // Helper to resolve handles for a source
+        auto resolve_source = [&](const std::string &source_name) {
             ForceSourceHandles<Scalar> handles;
             handles.name = source_name;
 
@@ -170,7 +190,21 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
                 handles.has_app_point = true;
             }
 
-            sources_.push_back(std::move(handles));
+            return handles;
+        };
+
+        // Resolve body-frame sources
+        body_sources_.clear();
+        body_sources_.reserve(body_names.size());
+        for (const auto &name : body_names) {
+            body_sources_.push_back(resolve_source(name));
+        }
+
+        // Resolve ECEF-frame sources
+        ecef_sources_.clear();
+        ecef_sources_.reserve(ecef_names.size());
+        for (const auto &name : ecef_names) {
+            ecef_sources_.push_back(resolve_source(name));
         }
     }
 
@@ -179,7 +213,7 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
         (void)dt;
 
         // Handle empty case
-        if (sources_.empty()) {
+        if (body_sources_.empty() && ecef_sources_.empty()) {
             total_force_ = Vec3<Scalar>::Zero();
             total_moment_ = Vec3<Scalar>::Zero();
             return;
@@ -188,24 +222,44 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
         // Get CG position for moment transfer
         Vec3<Scalar> cg{cg_x_.get(), cg_y_.get(), cg_z_.get()};
 
+        // Get attitude quaternion (body-to-ECEF) for frame transformation
+        janus::Quaternion<Scalar> q_body_to_ecef{att_w_.get(), att_x_.get(), att_y_.get(),
+                                                 att_z_.get()};
+
         // Initialize accumulators
         Vec3<Scalar> sum_force = Vec3<Scalar>::Zero();
         Vec3<Scalar> sum_moment = Vec3<Scalar>::Zero();
 
-        // Aggregate all sources
-        for (const auto &src : sources_) {
-            Vec3<Scalar> F = src.GetForce();
+        // Helper to accumulate force/moment from a source
+        auto accumulate = [&](const ForceSourceHandles<Scalar> &src, Vec3<Scalar> F_body) {
             Vec3<Scalar> M = src.GetMoment();
             Vec3<Scalar> app_point = src.GetApplicationPoint();
 
-            // Sum forces directly
-            sum_force += F;
+            // Sum forces
+            sum_force += F_body;
 
             // Transfer moment to CG: M_cg = M_app + r × F
             // where r = (application_point - cg)
             Vec3<Scalar> r = app_point - cg;
-            Vec3<Scalar> moment_transfer = r.cross(F);
+            Vec3<Scalar> moment_transfer = r.cross(F_body);
             sum_moment += M + moment_transfer;
+        };
+
+        // Aggregate body-frame sources (no transformation needed)
+        for (const auto &src : body_sources_) {
+            Vec3<Scalar> F_body = src.GetForce();
+            accumulate(src, F_body);
+        }
+
+        // Aggregate ECEF-frame sources (transform to body)
+        for (const auto &src : ecef_sources_) {
+            Vec3<Scalar> F_ecef = src.GetForce();
+
+            // Transform ECEF → body using quaternion conjugate
+            // q.conjugate() rotates from ECEF to body
+            Vec3<Scalar> F_body = q_body_to_ecef.conjugate().rotate(F_ecef);
+
+            accumulate(src, F_body);
         }
 
         // Write outputs
@@ -218,16 +272,32 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
     // =========================================================================
 
     /**
-     * @brief Add a source component by name (programmatic setup)
+     * @brief Add a body-frame source component by name
      */
-    void AddSource(const std::string &source_name) { source_names_.push_back(source_name); }
+    void AddBodySource(const std::string &source_name) {
+        body_source_names_.push_back(source_name);
+    }
+
+    /**
+     * @brief Add an ECEF-frame source component by name
+     */
+    void AddEcefSource(const std::string &source_name) {
+        ecef_source_names_.push_back(source_name);
+    }
+
+    /**
+     * @brief Add a source (legacy - treated as body source)
+     */
+    void AddSource(const std::string &source_name) { AddBodySource(source_name); }
 
     /**
      * @brief Clear all sources
      */
     void ClearSources() {
-        source_names_.clear();
-        sources_.clear();
+        body_source_names_.clear();
+        ecef_source_names_.clear();
+        body_sources_.clear();
+        ecef_sources_.clear();
     }
 
     // =========================================================================
@@ -241,14 +311,24 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
     std::string name_;
     std::string entity_;
 
-    // Source configuration
-    std::vector<std::string> source_names_;
-    std::vector<ForceSourceHandles<Scalar>> sources_;
+    // Source configuration (programmatic)
+    std::vector<std::string> body_source_names_;
+    std::vector<std::string> ecef_source_names_;
 
-    // CG input for moment transfer (wired via SignalRouter)
+    // Resolved handles by frame
+    std::vector<ForceSourceHandles<Scalar>> body_sources_;
+    std::vector<ForceSourceHandles<Scalar>> ecef_sources_;
+
+    // CG input for moment transfer
     InputHandle<Scalar> cg_x_;
     InputHandle<Scalar> cg_y_;
     InputHandle<Scalar> cg_z_;
+
+    // Attitude input for ECEF→body transformation
+    InputHandle<Scalar> att_w_;
+    InputHandle<Scalar> att_x_;
+    InputHandle<Scalar> att_y_;
+    InputHandle<Scalar> att_z_;
 
     // Aggregated outputs
     Vec3<Scalar> total_force_ = Vec3<Scalar>::Zero();

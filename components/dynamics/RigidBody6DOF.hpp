@@ -149,30 +149,33 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
     /**
      * @brief Stage phase - load config and apply initial conditions
      *
-     * Position initialization priority: initial_lla > initial_position (ECEF)
-     * Attitude initialization priority: initial_euler_zyx > initial_attitude (quaternion)
+     * Position init controlled by position_init_mode: "lla" or "ecef" (default)
+     * Attitude init controlled by attitude_init_mode: "euler_zyx" or "quaternion" (default)
      */
     void Stage(Backplane<Scalar> &) override {
         const auto &config = this->GetConfig();
 
         // === Position Initialization ===
-        // Priority: initial_lla > initial_position (ECEF)
-        if (config.template Has<Vec3<double>>("initial_lla")) {
+        // Track position as double for coordinate transforms (needed for Euler init)
+        Vec3<double> r_ecef_double = Vec3<double>::Zero();
+
+        auto pos_mode = this->template read_param<std::string>("position_init_mode", "ecef");
+        if (pos_mode == "lla") {
             // LLA format: [lat_deg, lon_deg, alt_m]
             auto lla_vec = config.template Get<Vec3<double>>("initial_lla", Vec3<double>::Zero());
 
-            // Convert degrees to radians for lat/lon
             vulcan::LLA<double> lla;
             lla.lat = lla_vec(0) * vulcan::constants::angle::deg2rad;
             lla.lon = lla_vec(1) * vulcan::constants::angle::deg2rad;
             lla.alt = lla_vec(2);
 
-            // Convert to ECEF
-            Vec3<double> r_ecef = vulcan::lla_to_ecef(lla);
-            position_ = Vec3<Scalar>{static_cast<Scalar>(r_ecef(0)), static_cast<Scalar>(r_ecef(1)),
-                                     static_cast<Scalar>(r_ecef(2))};
+            r_ecef_double = vulcan::lla_to_ecef(lla);
+            position_ = Vec3<Scalar>{static_cast<Scalar>(r_ecef_double(0)),
+                                     static_cast<Scalar>(r_ecef_double(1)),
+                                     static_cast<Scalar>(r_ecef_double(2))};
         } else {
-            // Existing ECEF initialization
+            r_ecef_double =
+                config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
             position_ = this->read_param_vec3("initial_position", position_);
         }
 
@@ -181,8 +184,8 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         omega_body_ = this->read_param_vec3("initial_omega_body", omega_body_);
 
         // === Attitude Initialization ===
-        // Priority: initial_euler_zyx > initial_attitude (quaternion)
-        if (config.template Has<Vec3<double>>("initial_euler_zyx")) {
+        auto att_mode = this->template read_param<std::string>("attitude_init_mode", "quaternion");
+        if (att_mode == "euler_zyx") {
             // Euler format: [yaw_deg, pitch_deg, roll_deg] (ZYX sequence)
             auto euler_deg =
                 config.template Get<Vec3<double>>("initial_euler_zyx", Vec3<double>::Zero());
@@ -191,19 +194,13 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
             double pitch = euler_deg(1) * vulcan::constants::angle::deg2rad;
             double roll = euler_deg(2) * vulcan::constants::angle::deg2rad;
 
-            // Get current position in ECEF (double for coordinate transforms)
-            Vec3<double> r_ecef{static_cast<double>(position_(0)),
-                                static_cast<double>(position_(1)),
-                                static_cast<double>(position_(2))};
-
-            // Compute NED frame at this position
-            auto ned = vulcan::local_ned_at(r_ecef);
+            // Compute NED frame at position (using double for coordinate transforms)
+            auto ned = vulcan::local_ned_at(r_ecef_double);
 
             // Build body frame from Euler angles relative to NED
             auto body = vulcan::body_from_euler(ned, yaw, pitch, roll);
 
             // Extract quaternion (body-to-ECEF)
-            // The body frame axes in ECEF define the DCM columns
             Mat3<double> dcm;
             dcm.col(0) = body.x_axis;
             dcm.col(1) = body.y_axis;
@@ -214,7 +211,6 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
                 static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
                 static_cast<Scalar>(q_body_to_ecef.y), static_cast<Scalar>(q_body_to_ecef.z)};
         } else {
-            // Existing quaternion initialization
             attitude_ = this->read_param_vec4("initial_attitude", attitude_);
         }
 
