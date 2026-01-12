@@ -151,6 +151,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 # --- External Interfaces (interfaces/) ---
-if(BUILD_INTERFACES)
+# Include when C API (BUILD_INTERFACES) or Python bindings requested
+if(BUILD_INTERFACES OR BUILD_PYTHON)
   add_subdirectory(interfaces)
 endif()

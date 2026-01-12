@@ -264,8 +264,8 @@ struct StageConfig {
     SymbolicsConfig symbolics;
 
     // Validation settings
-    bool validate_wiring = true; ///< Throw if unwired inputs exist
-    bool warn_on_unwired = true; ///< Log warning for unwired inputs
+    bool validate_wiring = false; ///< Throw if unwired inputs exist (default: warn only)
+    bool warn_on_unwired = true;  ///< Log warning for unwired inputs
 
     /// Create default config
     [[nodiscard]] static StageConfig Default() { return StageConfig{}; }

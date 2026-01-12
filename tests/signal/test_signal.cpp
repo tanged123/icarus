@@ -558,9 +558,12 @@ TEST(InputHandle, DefaultConstruction) {
     EXPECT_TRUE(handle.wired_to().empty());
 }
 
-TEST(InputHandle, UnwiredAccessThrows) {
+TEST(InputHandle, UnwiredAccessReturnsDefault) {
     InputHandle<double> handle;
-    EXPECT_THROW((void)handle.get(), UnwiredInputError);
+    // Unwired inputs return default value (0) instead of throwing
+    // This enables external injection via poke (e.g., from Hermes)
+    EXPECT_NO_THROW((void)handle.get());
+    EXPECT_EQ(handle.get(), 0.0);
 }
 
 TEST(InputHandle, WiredAccess) {

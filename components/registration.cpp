@@ -8,8 +8,8 @@
  * Components are registered at static initialization time when this
  * translation unit is linked into an executable.
  *
- * Registers with both janus::NumericScalar (double) and janus::SymbolicScalar
- * (casadi::MX) backends for full dual-backend support.
+ * Uses ICARUS_REGISTER_COMPONENT_AS macro for dual-backend registration
+ * (NumericScalar + SymbolicScalar) with minimal boilerplate.
  */
 
 #include <icarus/core/ComponentFactory.hpp>
@@ -21,130 +21,28 @@
 #include <environment/AtmosphericDrag.hpp>
 #include <environment/PointMassGravity.hpp>
 #include <mass/StaticMass.hpp>
+#include <propulsion/FuelTank.hpp>
+#include <propulsion/RocketEngine.hpp>
 
-namespace {
+// =============================================================================
+// Component Registration (Dual-Backend: Numeric + Symbolic)
+// =============================================================================
 
-// Static registration - runs at program startup
-// Registers all components with both numeric and symbolic backends.
+// Dynamics
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::PointMass3DOF, "PointMass3DOF")
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::RigidBody6DOF, "RigidBody6DOF")
 
-// === Numeric Backend (janus::NumericScalar = double) ===
-const bool registered_numeric = []() {
-    auto &factory = ::icarus::ComponentFactory<janus::NumericScalar>::Instance();
+// Environment
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::PointMassGravity, "PointMassGravity")
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::AtmosphericDrag, "AtmosphericDrag")
 
-    // Dynamics components
-    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
+// Mass
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::StaticMass, "StaticMass")
 
-    // Environment components
-    factory.Register("PointMassGravity", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::PointMassGravity<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
+// Aggregators
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::MassAggregator, "MassAggregator")
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::ForceAggregator, "ForceAggregator")
 
-    factory.Register("AtmosphericDrag", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::AtmosphericDrag<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    // Mass components
-    factory.Register("StaticMass", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::StaticMass<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    // Aggregator components
-    factory.Register("MassAggregator", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::MassAggregator<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    factory.Register("ForceAggregator", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::ForceAggregator<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    factory.Register("RigidBody6DOF", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::RigidBody6DOF<janus::NumericScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    return true;
-}();
-
-// === Symbolic Backend (janus::SymbolicScalar = casadi::MX) ===
-const bool registered_symbolic = []() {
-    auto &factory = ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance();
-
-    // Dynamics components
-    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    // Environment components
-    factory.Register("PointMassGravity", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::PointMassGravity<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    factory.Register("AtmosphericDrag", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::AtmosphericDrag<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    // Mass components
-    factory.Register("StaticMass", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::StaticMass<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    // Aggregator components
-    factory.Register("MassAggregator", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::MassAggregator<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    factory.Register("ForceAggregator", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::ForceAggregator<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    factory.Register("RigidBody6DOF", [](const ::icarus::ComponentConfig &config) {
-        auto comp = std::make_unique<::icarus::components::RigidBody6DOF<janus::SymbolicScalar>>(
-            config.name, config.entity);
-        comp->SetConfig(config);
-        return comp;
-    });
-
-    return true;
-}();
-
-} // anonymous namespace
+// Propulsion
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::RocketEngine, "RocketEngine")
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::FuelTank, "FuelTank")

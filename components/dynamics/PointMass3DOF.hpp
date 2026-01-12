@@ -95,26 +95,12 @@ template <typename Scalar> class PointMass3DOF : public Component<Scalar> {
      * @brief Stage phase - load config and apply initial conditions
      */
     void Stage(Backplane<Scalar> &) override {
-        const auto &config = this->GetConfig();
-
-        // Load mass from config if set
-        if (config.template Has<double>("mass")) {
-            mass_ = static_cast<Scalar>(config.template Get<double>("mass", 1.0));
-        }
-
-        // Load initial position if set
-        if (config.template Has<Vec3<double>>("initial_position")) {
-            auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
-            position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                                     static_cast<Scalar>(pos(2))};
-        }
-
-        // Load initial velocity if set
-        if (config.template Has<Vec3<double>>("initial_velocity")) {
-            auto vel = config.template Get<Vec3<double>>("initial_velocity", Vec3<double>::Zero());
-            velocity_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
-                                     static_cast<Scalar>(vel(2))};
-        }
+        // Load config using helpers - pass current values as defaults to preserve programmatic
+        // config
+        mass_ = static_cast<Scalar>(
+            this->template read_param<double>("mass", static_cast<double>(mass_)));
+        position_ = this->read_param_vec3("initial_position", position_);
+        velocity_ = this->read_param_vec3("initial_velocity", velocity_);
 
         // Zero derivatives
         position_dot_ = Vec3<Scalar>::Zero();

@@ -306,6 +306,14 @@ class SimulationLoader {
             cfg.sources = node["sources"].ToVector<std::string>();
         }
 
+        // Extract frame-categorized source lists (for ForceAggregator)
+        if (node.Has("body_sources")) {
+            cfg.body_sources = node["body_sources"].ToVector<std::string>();
+        }
+        if (node.Has("ecef_sources")) {
+            cfg.ecef_sources = node["ecef_sources"].ToVector<std::string>();
+        }
+
         return cfg;
     }
 

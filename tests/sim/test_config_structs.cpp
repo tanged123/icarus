@@ -95,9 +95,10 @@ TEST(SymbolicsConfigTest, DefaultIsDisabled) {
 // StageConfig Tests
 // =============================================================================
 
-TEST(StageConfigTest, DefaultHasValidationEnabled) {
+TEST(StageConfigTest, DefaultHasValidationDisabled) {
     auto cfg = StageConfig::Default();
-    EXPECT_TRUE(cfg.validate_wiring);
+    // validate_wiring defaults to false to allow unwired inputs for external injection
+    EXPECT_FALSE(cfg.validate_wiring);
     EXPECT_TRUE(cfg.warn_on_unwired);
     EXPECT_FALSE(cfg.trim.enabled);
     EXPECT_FALSE(cfg.linearization.enabled);

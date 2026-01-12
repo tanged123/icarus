@@ -720,11 +720,20 @@ inline void Simulator::ApplyInitialConditions() {
 inline void Simulator::ValidateWiring() {
     auto unwired = registry_.get_unwired_inputs();
     if (!unwired.empty()) {
-        std::string msg = "Unwired inputs: ";
+        std::string msg;
         for (const auto &name : unwired) {
             msg += name + ", ";
         }
-        throw WiringError(msg);
+        // Remove trailing ", "
+        if (msg.size() >= 2) {
+            msg.resize(msg.size() - 2);
+        }
+
+        if (config_.staging.validate_wiring) {
+            throw WiringError("Unwired inputs: " + msg);
+        }
+        // Warn only - unwired inputs default to 0, can be poked externally
+        logger_.Log(LogLevel::Warning, "[WIRE] Unwired inputs (defaulting to 0): " + msg);
     }
 }
 

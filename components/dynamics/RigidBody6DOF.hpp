@@ -24,6 +24,10 @@
 #include <icarus/signal/InputHandle.hpp>
 
 #include <janus/math/Quaternion.hpp>
+#include <vulcan/coordinates/BodyFrames.hpp>
+#include <vulcan/coordinates/Geodetic.hpp>
+#include <vulcan/coordinates/LocalFrames.hpp>
+#include <vulcan/core/Constants.hpp>
 #include <vulcan/dynamics/RigidBody.hpp>
 #include <vulcan/dynamics/RigidBodyTypes.hpp>
 #include <vulcan/mass/MassProperties.hpp>
@@ -100,6 +104,30 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         bp.template register_output_vec3<Scalar>("velocity_ref", &velocity_ref_, "m/s",
                                                  "Velocity in reference frame");
 
+        // === Coordinate Frame Outputs ===
+        // Position in LLA (geodetic)
+        bp.template register_output<Scalar>("position_lla.lat", &position_lla_(0), "rad",
+                                            "Geodetic latitude");
+        bp.template register_output<Scalar>("position_lla.lon", &position_lla_(1), "rad",
+                                            "Longitude");
+        bp.template register_output<Scalar>("position_lla.alt", &position_lla_(2), "m",
+                                            "Altitude above ellipsoid");
+
+        // Velocity in NED
+        bp.template register_output<Scalar>("velocity_ned.n", &velocity_ned_(0), "m/s",
+                                            "North velocity");
+        bp.template register_output<Scalar>("velocity_ned.e", &velocity_ned_(1), "m/s",
+                                            "East velocity");
+        bp.template register_output<Scalar>("velocity_ned.d", &velocity_ned_(2), "m/s",
+                                            "Down velocity");
+
+        // Attitude as Euler angles (ZYX: yaw-pitch-roll)
+        bp.template register_output<Scalar>("euler_zyx.yaw", &euler_zyx_(0), "rad",
+                                            "Yaw angle (heading from North)");
+        bp.template register_output<Scalar>("euler_zyx.pitch", &euler_zyx_(1), "rad",
+                                            "Pitch angle");
+        bp.template register_output<Scalar>("euler_zyx.roll", &euler_zyx_(2), "rad", "Roll angle");
+
         // === Inputs ===
         bp.template register_input<Scalar>("total_force.x", &force_x_, "N", "Total force X");
         bp.template register_input<Scalar>("total_force.y", &force_y_, "N", "Total force Y");
@@ -120,45 +148,82 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
 
     /**
      * @brief Stage phase - load config and apply initial conditions
+     *
+     * Position init controlled by position_init_mode: "lla" or "ecef" (default)
+     * Attitude init controlled by attitude_init_mode: "euler_zyx" or "quaternion" (default)
+     * Reference frame controlled by reference_frame: "eci" (default) or "ecef"
+     *   - "eci": Inertial equations (no Earth rotation effects)
+     *   - "ecef": Includes Coriolis and centrifugal terms from Earth rotation
      */
     void Stage(Backplane<Scalar> &) override {
         const auto &config = this->GetConfig();
 
-        // Load initial position
-        if (config.template Has<Vec3<double>>("initial_position")) {
-            auto pos = config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
-            position_ = Vec3<Scalar>{static_cast<Scalar>(pos(0)), static_cast<Scalar>(pos(1)),
-                                     static_cast<Scalar>(pos(2))};
+        // Read reference frame setting (default to "eci" for backward compatibility)
+        reference_frame_ = this->template read_param<std::string>("reference_frame", "eci");
+
+        // === Position Initialization ===
+        // Track position as double for coordinate transforms (needed for Euler init)
+        Vec3<double> r_ecef_double = Vec3<double>::Zero();
+
+        auto pos_mode = this->template read_param<std::string>("position_init_mode", "ecef");
+        if (pos_mode == "lla") {
+            // LLA format: [lat_deg, lon_deg, alt_m]
+            auto lla_vec = config.template Get<Vec3<double>>("initial_lla", Vec3<double>::Zero());
+
+            vulcan::LLA<double> lla;
+            lla.lat = lla_vec(0) * vulcan::constants::angle::deg2rad;
+            lla.lon = lla_vec(1) * vulcan::constants::angle::deg2rad;
+            lla.alt = lla_vec(2);
+
+            r_ecef_double = vulcan::lla_to_ecef(lla);
+            position_ = Vec3<Scalar>{static_cast<Scalar>(r_ecef_double(0)),
+                                     static_cast<Scalar>(r_ecef_double(1)),
+                                     static_cast<Scalar>(r_ecef_double(2))};
+        } else {
+            r_ecef_double =
+                config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
+            position_ = this->read_param_vec3("initial_position", position_);
         }
 
-        // Load initial velocity (body frame)
-        if (config.template Has<Vec3<double>>("initial_velocity_body")) {
-            auto vel =
-                config.template Get<Vec3<double>>("initial_velocity_body", Vec3<double>::Zero());
-            velocity_body_ = Vec3<Scalar>{static_cast<Scalar>(vel(0)), static_cast<Scalar>(vel(1)),
-                                          static_cast<Scalar>(vel(2))};
+        // Load velocity and omega (always body frame)
+        velocity_body_ = this->read_param_vec3("initial_velocity_body", velocity_body_);
+        omega_body_ = this->read_param_vec3("initial_omega_body", omega_body_);
+
+        // === Attitude Initialization ===
+        auto att_mode = this->template read_param<std::string>("attitude_init_mode", "quaternion");
+        if (att_mode == "euler_zyx") {
+            // Euler format: [yaw_deg, pitch_deg, roll_deg] (ZYX sequence)
+            auto euler_deg =
+                config.template Get<Vec3<double>>("initial_euler_zyx", Vec3<double>::Zero());
+
+            double yaw = euler_deg(0) * vulcan::constants::angle::deg2rad;
+            double pitch = euler_deg(1) * vulcan::constants::angle::deg2rad;
+            double roll = euler_deg(2) * vulcan::constants::angle::deg2rad;
+
+            // Compute NED frame at position (using double for coordinate transforms)
+            auto ned = vulcan::local_ned_at(r_ecef_double);
+
+            // Build body frame from Euler angles relative to NED
+            auto body = vulcan::body_from_euler(ned, yaw, pitch, roll);
+
+            // Extract quaternion (body-to-ECEF)
+            Mat3<double> dcm;
+            dcm.col(0) = body.x_axis;
+            dcm.col(1) = body.y_axis;
+            dcm.col(2) = body.z_axis;
+            auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(dcm);
+
+            attitude_ = Vec4<Scalar>{
+                static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
+                static_cast<Scalar>(q_body_to_ecef.y), static_cast<Scalar>(q_body_to_ecef.z)};
+        } else {
+            attitude_ = this->read_param_vec4("initial_attitude", attitude_);
         }
 
-        // Load initial attitude quaternion [w, x, y, z]
-        if (config.template Has<Vec4<double>>("initial_attitude")) {
-            Vec4<double> default_quat;
-            default_quat << 1.0, 0.0, 0.0, 0.0; // Identity quaternion
-            auto quat = config.template Get<Vec4<double>>("initial_attitude", default_quat);
-            attitude_ = Vec4<Scalar>{static_cast<Scalar>(quat(0)), static_cast<Scalar>(quat(1)),
-                                     static_cast<Scalar>(quat(2)), static_cast<Scalar>(quat(3))};
-        }
-
-        // Load initial angular velocity (body frame)
-        if (config.template Has<Vec3<double>>("initial_omega_body")) {
-            auto omega =
-                config.template Get<Vec3<double>>("initial_omega_body", Vec3<double>::Zero());
-            omega_body_ = Vec3<Scalar>{static_cast<Scalar>(omega(0)), static_cast<Scalar>(omega(1)),
-                                       static_cast<Scalar>(omega(2))};
-        }
-
-        // Compute derived output
+        // Compute derived outputs
         janus::Quaternion<Scalar> q{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
         velocity_ref_ = q.rotate(velocity_body_);
+        ComputeCoordinateFrameOutputs();
 
         // Zero all derivatives
         position_dot_ = Vec3<Scalar>::Zero();
@@ -171,6 +236,10 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
      * @brief Compute derivatives using Vulcan 6DOF dynamics
      *
      * Phase 6: No PreStep/PublishOutputs needed - states ARE outputs.
+     *
+     * Reference frame modes:
+     *   - "eci": Standard inertial equations (default)
+     *   - "ecef": Includes Coriolis and centrifugal terms from Earth rotation
      */
     void Step(Scalar t, Scalar dt) override {
         (void)t;
@@ -179,8 +248,9 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         // Build quaternion from state
         janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
-        // Update derived output
+        // Update derived outputs
         velocity_ref_ = quat.rotate(velocity_body_);
+        ComputeCoordinateFrameOutputs();
 
         // Build force and moment vectors from inputs
         Vec3<Scalar> force{force_x_.get(), force_y_.get(), force_z_.get()};
@@ -208,16 +278,43 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         rb_state.attitude = quat;
         rb_state.omega_body = omega_body_;
 
-        // Compute derivatives using Vulcan
-        auto derivs =
-            vulcan::dynamics::compute_6dof_derivatives(rb_state, force, moment, mass_props);
+        // Compute derivatives - method depends on reference frame setting
+        if (reference_frame_ == "ecef") {
+            // ECEF mode: Include Coriolis and centrifugal terms from Earth rotation
+            // Earth rotation vector in ECEF: [0, 0, omega]
+            Vec3<Scalar> omega_earth{Scalar(0), Scalar(0), Scalar(vulcan::constants::earth::omega)};
 
-        // Write derivatives directly to member variables
-        position_dot_ = derivs.position_dot;
-        velocity_body_dot_ = derivs.velocity_dot;
-        attitude_dot_ = Vec4<Scalar>{derivs.attitude_dot.w, derivs.attitude_dot.x,
-                                     derivs.attitude_dot.y, derivs.attitude_dot.z};
-        omega_body_dot_ = derivs.omega_dot;
+            // Transform velocity and force from body to ECEF for ECEF dynamics
+            Vec3<Scalar> velocity_ecef = quat.rotate(velocity_body_);
+            Vec3<Scalar> force_ecef = quat.rotate(force);
+
+            // Compute ECEF translational dynamics (includes Coriolis and centrifugal)
+            Vec3<Scalar> accel_ecef = vulcan::dynamics::translational_dynamics_ecef(
+                position_, velocity_ecef, force_ecef, mass_props.mass, omega_earth);
+
+            // Transform acceleration back to body frame
+            velocity_body_dot_ = quat.conjugate().rotate(accel_ecef);
+
+            // Position rate = velocity in ECEF
+            position_dot_ = velocity_ecef;
+
+            // Attitude and omega derivatives use standard formulas
+            auto q_dot = vulcan::quaternion_rate_from_omega(quat, omega_body_);
+            attitude_dot_ = Vec4<Scalar>{q_dot.w, q_dot.x, q_dot.y, q_dot.z};
+            omega_body_dot_ =
+                vulcan::dynamics::rotational_dynamics(omega_body_, moment, mass_props.inertia);
+        } else {
+            // ECI mode (default): Standard inertial equations
+            auto derivs =
+                vulcan::dynamics::compute_6dof_derivatives(rb_state, force, moment, mass_props);
+
+            // Write derivatives directly to member variables
+            position_dot_ = derivs.position_dot;
+            velocity_body_dot_ = derivs.velocity_dot;
+            attitude_dot_ = Vec4<Scalar>{derivs.attitude_dot.w, derivs.attitude_dot.x,
+                                         derivs.attitude_dot.y, derivs.attitude_dot.z};
+            omega_body_dot_ = derivs.omega_dot;
+        }
     }
 
     // =========================================================================
@@ -244,6 +341,56 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         omega_body_ = Vec3<Scalar>{wx, wy, wz};
     }
 
+    /**
+     * @brief Set initial position from LLA coordinates
+     * @param lat_deg Geodetic latitude [degrees]
+     * @param lon_deg Longitude [degrees]
+     * @param alt_m Altitude above ellipsoid [meters]
+     */
+    void SetInitialPositionLLA(double lat_deg, double lon_deg, double alt_m) {
+        vulcan::LLA<double> lla;
+        lla.lat = lat_deg * vulcan::constants::angle::deg2rad;
+        lla.lon = lon_deg * vulcan::constants::angle::deg2rad;
+        lla.alt = alt_m;
+        Vec3<double> r_ecef = vulcan::lla_to_ecef(lla);
+        position_ = Vec3<Scalar>{static_cast<Scalar>(r_ecef(0)), static_cast<Scalar>(r_ecef(1)),
+                                 static_cast<Scalar>(r_ecef(2))};
+    }
+
+    /**
+     * @brief Set initial attitude from Euler angles relative to local NED
+     * @param yaw_deg Yaw angle from North [degrees], positive clockwise
+     * @param pitch_deg Pitch angle [degrees], positive nose up
+     * @param roll_deg Roll angle [degrees], positive right wing down
+     * @note Position must be set before calling this method
+     */
+    void SetInitialAttitudeEuler(double yaw_deg, double pitch_deg, double roll_deg) {
+        double yaw = yaw_deg * vulcan::constants::angle::deg2rad;
+        double pitch = pitch_deg * vulcan::constants::angle::deg2rad;
+        double roll = roll_deg * vulcan::constants::angle::deg2rad;
+
+        // Get current position in ECEF
+        Vec3<double> r_ecef{static_cast<double>(position_(0)), static_cast<double>(position_(1)),
+                            static_cast<double>(position_(2))};
+
+        // Compute NED frame at this position
+        auto ned = vulcan::local_ned_at(r_ecef);
+
+        // Build body frame from Euler angles relative to NED
+        auto body = vulcan::body_from_euler(ned, yaw, pitch, roll);
+
+        // Extract quaternion (body-to-ECEF)
+        Mat3<double> dcm;
+        dcm.col(0) = body.x_axis;
+        dcm.col(1) = body.y_axis;
+        dcm.col(2) = body.z_axis;
+        auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(dcm);
+
+        attitude_ = Vec4<Scalar>{
+            static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
+            static_cast<Scalar>(q_body_to_ecef.y), static_cast<Scalar>(q_body_to_ecef.z)};
+    }
+
     // =========================================================================
     // Accessors
     // =========================================================================
@@ -256,10 +403,64 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
     }
     [[nodiscard]] Vec3<Scalar> GetOmegaBody() const { return omega_body_; }
 
+    // Coordinate frame accessors
+    [[nodiscard]] Vec3<Scalar> GetPositionLLA() const { return position_lla_; }
+    [[nodiscard]] Vec3<Scalar> GetVelocityNED() const { return velocity_ned_; }
+    [[nodiscard]] Vec3<Scalar> GetEulerZYX() const { return euler_zyx_; }
+
   private:
+    // =========================================================================
+    // Private Methods
+    // =========================================================================
+
+    /**
+     * @brief Compute coordinate frame outputs (LLA, NED velocity, Euler angles)
+     *
+     * Called during Stage() and Step() to update derived coordinate frame outputs.
+     */
+    void ComputeCoordinateFrameOutputs() {
+        // Convert position to LLA
+        vulcan::LLA<Scalar> lla = vulcan::ecef_to_lla(position_);
+        position_lla_(0) = lla.lat;
+        position_lla_(1) = lla.lon;
+        position_lla_(2) = lla.alt;
+
+        // Get NED frame at current position
+        auto ned = vulcan::local_ned_at(position_);
+
+        // Transform velocity from ECEF to NED
+        velocity_ned_ = ned.from_ecef(velocity_ref_);
+
+        // Compute Euler angles from attitude quaternion
+        // Build body frame from quaternion (body-to-ECEF)
+        janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+
+        // Body axes in ECEF (quaternion rotates body coords to ECEF)
+        Vec3<Scalar> x_body_ecef = quat.rotate(Vec3<Scalar>::UnitX());
+        Vec3<Scalar> y_body_ecef = quat.rotate(Vec3<Scalar>::UnitY());
+        Vec3<Scalar> z_body_ecef = quat.rotate(Vec3<Scalar>::UnitZ());
+
+        // Build body frame for euler_from_body
+        vulcan::CoordinateFrame<Scalar> body_frame(x_body_ecef, y_body_ecef, z_body_ecef,
+                                                   Vec3<Scalar>::Zero());
+
+        // Extract Euler angles (returns [yaw, pitch, roll])
+        // NOTE: This can have singularities at pitch = +/-90 degrees (gimbal lock)
+        // The Euler outputs may be unreliable near these angles, but this should
+        // not affect the dynamics which use quaternions directly.
+        euler_zyx_ = vulcan::euler_from_body(body_frame, ned);
+    }
+
+    // =========================================================================
+    // Member Variables
+    // =========================================================================
+
     // Identity
     std::string name_;
     std::string entity_;
+
+    // Reference frame setting: "eci" (inertial) or "ecef" (with Coriolis/centrifugal)
+    std::string reference_frame_ = "eci";
 
     // === Phase 6: State variables (ARE the outputs) ===
     Vec3<Scalar> position_ = Vec3<Scalar>::Zero();
@@ -275,8 +476,13 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
     Vec3<Scalar> omega_body_ = Vec3<Scalar>::Zero();
     Vec3<Scalar> omega_body_dot_ = Vec3<Scalar>::Zero();
 
-    // === Derived output ===
+    // === Derived outputs ===
     Vec3<Scalar> velocity_ref_ = Vec3<Scalar>::Zero();
+
+    // Coordinate frame outputs
+    Vec3<Scalar> position_lla_ = Vec3<Scalar>::Zero(); ///< [lat, lon, alt] in [rad, rad, m]
+    Vec3<Scalar> velocity_ned_ = Vec3<Scalar>::Zero(); ///< [vn, ve, vd] in m/s
+    Vec3<Scalar> euler_zyx_ = Vec3<Scalar>::Zero();    ///< [yaw, pitch, roll] in rad
 
     // === Input Handles ===
     InputHandle<Scalar> force_x_;
