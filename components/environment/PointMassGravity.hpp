@@ -109,7 +109,9 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
     void Stage(Backplane<Scalar> &) override {
         // Read config using helpers (preserves defaults if not in config)
         mu_ = this->template read_param<double>("mu", mu_);
-        model_int_ = this->template read_param<int>("model", model_int_);
+        // Note: model is often in scalars (as double), so read as double and cast
+        model_int_ = static_cast<int>(
+            this->template read_param<double>("model", static_cast<double>(model_int_)));
     }
 
     /**

@@ -1,404 +1,1076 @@
-# Unified Vehicle Component: Design Analysis
+# Unified Vehicle Component: Refined Design
 
-## Problem Statement
+## Executive Summary
 
-The current architecture for a 6DOF rigid body (like the Rocket in `rocket_ascent.yaml`) requires three separate components working in concert:
+This document refines the unified vehicle component design by combining the **automatic aggregation semantics** of hierarchical "system model" architectures with **IODA's flat, composable signal model**.
 
-1. **`RigidBody6DOF`** — Owns 13-state dynamics (position, velocity, attitude, angular velocity)
-2. **`ForceAggregator`** — Sums forces/moments from multiple sources, handles frame transforms
-3. **`MassAggregator`** — Aggregates mass properties (mass, CG, inertia) from multiple sources
+**Key Insight**: Components self-declare their physical characteristics (mass, forces, body attachment) through standard signal patterns. A `Vehicle6DOF` component discovers and aggregates these automatically within its entity namespace.
 
-This separation creates significant YAML wiring complexity:
+---
 
-```yaml
-# Current: 26+ signal routes just to connect these three components
-routes:
-  # Mass → ForceAggregator (CG for moment transfer)
-  - input: Rocket.Forces.cg.x
-    output: Rocket.Mass.cg.x
-  # ... (3 routes)
-  
-  # EOM → ForceAggregator (attitude for ECEF→body transform)
-  - input: Rocket.Forces.attitude.w
-    output: Rocket.EOM.attitude.w
-  # ... (4 routes)
-  
-  # ForceAggregator → EOM (forces/moments)
-  - input: Rocket.EOM.total_force.x
-    output: Rocket.Forces.total_force.x
-  # ... (6 routes)
-  
-  # Mass → EOM (mass properties)
-  - input: Rocket.EOM.total_mass
-    output: Rocket.Mass.total_mass
-  # ... (7 routes)
+## Problem Recap
+
+The current architecture requires 26+ manual routes to connect:
+
+1. `RigidBody6DOF` — owns 13-state dynamics
+2. `ForceAggregator` — sums forces/moments
+3. `MassAggregator` — aggregates mass properties
+
+The old "system model" approach had automatic aggregation but violated IODA's flat peer model.
+
+**Goal**: Get automatic aggregation while preserving IODA compliance.
+
+---
+
+## Design Philosophy: "Opt-In Aggregation via Convention"
+
+Rather than hierarchical ownership, we use **signal conventions** to enable auto-discovery:
+
+1. **Components remain IODA peers** — no parent/child ownership
+2. **Components self-declare capabilities** via standard signal patterns
+3. **Vehicle6DOF discovers providers** within its entity namespace
+4. **Configuration override** available when auto-discovery is insufficient
+
+This is similar to how Go uses interface satisfaction by method signature rather than explicit declaration.
+
+---
+
+## Component Frame Concept (Key Design Decision)
+
+### The Problem with Body-Frame Outputs
+
+Consider a thruster mounted at 45° on a rocket. In the **current design**, the component would need to:
+1. Know its mounting orientation
+2. Transform its thrust vector from local frame to body frame
+3. Output the result in body frame
+
+This has problems:
+- **Duplicated logic**: Every force-producing component handles its own frame transform
+- **Coupling**: Component knows about vehicle geometry
+- **Less reusable**: Can't reuse the same thruster component at different mount angles
+
+### The Insight: Component Local Frame
+
+Every physical component naturally operates in its **own local frame**:
+- A thruster produces thrust along its nozzle axis (typically +X or -Z in local frame)
+- A fuel tank has mass properties symmetric about its own axis
+- A sensor measures in its own boresight direction
+
+The **attachment** (where and how the component is mounted) is configuration, not computed physics.
+
+### Two-Frame Model
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Vehicle Body Frame                              │
+│                                                                              │
+│    Body Origin (0,0,0)                                                       │
+│         │                                                                    │
+│         │  r_body = [2, 0, 5] m                                              │
+│         │  (attachment position)                                             │
+│         ▼                                                                    │
+│    ┌─────────────────────┐                                                   │
+│    │   Component Frame   │◄── q_comp_to_body (attachment orientation)        │
+│    │                     │                                                   │
+│    │   Origin: [0,0,0]   │    Component outputs in LOCAL frame:              │
+│    │   +X: thrust axis   │    - force_local = [thrust, 0, 0]                 │
+│    │   +Z: "up" locally  │    - moment_local = [0, 0, 0]                     │
+│    │                     │    - mass_local, cg_local, inertia_local          │
+│    └─────────────────────┘                                                   │
+│                                                                              │
+│    Vehicle6DOF transforms to body frame during aggregation:                  │
+│    F_body = q_comp_to_body.rotate(F_local)                                   │
+│    M_body = r_body × F_body + q_comp_to_body.rotate(M_local)                 │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> [!IMPORTANT]
-> **User's Question**: Should we combine these into a single "Vehicle" or "6DOF Entity" component?
+### Should Attachment Be in Base Component?
 
----
+**Option A: Build into Base Component Class**
 
-## Analysis
+```cpp
+template <typename Scalar>
+class Component {
+protected:
+    // === Body Attachment (Optional) ===
+    Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();      // Position in parent body frame
+    janus::Quaternion<Scalar> body_orientation_;              // Component-to-body rotation
 
-### Current Architecture Pros
+    // Helper called in Stage() by components that need attachment
+    void ReadAttachmentFromConfig() {
+        body_position_ = read_param_vec3("body_position", Vec3<Scalar>::Zero());
+        auto q = read_param_vec4("body_orientation", Vec4<Scalar>{1,0,0,0});
+        body_orientation_ = janus::Quaternion<Scalar>{q(0), q(1), q(2), q(3)};
+    }
 
-| Aspect | Benefit |
-|:-------|:--------|
-| **Separation of Concerns** | Each component has a clear, testable responsibility |
-| **Composability** | Can use MassAggregator without EOM (e.g., ground test), or ForceAggregator for non-6DOF bodies |
-| **IDOA Compliance** | Follows the "flat simulation" philosophy — all components are peers |
-| **Vulcan Alignment** | Each component maps cleanly to Vulcan utilities (`MassProperties`, `compute_6dof_derivatives`) |
-
-### Current Architecture Cons
-
-| Aspect | Pain Point |
-|:-------|:-----------|
-| **Wiring Verbosity** | ~26 routes for a basic 6DOF body is error-prone |
-| **Conceptual Overhead** | Users must understand three components to model one vehicle |
-| **Scheduling Complexity** | Must order Mass → Forces → EOM correctly |
-| **Cohesion Gap** | Mass, forces, and dynamics are *always* needed together for a 6DOF body |
-
----
-
-## Design Options
-
-### Option A: Keep Separate Components (Status Quo + Wire Bundles)
-
-**Approach**: Keep the current three components, but add "wire bundle" helpers to reduce YAML verbosity.
-
-```yaml
-# New: Wire bundle syntax
-wire_bundles:
-  - type: 6dof_entity
-    entity: Rocket
-    mass_aggregator: Mass
-    force_aggregator: Forces
-    rigid_body: EOM
+public:
+    // Virtual accessors (can be overridden for complex cases)
+    [[nodiscard]] virtual Vec3<Scalar> GetBodyPosition() const {
+        return body_position_;
+    }
+    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
+        return body_orientation_;
+    }
+    [[nodiscard]] virtual bool HasBodyAttachment() const {
+        return has_attachment_;
+    }
+};
 ```
 
-**Pros**:
+**Pros:**
+- Unified API for all physical components
+- Single place to get attachment config parsing right
+- Virtual methods allow override for complex cases
+- Lightweight (just two members with identity defaults)
 
-- No code changes to components
-- Maintains composability
-- Wire bundles are purely syntactic sugar
+**Cons:**
+- Not all components are "physical" (Environment, schedulers)
+- Some components have multiple attachment points
 
-**Cons**:
+**Option B: Trait/Mixin Pattern**
 
-- Still three components conceptually
-- Wire bundle logic adds complexity to loader
-- Doesn't solve programmatic API verbosity
+```cpp
+template <typename Scalar>
+class PhysicalComponent : public Component<Scalar> {
+    // Attachment members and methods
+};
+
+// Usage
+class RocketEngine : public PhysicalComponent<Scalar> { ... };
+class GravityModel : public Component<Scalar> { ... };  // No attachment
+```
+
+**Pros:**
+- Clear separation of concerns
+- Non-physical components don't have attachment baggage
+
+**Cons:**
+- More complex class hierarchy
+- Multiple inheritance issues if mixing traits
+
+**Option C: Signal Convention Only (Pure IODA)**
+
+Components that have attachment output it as signals:
+```
+{entity}.{component}.attachment.position.x/y/z
+{entity}.{component}.attachment.orientation.w/x/y/z
+```
+
+**Pros:**
+- Most IODA-compliant (no special base class knowledge)
+- Discovery works uniformly via signals
+
+**Cons:**
+- More signals to register
+- Every attachable component must implement the pattern
+- Can't query attachment without resolving signals
+
+### Recommendation: Option A (Base Component) + Signal Export
+
+Build attachment into base Component as **optional infrastructure**, but also expose as signals for debugging/visualization:
+
+```cpp
+void Provision(Backplane<Scalar>& bp) override {
+    // ... component-specific outputs ...
+
+    // If component has attachment, expose it (called by components that need it)
+    if (has_body_attachment_) {
+        bp.register_output_vec3<Scalar>("attachment.position", &body_position_,
+                                        "m", "Component position in body frame");
+        bp.register_output_quat<Scalar>("attachment.orientation", &body_orientation_vec_,
+                                        "", "Component-to-body quaternion");
+    }
+}
+```
 
 ---
 
-### Option B: Unified "Vehicle6DOF" Component
+## Signal Conventions for Physical Components
 
-**Approach**: Create a new component that *contains* the logic of all three:
+### Mass Provider Convention
+
+A component that provides mass outputs these signals **in its local frame**:
+
+```
+{entity}.{component}.mass           [kg]      - Total mass
+{entity}.{component}.cg_local.x/y/z [m]       - CG in COMPONENT frame
+{entity}.{component}.inertia_local.xx/yy/zz/xy/xz/yz  [kg*m^2] - Inertia about local CG
+
+# Attachment (from config, optionally exposed as signals)
+{entity}.{component}.attachment.position.x/y/z      [m]  - Position in body frame
+{entity}.{component}.attachment.orientation.w/x/y/z [-]  - Quaternion (comp→body)
+```
+
+Vehicle6DOF transforms to body frame:
+```cpp
+// CG in body frame
+Vec3<Scalar> cg_body = body_position + body_orientation.rotate(cg_local);
+
+// Inertia transformation (rotation + parallel axis theorem)
+auto mass_props_body = transform_mass_properties(mass_props_local,
+                                                  body_position,
+                                                  body_orientation);
+```
+
+### Force Provider Convention
+
+A component that provides forces outputs **in its local frame**:
+
+```
+{entity}.{component}.force_local.x/y/z    [N]     - Force in COMPONENT frame
+{entity}.{component}.moment_local.x/y/z   [N*m]   - Moment about component origin (optional)
+
+# Attachment (from config)
+{entity}.{component}.attachment.position.x/y/z      [m]
+{entity}.{component}.attachment.orientation.w/x/y/z [-]
+```
+
+Vehicle6DOF transforms to body frame:
+```cpp
+// Transform force to body frame
+Vec3<Scalar> F_body = body_orientation.rotate(F_local);
+
+// Transform moment and add moment arm contribution
+Vec3<Scalar> M_body = body_orientation.rotate(M_local)
+                    + (body_position - cg).cross(F_body);
+```
+
+### Environmental Force Convention (No Attachment)
+
+Environmental forces (gravity, drag, etc.) that act at CG or in global frames:
+
+```
+{entity}.{component}.force_ecef.x/y/z    [N]   - Force in ECEF frame (gravity)
+# OR
+{entity}.{component}.force_body.x/y/z    [N]   - Force in body frame (aero)
+```
+
+These have no attachment — they're applied directly without transformation.
+
+### Discovery Mechanism
+
+During `Stage()`, Vehicle6DOF:
+
+1. Queries backplane for all components in its entity namespace
+2. For each component, checks signal patterns to identify providers
+3. Resolves handles and queries attachment via base Component API
+4. Builds handle bundles with frame transformation info
+
+```cpp
+void DiscoverProviders(Backplane<Scalar>& bp) {
+    auto components = bp.components_in_entity(entity_);
+
+    for (const auto& comp_name : components) {
+        if (comp_name == name_) continue;  // Skip self
+
+        std::string prefix = entity_ + "." + comp_name + ".";
+        Component<Scalar>* comp_ptr = bp.get_component(entity_, comp_name);
+
+        // Check for mass provider pattern (local frame)
+        if (bp.has_signal(prefix + "mass") &&
+            bp.has_signal(prefix + "cg_local.x") &&
+            bp.has_signal(prefix + "inertia_local.xx")) {
+
+            MassSourceBundle bundle;
+            bundle.name = comp_name;
+            bundle.mass = bp.resolve<Scalar>(prefix + "mass");
+            bundle.cg_local = resolve_vec3(bp, prefix + "cg_local");
+            bundle.inertia_local = resolve_inertia(bp, prefix + "inertia_local");
+
+            // Get attachment from component (base class API)
+            if (comp_ptr && comp_ptr->HasBodyAttachment()) {
+                bundle.body_position = comp_ptr->GetBodyPosition();
+                bundle.body_orientation = comp_ptr->GetBodyOrientation();
+                bundle.has_attachment = true;
+            }
+
+            mass_sources_.push_back(bundle);
+        }
+
+        // Check for local-frame force provider
+        if (bp.has_signal(prefix + "force_local.x")) {
+            ForceSourceBundle bundle;
+            bundle.name = comp_name;
+            bundle.force_local = resolve_vec3(bp, prefix + "force_local");
+            bundle.moment_local = resolve_vec3_optional(bp, prefix + "moment_local");
+            bundle.frame_type = ForceFrame::Local;
+
+            if (comp_ptr && comp_ptr->HasBodyAttachment()) {
+                bundle.body_position = comp_ptr->GetBodyPosition();
+                bundle.body_orientation = comp_ptr->GetBodyOrientation();
+            }
+
+            force_sources_.push_back(bundle);
+        }
+
+        // Check for body-frame force (no transform needed)
+        else if (bp.has_signal(prefix + "force_body.x")) {
+            ForceSourceBundle bundle;
+            bundle.name = comp_name;
+            bundle.force = resolve_vec3(bp, prefix + "force_body");
+            bundle.frame_type = ForceFrame::Body;
+            force_sources_.push_back(bundle);
+        }
+
+        // Check for ECEF-frame force (transform via attitude)
+        else if (bp.has_signal(prefix + "force_ecef.x")) {
+            ForceSourceBundle bundle;
+            bundle.name = comp_name;
+            bundle.force = resolve_vec3(bp, prefix + "force_ecef");
+            bundle.frame_type = ForceFrame::ECEF;
+            force_sources_.push_back(bundle);
+        }
+    }
+}
+```
+
+---
+
+## Component Architecture
+
+### Vehicle6DOF Component
 
 ```cpp
 template <typename Scalar>
 class Vehicle6DOF : public Component<Scalar> {
-    // Owns state: position, velocity, attitude, omega
-    // Owns mass aggregation logic
-    // Owns force aggregation logic
-    // Outputs: all state + LLA/NED/Euler + mass properties
+    // === Identity ===
+    std::string name_;
+    std::string entity_;
+
+    // === 6DOF State (13 variables) ===
+    Vec3<Scalar> position_;           // ECEF position [m]
+    Vec3<Scalar> velocity_body_;      // Body-frame velocity [m/s]
+    Vec4<Scalar> attitude_;           // Quaternion (body-to-ECEF)
+    Vec3<Scalar> omega_body_;         // Angular velocity [rad/s]
+
+    // === Derivatives ===
+    Vec3<Scalar> position_dot_;
+    Vec3<Scalar> velocity_body_dot_;
+    Vec4<Scalar> attitude_dot_;
+    Vec3<Scalar> omega_body_dot_;
+
+    // === Aggregated Properties (internal, not wired) ===
+    vulcan::mass::MassProperties<Scalar> total_mass_props_;
+    Vec3<Scalar> total_force_body_;
+    Vec3<Scalar> total_moment_body_;
+
+    // === Discovered Providers ===
+    std::vector<MassSourceHandles<Scalar>> mass_sources_;
+    std::vector<ForceSourceHandles<Scalar>> body_force_sources_;
+    std::vector<ForceSourceHandles<Scalar>> ecef_force_sources_;
+
+    // === Configuration ===
+    bool auto_discover_ = true;  // Default: discover providers automatically
+    std::vector<std::string> explicit_mass_sources_;   // Override: explicit list
+    std::vector<std::string> explicit_force_sources_;  // Override: explicit list
 };
 ```
+
+### Lifecycle Implementation
+
+#### Provision Phase
+
+```cpp
+void Provision(Backplane<Scalar>& bp) override {
+    // === Register State Outputs ===
+    bp.register_state_vec3<Scalar>("position", &position_, &position_dot_, "m", "ECEF position");
+    bp.register_state_vec3<Scalar>("velocity_body", &velocity_body_, &velocity_body_dot_, "m/s", "Body velocity");
+    bp.register_state_quat<Scalar>("attitude", &attitude_, &attitude_dot_, "", "Body-to-ECEF quaternion");
+    bp.register_state_vec3<Scalar>("omega_body", &omega_body_, &omega_body_dot_, "rad/s", "Angular velocity");
+
+    // === Register Derived Outputs ===
+    bp.register_output_vec3<Scalar>("velocity_ref", &velocity_ref_, "m/s", "ECEF velocity");
+    bp.register_output<Scalar>("position_lla.lat", &position_lla_(0), "rad", "Latitude");
+    bp.register_output<Scalar>("position_lla.lon", &position_lla_(1), "rad", "Longitude");
+    bp.register_output<Scalar>("position_lla.alt", &position_lla_(2), "m", "Altitude");
+    // ... NED velocity, Euler angles ...
+
+    // === Register Aggregated Mass Outputs (for consumers) ===
+    bp.register_output<Scalar>("total_mass", &total_mass_, "kg", "Aggregated mass");
+    bp.register_output_vec3<Scalar>("cg", &total_cg_, "m", "Aggregated CG");
+    bp.register_output<Scalar>("inertia.xx", &total_inertia_xx_, "kg*m^2", "Aggregated Ixx");
+    // ... other inertia components ...
+
+    // === Register Aggregated Force Outputs (for debugging/telemetry) ===
+    bp.register_output_vec3<Scalar>("total_force", &total_force_body_, "N", "Total body force");
+    bp.register_output_vec3<Scalar>("total_moment", &total_moment_body_, "N*m", "Total body moment");
+
+    // NOTE: No inputs registered! Vehicle discovers providers via signals.
+}
+```
+
+#### Stage Phase (Discovery)
+
+```cpp
+void Stage(Backplane<Scalar>& bp) override {
+    const auto& config = GetConfig();
+
+    // Configuration options
+    auto_discover_ = read_param("auto_discover", true);
+    explicit_mass_sources_ = config.Get<std::vector<std::string>>("mass_sources", {});
+    explicit_force_sources_ = config.Get<std::vector<std::string>>("force_sources", {});
+
+    // Apply initial conditions (position, velocity, attitude)
+    ApplyInitialConditions(config);
+
+    // === Discovery Phase ===
+    if (auto_discover_) {
+        DiscoverMassProviders(bp);
+        DiscoverForceProviders(bp);
+    }
+
+    // Explicit sources override/supplement auto-discovery
+    for (const auto& name : explicit_mass_sources_) {
+        ResolveMassSource(bp, name);
+    }
+    for (const auto& name : explicit_force_sources_) {
+        ResolveForceSource(bp, name);
+    }
+}
+
+void DiscoverMassProviders(Backplane<Scalar>& bp) {
+    // Get all component names in our entity
+    auto components = bp.components_in_entity(entity_);
+
+    for (const auto& comp_name : components) {
+        if (comp_name == name_) continue;  // Skip self
+
+        std::string prefix = entity_ + "." + comp_name + ".";
+
+        // Check for mass provider pattern
+        if (bp.has_signal(prefix + "mass") &&
+            bp.has_signal(prefix + "cg.x") &&
+            bp.has_signal(prefix + "inertia.xx")) {
+
+            ResolveMassSource(bp, comp_name);
+        }
+    }
+}
+
+void DiscoverForceProviders(Backplane<Scalar>& bp) {
+    auto components = bp.components_in_entity(entity_);
+
+    for (const auto& comp_name : components) {
+        if (comp_name == name_) continue;
+
+        std::string prefix = entity_ + "." + comp_name + ".";
+
+        // Check for force provider pattern
+        if (bp.has_signal(prefix + "force.x") &&
+            bp.has_signal(prefix + "force.y") &&
+            bp.has_signal(prefix + "force.z")) {
+
+            // Determine frame (default to body if not specified)
+            auto frame = bp.has_signal(prefix + "force_frame")
+                ? GetFrameFromSignal(bp, prefix + "force_frame")
+                : ForceFrame::Body;
+
+            ResolveForceSource(bp, comp_name, frame);
+        }
+    }
+}
+```
+
+#### Step Phase (Aggregation + Dynamics)
+
+```cpp
+void Step(Scalar t, Scalar dt) override {
+    (void)t; (void)dt;
+
+    // === 1. Aggregate Mass Properties ===
+    AggregateMass();
+
+    // === 2. Aggregate Forces/Moments ===
+    AggregateForces();
+
+    // === 3. Compute 6DOF Derivatives ===
+    ComputeDynamics();
+
+    // === 4. Update Derived Outputs ===
+    ComputeCoordinateFrameOutputs();
+}
+
+void AggregateMass() {
+    if (mass_sources_.empty()) {
+        total_mass_props_ = default_mass_props_;
+        return;
+    }
+
+    // Aggregate mass properties, transforming each from local to body frame
+    vulcan::mass::MassProperties<Scalar> total;
+    total.mass = Scalar(0);
+    total.cg = Vec3<Scalar>::Zero();
+    total.inertia = Mat3<Scalar>::Zero();
+
+    for (const auto& src : mass_sources_) {
+        // Get mass properties in component local frame
+        vulcan::mass::MassProperties<Scalar> local;
+        local.mass = *src.mass;
+        local.cg = src.GetCgLocal();
+        local.inertia = src.GetInertiaLocal();
+
+        // Transform to body frame
+        vulcan::mass::MassProperties<Scalar> body;
+        if (src.has_attachment) {
+            // CG in body frame: r_body + R * cg_local
+            body.cg = src.body_position + src.body_orientation.rotate(local.cg);
+
+            // Inertia transformation:
+            // 1. Rotate inertia tensor: I_rotated = R * I_local * R^T
+            // 2. Parallel axis theorem: I_body = I_rotated + m * (d^2 * I - d ⊗ d)
+            body.inertia = vulcan::mass::transform_inertia(
+                local.inertia, local.mass, src.body_orientation, body.cg);
+            body.mass = local.mass;
+        } else {
+            // No attachment - assume local frame IS body frame
+            body = local;
+        }
+
+        // Aggregate using Vulcan's MassProperties::operator+
+        total = total + body;
+    }
+
+    total_mass_props_ = total;
+    total_mass_ = total.mass;
+    total_cg_ = total.cg;
+    // ... write inertia outputs ...
+}
+
+void AggregateForces() {
+    Vec3<Scalar> sum_force = Vec3<Scalar>::Zero();
+    Vec3<Scalar> sum_moment = Vec3<Scalar>::Zero();
+
+    // Vehicle attitude for ECEF transforms
+    janus::Quaternion<Scalar> q_body_to_ecef{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+
+    for (const auto& src : force_sources_) {
+        Vec3<Scalar> F_body;
+        Vec3<Scalar> M_body;
+        Vec3<Scalar> r_app;  // Application point in body frame
+
+        switch (src.frame_type) {
+            case ForceFrame::Local: {
+                // Force in component local frame - transform via attachment
+                Vec3<Scalar> F_local = src.GetForceLocal();
+                Vec3<Scalar> M_local = src.GetMomentLocal();
+
+                // Transform force: F_body = R_comp_to_body * F_local
+                F_body = src.body_orientation.rotate(F_local);
+
+                // Transform moment and compute application point
+                M_body = src.body_orientation.rotate(M_local);
+                r_app = src.body_position;  // Force applied at component origin
+                break;
+            }
+
+            case ForceFrame::Body: {
+                // Already in body frame - no transform needed
+                F_body = src.GetForce();
+                M_body = Vec3<Scalar>::Zero();
+                r_app = total_mass_props_.cg;  // Applied at CG (no moment arm)
+                break;
+            }
+
+            case ForceFrame::ECEF: {
+                // Transform from ECEF to body using vehicle attitude
+                Vec3<Scalar> F_ecef = src.GetForce();
+                F_body = q_body_to_ecef.conjugate().rotate(F_ecef);
+                M_body = Vec3<Scalar>::Zero();
+                r_app = total_mass_props_.cg;  // Applied at CG
+                break;
+            }
+        }
+
+        // Sum forces
+        sum_force += F_body;
+
+        // Moment about CG: M_cg = M_app + (r_app - r_cg) × F_body
+        Vec3<Scalar> lever_arm = r_app - total_mass_props_.cg;
+        sum_moment += M_body + lever_arm.cross(F_body);
+    }
+
+    total_force_body_ = sum_force;
+    total_moment_body_ = sum_moment;
+}
+
+void ComputeDynamics() {
+    janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+
+    vulcan::dynamics::RigidBodyState<Scalar> state;
+    state.position = position_;
+    state.velocity_body = velocity_body_;
+    state.attitude = quat;
+    state.omega_body = omega_body_;
+
+    auto derivs = vulcan::dynamics::compute_6dof_derivatives(
+        state, total_force_body_, total_moment_body_, total_mass_props_);
+
+    position_dot_ = derivs.position_dot;
+    velocity_body_dot_ = derivs.velocity_dot;
+    attitude_dot_ = Vec4<Scalar>{derivs.attitude_dot.w, derivs.attitude_dot.x,
+                                  derivs.attitude_dot.y, derivs.attitude_dot.z};
+    omega_body_dot_ = derivs.omega_dot;
+}
+```
+
+---
+
+## YAML Configuration
+
+### Minimal (Auto-Discovery)
+
+```yaml
+components:
+  # Vehicle automatically discovers mass/force providers in "Rocket" entity
+  - type: Vehicle6DOF
+    name: Vehicle
+    entity: Rocket
+    initial_lla: [28.5, -80.6, 0.0]        # Cape Canaveral
+    initial_euler_zyx: [90.0, 85.0, 0.0]   # Pointing East, 85° pitch up
+    initial_velocity_body: [0.0, 0.0, 0.0]
+
+  # Mass provider - outputs in LOCAL frame, Vehicle transforms to body
+  - type: StaticMass
+    name: Structure
+    entity: Rocket
+    body_position: [0.0, 0.0, 0.0]         # At body origin
+    body_orientation: [1.0, 0.0, 0.0, 0.0] # Identity (aligned with body)
+    mass: 1000.0
+    cg_local: [0.0, 0.0, 2.0]              # CG 2m along local Z
+    inertia_local: [100.0, 100.0, 50.0, 0.0, 0.0, 0.0]
+
+  # Fuel tank at specific body location
+  - type: FuelTank
+    name: Propellant
+    entity: Rocket
+    body_position: [0.0, 0.0, 5.0]         # 5m along body Z
+    body_orientation: [1.0, 0.0, 0.0, 0.0] # Aligned with body
+    initial_mass: 9000.0
+    cg_local: [0.0, 0.0, 0.0]              # CG at tank origin
+    # ... tank geometry for inertia ...
+
+  # Main engine - thrust along LOCAL +X, mounted at body [0,0,10]
+  - type: RocketEngine
+    name: MainEngine
+    entity: Rocket
+    body_position: [0.0, 0.0, 10.0]        # Nozzle location in body frame
+    body_orientation: [0.707, 0.0, 0.707, 0.0]  # Rotate so local +X points to body -Z
+    thrust: 100000.0
+    # Outputs: force_local = [thrust, 0, 0] (always along nozzle axis)
+    # Vehicle transforms: F_body = q.rotate([thrust, 0, 0]) = [0, 0, -thrust]
+
+  # Vernier engine - canted 10° for roll control
+  - type: RocketEngine
+    name: Vernier1
+    entity: Rocket
+    body_position: [1.0, 0.0, 9.5]         # Offset from centerline
+    body_orientation: [0.996, 0.0, 0.087, 0.0]  # 10° cant angle
+    thrust: 5000.0
+    # Same component type, different mounting = different body-frame force
+
+  # Gravity - acts in ECEF frame, no attachment needed
+  - type: SphericalGravity
+    name: Gravity
+    entity: Rocket
+    # Outputs: force_ecef.x/y/z (no body_position/orientation needed)
+```
+
+### Why This Is Better
+
+The **same RocketEngine component** produces the same output (`force_local = [thrust, 0, 0]`) regardless of mounting. The YAML configures WHERE it's mounted, and Vehicle6DOF handles the transformation:
+
+```
+MainEngine:
+  body_position = [0, 0, 10]
+  body_orientation = 90° rotation about Y
+  force_local = [100000, 0, 0]
+  → F_body = [0, 0, -100000]  (thrust along -Z body axis)
+
+Vernier1:
+  body_position = [1, 0, 9.5]
+  body_orientation = 10° cant
+  force_local = [5000, 0, 0]
+  → F_body = [~4900, 0, -870]  (mostly -Z with small roll component)
+```
+
+### Explicit Override
 
 ```yaml
 components:
   - type: Vehicle6DOF
-    name: Rocket
-    mass_sources: [Structure, FuelTank]
-    force_body_sources: [Engine]
-    force_ecef_sources: [Gravity]
-    initial_lla: [0.0, 0.0, 100000.0]
-    initial_euler_zyx: [0.0, 90.0, 0.0]
+    name: Vehicle
+    entity: Rocket
+    auto_discover: false  # Disable auto-discovery
+    mass_sources: [Structure, Propellant]
+    force_body_sources: [MainEngine, RCS]
+    force_ecef_sources: [Gravity, Drag]
+    # ... initial conditions ...
 ```
 
-**Pros**:
-
-- Single component per vehicle — simple YAML
-- All mass/force wiring internal to component
-- Matches user mental model ("this is my rocket")
-
-**Cons**:
-
-- **Violates IDOA principles** — component becomes a "god object"
-- Cannot use mass aggregation without dynamics
-- Code duplication if we also keep the separate components
-- Harder to test (monolithic)
-
----
-
-### Option C: Unified "RigidBody6DOF" with Inline Aggregation (Recommended)
-
-**Approach**: Extend `RigidBody6DOF` to optionally aggregate mass/forces internally when sources are specified, while keeping the aggregator components as standalone utilities.
+### Hybrid (Auto + Explicit Exclusions)
 
 ```yaml
 components:
-  # Standalone mass sources (unchanged)
-  - type: StaticMass
-    name: Structure
+  - type: Vehicle6DOF
+    name: Vehicle
     entity: Rocket
-    ...
-
-  - type: FuelTank
-    name: FuelTank
-    entity: Rocket
-    ...
-
-  # Unified body — aggregates internally
-  - type: RigidBody6DOF
-    name: EOM
-    entity: Rocket
-    mass_sources: [Structure, FuelTank]    # New: inline mass aggregation
-    force_body_sources: [Engine]           # New: inline force aggregation
-    force_ecef_sources: [Gravity]
-    initial_lla: [0.0, 0.0, 100000.0]
-    initial_euler_zyx: [0.0, 90.0, 0.0]
-```
-
-**Key Change**: When `mass_sources` or `force_*_sources` are specified, `RigidBody6DOF` performs aggregation internally. When not specified, it expects the traditional input signals (backwards compatible).
-
-**Implementation**:
-
-1. **Stage()**: If `mass_sources` is non-empty:
-   - Resolve handles to each mass source's outputs (mass, cg, inertia)
-   - Store handles internally (like `MassAggregator` does)
-
-2. **Step()**: If sources are configured:
-   - Aggregate mass properties directly (using `vulcan::mass::MassProperties::operator+`)
-   - Aggregate forces/moments directly (with frame transform)
-   - Use aggregated values instead of reading from input handles
-
-**Pros**:
-
-- Backwards compatible (existing configs still work)
-- Reduces wiring to near-zero for common case
-- Keeps aggregator components as standalone utilities
-- Single component models common "6DOF body" pattern
-- Aligns with Vulcan's `compute_6dof_derivatives` signature
-
-**Cons**:
-
-- `RigidBody6DOF` becomes larger (but still focused on one physical concept)
-- Two ways to configure the same behavior (input signals vs sources list)
-
----
-
-### Option D: "Entity" Meta-Component
-
-**Approach**: Create an "Entity" wrapper that composes multiple sub-components, hiding internal wiring.
-
-```yaml
-entities:
-  - name: Rocket
-    template: vehicle_6dof
-    config:
-      mass_sources: [Structure, FuelTank]
-      force_body_sources: [Engine]
-      force_ecef_sources: [Gravity]
-```
-
-The loader would expand this into the three separate components with auto-generated wiring.
-
-**Pros**:
-
-- Clean YAML ergonomics
-- Preserves component separation internally
-- Can support different "templates" (vehicle_3dof, point_mass, etc.)
-
-**Cons**:
-
-- Complex loader logic
-- Hidden complexity (debugging harder)
-- Entity templates are a new concept to learn
-
----
-
-## Recommendation: Option C
-
-**Extend `RigidBody6DOF` with inline aggregation** is the best balance of:
-
-1. **Simplicity**: One component = one vehicle (common case)
-2. **Composability**: Aggregators still available for advanced use
-3. **Backwards Compatibility**: Existing configs work unchanged
-4. **IDOA Compliance**: Still peers under the hood — just optional internal aggregation
-
-### Proposed Signal Topology (Option C)
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          RigidBody6DOF                              │
-│                                                                     │
-│  ┌─────────────────┐    ┌──────────────────┐    ┌───────────────┐  │
-│  │ Mass Sources    │───▶│ Internal Mass    │───▶│ Dynamics      │  │
-│  │ (resolved)      │    │ Aggregation      │    │ (Vulcan)      │  │
-│  └─────────────────┘    └──────────────────┘    └───────┬───────┘  │
-│                                                         │          │
-│  ┌─────────────────┐    ┌──────────────────┐            │          │
-│  │ Force Sources   │───▶│ Internal Force   │────────────┘          │
-│  │ (resolved)      │    │ Aggregation      │                       │
-│  └─────────────────┘    └──────────────────┘                       │
-│                                                                     │
-│  Outputs: position, velocity, attitude, omega, LLA, NED, Euler     │
-│           total_mass, cg, inertia (if aggregating internally)      │
-└─────────────────────────────────────────────────────────────────────┘
+    auto_discover: true
+    exclude_mass_sources: [DebugMass]      # Skip these in discovery
+    exclude_force_sources: [TestForce]
+    additional_force_sources: [External.Perturbation]  # Include cross-entity
 ```
 
 ---
 
-## Alternative Naming
+## Component Self-Declaration Pattern
 
-The user mentioned "Vehicle" or "6DOF Entity" as potential names. Options:
+Components that want to be discoverable simply output the standard signals:
 
-| Name | Pros | Cons |
-|:-----|:-----|:-----|
-| `RigidBody6DOF` (current) | No rename needed, familiar | Doesn't convey aggregation capability |
-| `Vehicle6DOF` | Intuitive for aero users | Implies vehicle (not generic rigid body) |
-| `Entity6DOF` | Matches "entity" namespace concept | Overloads "Entity" terminology |
-| `Body6DOF` | Short, generic | May conflict with "body frame" |
+### Example: StaticMass Component
 
-**Suggestion**: Keep `RigidBody6DOF` with extended functionality. Document the aggregation feature prominently.
+```cpp
+template <typename Scalar>
+class StaticMass : public Component<Scalar> {
+    void Provision(Backplane<Scalar>& bp) override {
+        // These signals make us a "mass provider"
+        bp.register_output<Scalar>("mass", &mass_, "kg", "Total mass");
+        bp.register_output_vec3<Scalar>("cg", &cg_, "m", "CG position");
+        bp.register_output<Scalar>("inertia.xx", &Ixx_, "kg*m^2", "Ixx");
+        bp.register_output<Scalar>("inertia.yy", &Iyy_, "kg*m^2", "Iyy");
+        bp.register_output<Scalar>("inertia.zz", &Izz_, "kg*m^2", "Izz");
+        bp.register_output<Scalar>("inertia.xy", &Ixy_, "kg*m^2", "Ixy");
+        bp.register_output<Scalar>("inertia.xz", &Ixz_, "kg*m^2", "Ixz");
+        bp.register_output<Scalar>("inertia.yz", &Iyz_, "kg*m^2", "Iyz");
+
+        // Optional: body position (for display/debugging)
+        bp.register_output_vec3<Scalar>("body_position", &body_pos_, "m", "Body frame position");
+    }
+
+    void Step(Scalar, Scalar) override {
+        // Static mass never changes
+    }
+};
+```
+
+### Example: RocketEngine Component
+
+```cpp
+template <typename Scalar>
+class RocketEngine : public Component<Scalar> {
+    void Provision(Backplane<Scalar>& bp) override {
+        // These signals make us a "force provider"
+        bp.register_output_vec3<Scalar>("force", &thrust_vec_, "N", "Thrust force (body)");
+        bp.register_output_vec3<Scalar>("moment", &moment_, "N*m", "Thrust moment");
+        bp.register_output_vec3<Scalar>("application_point", &nozzle_pos_, "m", "Nozzle location");
+
+        // Frame indicator (helps Vehicle know how to handle us)
+        // Note: Could be implicit "body" if not specified
+
+        // Mass flow output (consumed by fuel tank)
+        bp.register_output<Scalar>("mass_flow", &mdot_, "kg/s", "Propellant mass flow");
+
+        // Inputs
+        bp.register_input<Scalar>("throttle", &throttle_, "", "Throttle command");
+    }
+
+    void Step(Scalar, Scalar) override {
+        // Compute thrust based on throttle
+        Scalar thrust_mag = throttle_.get() * max_thrust_;
+        thrust_vec_ = thrust_direction_ * thrust_mag;
+        moment_ = Vec3<Scalar>::Zero();  // Thrust through nozzle center
+        mdot_ = thrust_mag / (Isp_ * g0_);
+    }
+};
+```
+
+---
+
+## Backplane Extensions Required
+
+### New Methods for Discovery
+
+```cpp
+template <typename Scalar>
+class Backplane {
+public:
+    // === Discovery API ===
+
+    /**
+     * @brief Get all component names in an entity namespace
+     */
+    std::vector<std::string> components_in_entity(const std::string& entity) const {
+        return registry_.components_in_entity(entity);
+    }
+
+    /**
+     * @brief Get all signals matching a prefix
+     */
+    std::vector<std::string> signals_with_prefix(const std::string& prefix) const {
+        return registry_.signals_with_prefix(prefix);
+    }
+
+    /**
+     * @brief Check if signal exists (already implemented)
+     */
+    bool has_signal(const std::string& name) const;
+};
+```
+
+### SignalRegistry Extensions
+
+```cpp
+template <typename Scalar>
+class SignalRegistry {
+public:
+    // === Discovery Support ===
+
+    std::vector<std::string> components_in_entity(const std::string& entity) const {
+        std::set<std::string> components;
+        std::string prefix = entity + ".";
+
+        for (const auto& [name, _] : signals_) {
+            if (name.starts_with(prefix)) {
+                // Extract component name: "Rocket.Engine.force.x" → "Engine"
+                auto rest = name.substr(prefix.size());
+                auto dot_pos = rest.find('.');
+                if (dot_pos != std::string::npos) {
+                    components.insert(rest.substr(0, dot_pos));
+                }
+            }
+        }
+        return {components.begin(), components.end()};
+    }
+
+    std::vector<std::string> signals_with_prefix(const std::string& prefix) const {
+        std::vector<std::string> result;
+        for (const auto& [name, _] : signals_) {
+            if (name.starts_with(prefix)) {
+                result.push_back(name);
+            }
+        }
+        return result;
+    }
+};
+```
+
+---
+
+## Comparison: Old system model vs. New Vehicle6DOF
+
+| Aspect | Old system model | IODA Separate | New Vehicle6DOF |
+|:-------|:-----------|:--------------|:----------------|
+| Component ownership | Hierarchical | Flat peers | Flat peers |
+| Mass aggregation | Automatic | Manual wiring | Auto-discovered |
+| Force aggregation | Automatic | Manual wiring | Auto-discovered |
+| Body positions | Component config | N/A | Component signals |
+| Wiring complexity | None | ~26 routes | ~0 routes |
+| IODA compliance | No | Yes | Yes |
+| Testability | Monolithic | Per-component | Per-component |
+| Composability | Low | High | High |
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Add Inline Mass Aggregation to RigidBody6DOF
+### Phase 1: Base Component Attachment Infrastructure
 
-1. Add `std::vector<std::string> mass_source_names_` config field
-2. In `Stage()`: resolve mass source handles if configured
-3. In `Step()`: aggregate mass properties if sources exist, else use input handles
-4. Output aggregated mass properties (new outputs: `total_mass`, `cg`, `inertia.*`)
+1. Add attachment members to `Component<Scalar>` base class:
+   - `body_position_` (Vec3, default zero)
+   - `body_orientation_` (Quaternion, default identity)
+   - `has_body_attachment_` (bool, default false)
+2. Add protected helper `ReadAttachmentFromConfig()`
+3. Add virtual accessors: `GetBodyPosition()`, `GetBodyOrientation()`, `HasBodyAttachment()`
+4. Add `vulcan::mass::transform_inertia()` utility for inertia frame transformation
+5. Unit tests for attachment parsing and transformation
 
-### Phase 2: Add Inline Force Aggregation to RigidBody6DOF
+### Phase 2: Backplane Discovery API
 
-1. Add `body_force_sources_` and `ecef_force_sources_` config fields
-2. In `Stage()`: resolve force source handles if configured
-3. In `Step()`: aggregate forces/moments if sources exist, else use input handles
-4. No new outputs (forces/moments are consumed internally)
+1. Add `components_in_entity()` to SignalRegistry
+2. Add `signals_with_prefix()` to SignalRegistry
+3. Add `get_component()` to retrieve component pointer by name
+4. Expose via Backplane facade
+5. Unit tests for discovery
 
-### Phase 3: Update YAML Examples
+### Phase 3: Vehicle6DOF Component
 
-1. Create `rocket_ascent_unified.yaml` showing new syntax
-2. Update documentation with both patterns (explicit wiring vs inline aggregation)
-3. Add migration guide for existing users
+1. Create `components/dynamics/Vehicle6DOF.hpp`
+2. Implement state registration (copy from RigidBody6DOF)
+3. Implement provider discovery with frame detection:
+   - Mass providers: `mass` + `cg_local.*` + `inertia_local.*`
+   - Local force providers: `force_local.*`
+   - Body force providers: `force_body.*`
+   - ECEF force providers: `force_ecef.*`
+4. Implement mass aggregation with frame transformation
+5. Implement force aggregation with frame transformation
+6. Implement 6DOF dynamics (reuse Vulcan)
+7. Register aggregated outputs for telemetry
 
-### Phase 4: Deprecation (Future)
+### Phase 4: Update Existing Components
 
-1. Consider deprecating standalone `MassAggregator` / `ForceAggregator` if unused
-2. Or keep them as "power user" components for non-6DOF scenarios
+1. Update mass components to output `cg_local` and `inertia_local` signals
+2. Update force components to output `force_local` (not body frame)
+3. Add `ReadAttachmentFromConfig()` calls to physical components
+4. Ensure backwards compatibility (old signal names as aliases if needed)
+
+### Phase 5: Examples and Documentation
+
+1. Create `rocket_vehicle.yaml` demonstrating:
+   - Auto-discovery
+   - Component attachment (position + orientation)
+   - Mixed frame types (local, body, ECEF)
+2. Create migration guide from separate components
+3. Update architecture documentation
+4. Add signal convention reference document
 
 ---
 
-## Verification Plan
+## Open Design Questions
 
-### Automated Tests
+### 1. Attachment in Base Component vs. Separate Trait
 
-Since this is a design document, no automated tests are written yet. When implementing:
+Should body attachment (position + orientation) be:
 
-```bash
-# Existing test commands
-./scripts/test.sh
+**Option A: In Base Component (Recommended)**
+- Every Component has optional `body_position_` and `body_orientation_` members
+- Helper `ReadAttachmentFromConfig()` for components that need it
+- Virtual `GetBodyPosition()`, `GetBodyOrientation()`, `HasBodyAttachment()` accessors
+- Lightweight (identity defaults, only ~48 bytes added)
 
-# Specific component tests
-./scripts/test.sh rigid_body
-./scripts/test.sh aggregator
-```
+**Option B: Separate `PhysicalComponent` Base Class**
+- `PhysicalComponent<Scalar>` inherits from `Component<Scalar>`
+- Only physical components (mass/force sources) inherit from it
+- Cleaner separation but more complex hierarchy
 
-### Manual Verification
+**Recommendation**: Option A. The overhead is minimal, and having a uniform API simplifies discovery.
 
-1. Run `rocket_ascent.yaml` with both old and new syntax
-2. Compare telemetry outputs (should be identical)
-3. Verify symbolic mode still works with new aggregation
+### 2. Signal Naming for Force Frames
 
----
+**Resolved**: Use naming convention for discovery:
+- `force_local.x/y/z` — Component local frame (needs attachment transform)
+- `force_body.x/y/z` — Vehicle body frame (no transform needed)
+- `force_ecef.x/y/z` — ECEF frame (transform via vehicle attitude)
 
-## Open Questions for User Review
+### 3. Default Behavior When No Sources Found
 
-1. **Naming**: Should we rename `RigidBody6DOF` to `Vehicle6DOF` or similar?
-2. **Scope**: Should inline aggregation be opt-in (recommended) or the only mode?
-3. **Output Scope**: Should aggregated mass/force be exposed as outputs, or kept internal?
-4. **Alternative**: Is Option D (Entity templates) worth exploring further?
+When no mass/force sources are discovered:
+
+**Option A: Error (Strict)**
+- Fail Stage() with clear error message
+- Forces user to configure at least one source
+
+**Option B: Warning + Defaults (Recommended)**
+- Log warning about missing sources
+- Use configurable default mass properties (e.g., 1 kg point mass)
+- Allows incremental development and testing
+
+**Option C: Silent Fallback**
+- No warning, just use defaults
+- Could hide configuration mistakes
+
+**Recommendation**: Option B. Warn but don't fail.
+
+### 4. Deprecate Aggregator Components?
+
+Should we deprecate `MassAggregator` and `ForceAggregator`?
+
+**Recommendation**: No. Keep them as "power user" components for:
+- Non-vehicle aggregation (e.g., ground test stand)
+- Cross-entity aggregation
+- Debugging individual aggregations
+- Gradual migration path
+
+### 5. Multiple Vehicles per Simulation
+
+How do we handle multi-body simulations (e.g., rocket + payload)?
+
+**Recommendation**: Each vehicle has its own entity namespace. Cross-vehicle forces (separation, contact) are separate components that read from both entities.
 
 ---
 
 ## Related Documents
 
-- [01_core_philosophy.md](file:///home/tanged/sources/icarus/docs/architecture/01_core_philosophy.md)
-- [06_entities_namespaces.md](file:///home/tanged/sources/icarus/docs/architecture/06_entities_namespaces.md)
-- [12_force_aggregation.md](file:///home/tanged/sources/icarus/docs/architecture/12_force_aggregation.md)
+- [01_core_philosophy.md](../architecture/01_core_philosophy.md) — IODA principles
+- [06_entities_namespaces.md](../architecture/06_entities_namespaces.md) — Entity namespace design
+- [12_force_aggregation.md](../architecture/12_force_aggregation.md) — Force aggregation theory
 
 ---
 
-## Appendix: Current YAML Wiring (Full)
+## Appendix: Migration Example
 
-The following routes are required today for a 6DOF body with mass and force aggregation:
-
-```yaml
-routes:
-  # Mass → ForceAggregator (CG for moment transfer)
-  - input: Rocket.Forces.cg.x
-    output: Rocket.Mass.cg.x
-  - input: Rocket.Forces.cg.y
-    output: Rocket.Mass.cg.y
-  - input: Rocket.Forces.cg.z
-    output: Rocket.Mass.cg.z
-
-  # EOM → ForceAggregator (attitude for ECEF→body transform)
-  - input: Rocket.Forces.attitude.w
-    output: Rocket.EOM.attitude.w
-  - input: Rocket.Forces.attitude.x
-    output: Rocket.EOM.attitude.x
-  - input: Rocket.Forces.attitude.y
-    output: Rocket.EOM.attitude.y
-  - input: Rocket.Forces.attitude.z
-    output: Rocket.EOM.attitude.z
-
-  # ForceAggregator → EOM (forces/moments)
-  - input: Rocket.EOM.total_force.x
-    output: Rocket.Forces.total_force.x
-  - input: Rocket.EOM.total_force.y
-    output: Rocket.Forces.total_force.y
-  - input: Rocket.EOM.total_force.z
-    output: Rocket.Forces.total_force.z
-  - input: Rocket.EOM.total_moment.x
-    output: Rocket.Forces.total_moment.x
-  - input: Rocket.EOM.total_moment.y
-    output: Rocket.Forces.total_moment.y
-  - input: Rocket.EOM.total_moment.z
-    output: Rocket.Forces.total_moment.z
-
-  # Mass → EOM (mass properties)
-  - input: Rocket.EOM.total_mass
-    output: Rocket.Mass.total_mass
-  - input: Rocket.EOM.inertia.xx
-    output: Rocket.Mass.inertia.xx
-  - input: Rocket.EOM.inertia.yy
-    output: Rocket.Mass.inertia.yy
-  - input: Rocket.EOM.inertia.zz
-    output: Rocket.Mass.inertia.zz
-  - input: Rocket.EOM.inertia.xy
-    output: Rocket.Mass.inertia.xy
-  - input: Rocket.EOM.inertia.xz
-    output: Rocket.Mass.inertia.xz
-  - input: Rocket.EOM.inertia.yz
-    output: Rocket.Mass.inertia.yz
-
-  # (Plus routes for gravity position, engine mass flow, etc.)
-```
-
-With Option C (inline aggregation), this entire block is replaced by:
+### Before (26 routes)
 
 ```yaml
 components:
   - type: RigidBody6DOF
     name: EOM
     entity: Rocket
-    mass_sources: [Structure, FuelTank]
-    force_body_sources: [Engine]
-    force_ecef_sources: [Gravity]
-    # ... initial conditions ...
+    # ... ICs ...
+
+  - type: MassAggregator
+    name: Mass
+    entity: Rocket
+    sources: [Structure, Propellant]
+
+  - type: ForceAggregator
+    name: Forces
+    entity: Rocket
+    body_sources: [MainEngine]
+    ecef_sources: [Gravity]
+
+routes:
+  # Mass → Forces (CG for moment transfer)
+  - input: Rocket.Forces.cg.x
+    output: Rocket.Mass.cg.x
+  # ... 2 more ...
+
+  # EOM → Forces (attitude for transform)
+  - input: Rocket.Forces.attitude.w
+    output: Rocket.EOM.attitude.w
+  # ... 3 more ...
+
+  # Forces → EOM
+  - input: Rocket.EOM.total_force.x
+    output: Rocket.Forces.total_force.x
+  # ... 5 more ...
+
+  # Mass → EOM
+  - input: Rocket.EOM.total_mass
+    output: Rocket.Mass.total_mass
+  # ... 6 more ...
+```
+
+### After (0 routes)
+
+```yaml
+components:
+  - type: Vehicle6DOF
+    name: Vehicle
+    entity: Rocket
+    initial_lla: [28.5, -80.6, 0.0]
+    initial_euler_zyx: [90.0, 85.0, 0.0]
+
+  - type: StaticMass
+    name: Structure
+    entity: Rocket
+    mass: 1000.0
+    cg: [0.0, 0.0, 2.0]
+    inertia: [100, 100, 50, 0, 0, 0]
+
+  - type: FuelTank
+    name: Propellant
+    entity: Rocket
+    initial_mass: 9000.0
+    cg: [0.0, 0.0, 5.0]
+
+  - type: RocketEngine
+    name: MainEngine
+    entity: Rocket
+    thrust: 100000.0
+    application_point: [0.0, 0.0, 10.0]
+
+  - type: SphericalGravity
+    name: Gravity
+    entity: Rocket
+
+# No routes needed! Vehicle6DOF discovers and aggregates automatically.
 ```
