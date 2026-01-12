@@ -151,9 +151,15 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
      *
      * Position init controlled by position_init_mode: "lla" or "ecef" (default)
      * Attitude init controlled by attitude_init_mode: "euler_zyx" or "quaternion" (default)
+     * Reference frame controlled by reference_frame: "eci" (default) or "ecef"
+     *   - "eci": Inertial equations (no Earth rotation effects)
+     *   - "ecef": Includes Coriolis and centrifugal terms from Earth rotation
      */
     void Stage(Backplane<Scalar> &) override {
         const auto &config = this->GetConfig();
+
+        // Read reference frame setting (default to "eci" for backward compatibility)
+        reference_frame_ = this->template read_param<std::string>("reference_frame", "eci");
 
         // === Position Initialization ===
         // Track position as double for coordinate transforms (needed for Euler init)
@@ -230,6 +236,10 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
      * @brief Compute derivatives using Vulcan 6DOF dynamics
      *
      * Phase 6: No PreStep/PublishOutputs needed - states ARE outputs.
+     *
+     * Reference frame modes:
+     *   - "eci": Standard inertial equations (default)
+     *   - "ecef": Includes Coriolis and centrifugal terms from Earth rotation
      */
     void Step(Scalar t, Scalar dt) override {
         (void)t;
@@ -268,16 +278,43 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         rb_state.attitude = quat;
         rb_state.omega_body = omega_body_;
 
-        // Compute derivatives using Vulcan
-        auto derivs =
-            vulcan::dynamics::compute_6dof_derivatives(rb_state, force, moment, mass_props);
+        // Compute derivatives - method depends on reference frame setting
+        if (reference_frame_ == "ecef") {
+            // ECEF mode: Include Coriolis and centrifugal terms from Earth rotation
+            // Earth rotation vector in ECEF: [0, 0, omega]
+            Vec3<Scalar> omega_earth{Scalar(0), Scalar(0), Scalar(vulcan::constants::earth::omega)};
 
-        // Write derivatives directly to member variables
-        position_dot_ = derivs.position_dot;
-        velocity_body_dot_ = derivs.velocity_dot;
-        attitude_dot_ = Vec4<Scalar>{derivs.attitude_dot.w, derivs.attitude_dot.x,
-                                     derivs.attitude_dot.y, derivs.attitude_dot.z};
-        omega_body_dot_ = derivs.omega_dot;
+            // Transform velocity and force from body to ECEF for ECEF dynamics
+            Vec3<Scalar> velocity_ecef = quat.rotate(velocity_body_);
+            Vec3<Scalar> force_ecef = quat.rotate(force);
+
+            // Compute ECEF translational dynamics (includes Coriolis and centrifugal)
+            Vec3<Scalar> accel_ecef = vulcan::dynamics::translational_dynamics_ecef(
+                position_, velocity_ecef, force_ecef, mass_props.mass, omega_earth);
+
+            // Transform acceleration back to body frame
+            velocity_body_dot_ = quat.conjugate().rotate(accel_ecef);
+
+            // Position rate = velocity in ECEF
+            position_dot_ = velocity_ecef;
+
+            // Attitude and omega derivatives use standard formulas
+            auto q_dot = vulcan::quaternion_rate_from_omega(quat, omega_body_);
+            attitude_dot_ = Vec4<Scalar>{q_dot.w, q_dot.x, q_dot.y, q_dot.z};
+            omega_body_dot_ =
+                vulcan::dynamics::rotational_dynamics(omega_body_, moment, mass_props.inertia);
+        } else {
+            // ECI mode (default): Standard inertial equations
+            auto derivs =
+                vulcan::dynamics::compute_6dof_derivatives(rb_state, force, moment, mass_props);
+
+            // Write derivatives directly to member variables
+            position_dot_ = derivs.position_dot;
+            velocity_body_dot_ = derivs.velocity_dot;
+            attitude_dot_ = Vec4<Scalar>{derivs.attitude_dot.w, derivs.attitude_dot.x,
+                                         derivs.attitude_dot.y, derivs.attitude_dot.z};
+            omega_body_dot_ = derivs.omega_dot;
+        }
     }
 
     // =========================================================================
@@ -421,6 +458,9 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
     // Identity
     std::string name_;
     std::string entity_;
+
+    // Reference frame setting: "eci" (inertial) or "ecef" (with Coriolis/centrifugal)
+    std::string reference_frame_ = "eci";
 
     // === Phase 6: State variables (ARE the outputs) ===
     Vec3<Scalar> position_ = Vec3<Scalar>::Zero();

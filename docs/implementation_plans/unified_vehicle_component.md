@@ -84,103 +84,134 @@ The **attachment** (where and how the component is mounted) is configuration, no
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Should Attachment Be in Base Component?
+### Class Hierarchy: PhysicalComponent
 
-**Option A: Build into Base Component Class**
+**Decision**: Use a `PhysicalComponent` intermediate class for components with body attachment.
 
 ```cpp
+// Base Component - no attachment (Environment, schedulers, etc.)
 template <typename Scalar>
 class Component {
-protected:
-    // === Body Attachment (Optional) ===
-    Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();      // Position in parent body frame
-    janus::Quaternion<Scalar> body_orientation_;              // Component-to-body rotation
+public:
+    // Virtual accessors - base class returns "no attachment"
+    [[nodiscard]] virtual bool HasBodyAttachment() const { return false; }
+    [[nodiscard]] virtual Vec3<Scalar> GetBodyPosition() const {
+        return Vec3<Scalar>::Zero();
+    }
+    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
+        return janus::Quaternion<Scalar>::identity();
+    }
 
-    // Helper called in Stage() by components that need attachment
+    // ... existing lifecycle methods ...
+};
+
+// Physical Component - adds body attachment (mass sources, force sources, sensors)
+template <typename Scalar>
+class PhysicalComponent : public Component<Scalar> {
+protected:
+    Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();
+    janus::Quaternion<Scalar> body_orientation_;  // body-to-component, identity default
+    bool has_body_attachment_ = false;
+
+    /**
+     * @brief Read attachment from config (call in Stage)
+     *
+     * Supports both quaternion and Euler angle specification:
+     *   body_position: [x, y, z]                    # meters
+     *   body_orientation: [w, x, y, z]              # quaternion (body-to-component)
+     *   body_orientation_euler_zyx: [yaw, pitch, roll]  # degrees (alternative)
+     */
     void ReadAttachmentFromConfig() {
-        body_position_ = read_param_vec3("body_position", Vec3<Scalar>::Zero());
-        auto q = read_param_vec4("body_orientation", Vec4<Scalar>{1,0,0,0});
-        body_orientation_ = janus::Quaternion<Scalar>{q(0), q(1), q(2), q(3)};
+        body_position_ = this->read_param_vec3("body_position", Vec3<Scalar>::Zero());
+
+        // Check for Euler angles first (more user-friendly)
+        if (this->GetConfig().template Has<Vec3<double>>("body_orientation_euler_zyx")) {
+            auto euler_deg = this->GetConfig().template Get<Vec3<double>>(
+                "body_orientation_euler_zyx", Vec3<double>::Zero());
+
+            // Convert degrees to radians and build quaternion
+            double yaw = euler_deg(0) * deg2rad;
+            double pitch = euler_deg(1) * deg2rad;
+            double roll = euler_deg(2) * deg2rad;
+            body_orientation_ = janus::Quaternion<Scalar>::from_euler_zyx(yaw, pitch, roll);
+        } else {
+            // Quaternion format
+            auto q = this->read_param_vec4("body_orientation", Vec4<Scalar>{1,0,0,0});
+            body_orientation_ = janus::Quaternion<Scalar>{q(0), q(1), q(2), q(3)};
+        }
+
+        has_body_attachment_ = true;
     }
 
 public:
-    // Virtual accessors (can be overridden for complex cases)
-    [[nodiscard]] virtual Vec3<Scalar> GetBodyPosition() const {
-        return body_position_;
-    }
-    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
+    [[nodiscard]] bool HasBodyAttachment() const override { return has_body_attachment_; }
+    [[nodiscard]] Vec3<Scalar> GetBodyPosition() const override { return body_position_; }
+    [[nodiscard]] janus::Quaternion<Scalar> GetBodyOrientation() const override {
         return body_orientation_;
     }
-    [[nodiscard]] virtual bool HasBodyAttachment() const {
-        return has_attachment_;
-    }
 };
 ```
 
-**Pros:**
-- Unified API for all physical components
-- Single place to get attachment config parsing right
-- Virtual methods allow override for complex cases
-- Lightweight (just two members with identity defaults)
-
-**Cons:**
-- Not all components are "physical" (Environment, schedulers)
-- Some components have multiple attachment points
-
-**Option B: Trait/Mixin Pattern**
-
+**Usage:**
 ```cpp
+// Physical components inherit from PhysicalComponent
 template <typename Scalar>
-class PhysicalComponent : public Component<Scalar> {
-    // Attachment members and methods
-};
-
-// Usage
 class RocketEngine : public PhysicalComponent<Scalar> { ... };
-class GravityModel : public Component<Scalar> { ... };  // No attachment
+
+template <typename Scalar>
+class StaticMass : public PhysicalComponent<Scalar> { ... };
+
+// Non-physical components inherit directly from Component
+template <typename Scalar>
+class GravityModel : public Component<Scalar> { ... };
+
+template <typename Scalar>
+class AtmosphereModel : public Component<Scalar> { ... };
 ```
 
-**Pros:**
-- Clear separation of concerns
-- Non-physical components don't have attachment baggage
+**Benefits:**
+- Virtual methods in base Component enable uniform querying by Vehicle6DOF
+- No storage overhead for non-physical components
+- Clear semantic distinction between physical and non-physical components
+- Euler angle support built-in for user convenience
 
-**Cons:**
-- More complex class hierarchy
-- Multiple inheritance issues if mixing traits
+### Orientation Convention: Body-to-Component
 
-**Option C: Signal Convention Only (Pure IODA)**
+**Decision**: `body_orientation` represents the rotation **from body frame to component frame**.
 
-Components that have attachment output it as signals:
-```
-{entity}.{component}.attachment.position.x/y/z
-{entity}.{component}.attachment.orientation.w/x/y/z
-```
+**Rationale (CAD Perspective)**:
+When mounting a GPS sensor that needs to face "up" (+Z in NED):
+1. Start with GPS at body origin, aligned with body axes
+2. Rotate 90° pitch (about Y): `body_orientation_euler_zyx: [0, 90, 0]`
+3. Now GPS local +Z points along body +X (forward → up)
 
-**Pros:**
-- Most IODA-compliant (no special base class knowledge)
-- Discovery works uniformly via signals
+The Euler angles describe "how I rotated this component from the body frame."
 
-**Cons:**
-- More signals to register
-- Every attachable component must implement the pattern
-- Can't query attachment without resolving signals
-
-### Recommendation: Option A (Base Component) + Signal Export
-
-Build attachment into base Component as **optional infrastructure**, but also expose as signals for debugging/visualization:
-
+**Frame Transformation Math**:
 ```cpp
-void Provision(Backplane<Scalar>& bp) override {
-    // ... component-specific outputs ...
+// body_orientation = R_body_to_comp (transforms body vectors to component frame)
+//
+// To transform component outputs TO body frame, use the conjugate (inverse):
+//   F_body = body_orientation.conjugate().rotate(F_local)
+//   M_body = body_orientation.conjugate().rotate(M_local)
+//
+// To transform body vectors TO component frame (e.g., for sensors):
+//   v_local = body_orientation.rotate(v_body)
+```
 
-    // If component has attachment, expose it (called by components that need it)
-    if (has_body_attachment_) {
-        bp.register_output_vec3<Scalar>("attachment.position", &body_position_,
-                                        "m", "Component position in body frame");
-        bp.register_output_quat<Scalar>("attachment.orientation", &body_orientation_vec_,
-                                        "", "Component-to-body quaternion");
-    }
-}
+**YAML Examples**:
+```yaml
+# Thruster pointing along body -Z (typical rocket main engine)
+# Component +X is thrust axis, needs to point to body -Z
+# Rotate 90° about Y, then 180° about X (or equivalently, -90° about Y for +X → -Z)
+body_orientation_euler_zyx: [0.0, -90.0, 0.0]
+
+# GPS facing "up" (body +Z in aircraft NED body frame)
+# Component +Z is boresight, needs to point to body -Z (down in NED = up in world)
+body_orientation_euler_zyx: [0.0, 0.0, 180.0]  # Roll 180° to flip
+
+# Star tracker on side of spacecraft
+body_orientation_euler_zyx: [90.0, 0.0, 0.0]   # Yaw 90° to face +Y
 ```
 
 ---
@@ -512,14 +543,17 @@ void AggregateMass() {
         // Transform to body frame
         vulcan::mass::MassProperties<Scalar> body;
         if (src.has_attachment) {
-            // CG in body frame: r_body + R * cg_local
-            body.cg = src.body_position + src.body_orientation.rotate(local.cg);
+            // body_orientation is body-to-component, so use conjugate for comp-to-body
+            auto R_comp_to_body = src.body_orientation.conjugate();
+
+            // CG in body frame: r_body + R_comp_to_body * cg_local
+            body.cg = src.body_position + R_comp_to_body.rotate(local.cg);
 
             // Inertia transformation:
             // 1. Rotate inertia tensor: I_rotated = R * I_local * R^T
             // 2. Parallel axis theorem: I_body = I_rotated + m * (d^2 * I - d ⊗ d)
             body.inertia = vulcan::mass::transform_inertia(
-                local.inertia, local.mass, src.body_orientation, body.cg);
+                local.inertia, local.mass, R_comp_to_body, body.cg);
             body.mass = local.mass;
         } else {
             // No attachment - assume local frame IS body frame
@@ -554,11 +588,14 @@ void AggregateForces() {
                 Vec3<Scalar> F_local = src.GetForceLocal();
                 Vec3<Scalar> M_local = src.GetMomentLocal();
 
+                // body_orientation is body-to-component, use conjugate for comp-to-body
+                auto R_comp_to_body = src.body_orientation.conjugate();
+
                 // Transform force: F_body = R_comp_to_body * F_local
-                F_body = src.body_orientation.rotate(F_local);
+                F_body = R_comp_to_body.rotate(F_local);
 
                 // Transform moment and compute application point
-                M_body = src.body_orientation.rotate(M_local);
+                M_body = R_comp_to_body.rotate(M_local);
                 r_app = src.body_position;  // Force applied at component origin
                 break;
             }
@@ -654,17 +691,17 @@ components:
     name: MainEngine
     entity: Rocket
     body_position: [0.0, 0.0, 10.0]        # Nozzle location in body frame
-    body_orientation: [0.707, 0.0, 0.707, 0.0]  # Rotate so local +X points to body -Z
+    body_orientation_euler_zyx: [0.0, -90.0, 0.0]  # Pitch -90° so local +X → body -Z
     thrust: 100000.0
     # Outputs: force_local = [thrust, 0, 0] (always along nozzle axis)
-    # Vehicle transforms: F_body = q.rotate([thrust, 0, 0]) = [0, 0, -thrust]
+    # Vehicle transforms: F_body = R.rotate([thrust, 0, 0]) = [0, 0, -thrust]
 
   # Vernier engine - canted 10° for roll control
   - type: RocketEngine
     name: Vernier1
     entity: Rocket
     body_position: [1.0, 0.0, 9.5]         # Offset from centerline
-    body_orientation: [0.996, 0.0, 0.087, 0.0]  # 10° cant angle
+    body_orientation_euler_zyx: [0.0, -80.0, 0.0]  # 10° cant from vertical
     thrust: 5000.0
     # Same component type, different mounting = different body-frame force
 
@@ -872,15 +909,23 @@ public:
 
 ## Implementation Phases
 
-### Phase 1: Base Component Attachment Infrastructure
+### Phase 1: Component Attachment Infrastructure
 
-1. Add attachment members to `Component<Scalar>` base class:
-   - `body_position_` (Vec3, default zero)
-   - `body_orientation_` (Quaternion, default identity)
-   - `has_body_attachment_` (bool, default false)
-2. Add protected helper `ReadAttachmentFromConfig()`
-3. Add virtual accessors: `GetBodyPosition()`, `GetBodyOrientation()`, `HasBodyAttachment()`
-4. Add `vulcan::mass::transform_inertia()` utility for inertia frame transformation
+1. Add virtual accessors to `Component<Scalar>` base class (default "no attachment"):
+   - `HasBodyAttachment()` → false
+   - `GetBodyPosition()` → zero vector
+   - `GetBodyOrientation()` → identity quaternion
+2. Create `PhysicalComponent<Scalar>` intermediate class:
+   - Inherits from `Component<Scalar>`
+   - Adds `body_position_`, `body_orientation_`, `has_body_attachment_` members
+   - Overrides virtual accessors
+   - Implements `ReadAttachmentFromConfig()` helper with:
+     - `body_position: [x, y, z]` support
+     - `body_orientation: [w, x, y, z]` quaternion support
+     - `body_orientation_euler_zyx: [yaw, pitch, roll]` degrees support
+   - Convention: body-to-component orientation
+3. Add `vulcan::mass::transform_inertia()` utility for inertia frame transformation
+4. Add `janus::Quaternion::from_euler_zyx()` if not already present
 5. Unit tests for attachment parsing and transformation
 
 ### Phase 2: Backplane Discovery API
@@ -907,9 +952,17 @@ public:
 
 ### Phase 4: Update Existing Components
 
-1. Update mass components to output `cg_local` and `inertia_local` signals
-2. Update force components to output `force_local` (not body frame)
-3. Add `ReadAttachmentFromConfig()` calls to physical components
+1. Change mass components to inherit from `PhysicalComponent<Scalar>`:
+   - `StaticMass`, `FuelTank`, etc.
+   - Call `ReadAttachmentFromConfig()` in Stage()
+   - Output `cg_local` and `inertia_local` signals (local frame)
+2. Change force components to inherit from `PhysicalComponent<Scalar>`:
+   - `RocketEngine`, `Thruster`, etc.
+   - Output `force_local` (not body frame)
+   - Remove internal frame transformation logic (Vehicle handles it)
+3. Keep environmental components as `Component<Scalar>`:
+   - `GravityModel` → outputs `force_ecef`
+   - `AeroModel` → outputs `force_body` (already in body frame)
 4. Ensure backwards compatibility (old signal names as aliases if needed)
 
 ### Phase 5: Examples and Documentation
@@ -924,33 +977,44 @@ public:
 
 ---
 
-## Open Design Questions
+## Design Decisions (Resolved)
 
-### 1. Attachment in Base Component vs. Separate Trait
+### 1. Class Hierarchy: PhysicalComponent
 
-Should body attachment (position + orientation) be:
+**Decision**: Use `PhysicalComponent<Scalar>` intermediate class.
 
-**Option A: In Base Component (Recommended)**
-- Every Component has optional `body_position_` and `body_orientation_` members
-- Helper `ReadAttachmentFromConfig()` for components that need it
-- Virtual `GetBodyPosition()`, `GetBodyOrientation()`, `HasBodyAttachment()` accessors
-- Lightweight (identity defaults, only ~48 bytes added)
+- Virtual accessors in base `Component` (default "no attachment")
+- `PhysicalComponent` adds storage and `ReadAttachmentFromConfig()` helper
+- Physical components (mass/force sources) inherit from `PhysicalComponent`
+- Non-physical components (environment, schedulers) inherit from `Component`
 
-**Option B: Separate `PhysicalComponent` Base Class**
-- `PhysicalComponent<Scalar>` inherits from `Component<Scalar>`
-- Only physical components (mass/force sources) inherit from it
-- Cleaner separation but more complex hierarchy
+### 2. Orientation Convention: Body-to-Component
 
-**Recommendation**: Option A. The overhead is minimal, and having a uniform API simplifies discovery.
+**Decision**: `body_orientation` represents rotation **from body frame to component frame**.
 
-### 2. Signal Naming for Force Frames
+- Matches CAD intuition: Euler angles describe "how I rotated this component"
+- For force transformation: `F_body = body_orientation.conjugate().rotate(F_local)`
+- Supports both quaternion and Euler angle config
 
-**Resolved**: Use naming convention for discovery:
-- `force_local.x/y/z` — Component local frame (needs attachment transform)
-- `force_body.x/y/z` — Vehicle body frame (no transform needed)
+### 3. Signal Naming for Force Frames
+
+**Decision**: Use naming convention for discovery:
+- `force_local.x/y/z` — Component local frame (transform via attachment)
+- `force_body.x/y/z` — Vehicle body frame (no transform)
 - `force_ecef.x/y/z` — ECEF frame (transform via vehicle attitude)
 
-### 3. Default Behavior When No Sources Found
+### 4. Euler Angle Support
+
+**Decision**: Support `body_orientation_euler_zyx: [yaw, pitch, roll]` in degrees.
+
+- Quaternion format also supported: `body_orientation: [w, x, y, z]`
+- Euler angles checked first (more user-friendly)
+
+---
+
+## Open Design Questions
+
+### 1. Default Behavior When No Sources Found
 
 When no mass/force sources are discovered:
 

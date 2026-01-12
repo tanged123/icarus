@@ -105,6 +105,7 @@ components:
     strings:
       position_init_mode: lla           # "lla" or "ecef"
       attitude_init_mode: euler_zyx     # "euler_zyx" or "quaternion"
+      reference_frame: ecef             # "eci" (inertial) or "ecef" (with Coriolis/centrifugal)
     vectors:
       initial_lla: [0.0, 0.0, 100000.0]     # [lat_deg, lon_deg, alt_m]
       initial_velocity_body: [0, 0, 0]      # Starting from rest
