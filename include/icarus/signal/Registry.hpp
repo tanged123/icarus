@@ -635,6 +635,14 @@ template <typename Scalar> class SignalRegistry {
 
         // Also register input in signal lookup for poke support
         // The data_ptr points to the input's default value buffer
+        // First check for collision with existing output/state signals
+        if (name_to_index_.contains(name)) {
+            const auto &existing = signals_[name_to_index_[name]];
+            throw DuplicateSignalError(name, existing.owner_component,
+                                       current_component_.empty() ? "(unknown)"
+                                                                  : current_component_);
+        }
+
         SignalDescriptor desc;
         desc.name = name;
         desc.unit = units;
@@ -721,7 +729,7 @@ template <typename Scalar> class SignalRegistry {
      * @param input_name Full name of the input port
      * @param source_name Full name of the source signal
      * @throws SignalNotFoundError if source doesn't exist
-     * @throws WiringError if input not found
+     * @throws WiringError if input not found or source is an input (not a valid wiring source)
      */
     template <typename T>
     void wire_input(const std::string &input_name, const std::string &source_name) {
@@ -738,6 +746,12 @@ template <typename Scalar> class SignalRegistry {
 
         // Resolve the source signal
         auto source_handle = resolve<T>(source_name);
+
+        // Validate source is not an input (inputs cannot be wiring sources)
+        if (source_handle.descriptor()->kind == SignalKind::Input) {
+            throw WiringError("Cannot wire input '" + input_name + "' to source '" + source_name +
+                              "': source is an input, not an output");
+        }
 
         // Wire the input - safe cast after type verification
         auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
@@ -785,24 +799,29 @@ template <typename Scalar> class SignalRegistry {
 
     /**
      * @brief Get all output signal descriptors
+     *
+     * Returns only signals with kind != SignalKind::Input (i.e., actual outputs).
      */
     [[nodiscard]] std::vector<SignalDescriptor> get_outputs() const {
         std::vector<SignalDescriptor> result;
-        result.reserve(signals_.size());
         for (const auto &desc : signals_) {
-            result.push_back(desc);
+            if (desc.kind != SignalKind::Input) {
+                result.push_back(desc);
+            }
         }
         return result;
     }
 
     /**
      * @brief Get output signals for a specific component
+     *
+     * Returns only signals with kind != SignalKind::Input for the component.
      */
     [[nodiscard]] std::vector<SignalDescriptor>
     get_outputs_for_component(const std::string &component_name) const {
         std::vector<SignalDescriptor> result;
         for (const auto &desc : signals_) {
-            if (desc.owner_component == component_name) {
+            if (desc.owner_component == component_name && desc.kind != SignalKind::Input) {
                 result.push_back(desc);
             }
         }
@@ -907,13 +926,16 @@ template <typename Scalar> class SignalRegistry {
     // =========================================================================
 
     /**
-     * @brief Get all signal names (outputs)
+     * @brief Get all output signal names
+     *
+     * Returns only signal names where kind != SignalKind::Input.
      */
     [[nodiscard]] std::vector<std::string> get_all_signal_names() const {
         std::vector<std::string> names;
-        names.reserve(signals_.size());
         for (const auto &desc : signals_) {
-            names.push_back(desc.name);
+            if (desc.kind != SignalKind::Input) {
+                names.push_back(desc.name);
+            }
         }
         return names;
     }
@@ -974,6 +996,7 @@ template <typename Scalar> class SignalRegistry {
      * @param input_name Full name of the input port
      * @param source_name Full name of the source signal
      * @param gain Scale factor (default 1.0)
+     * @throws WiringError if input not found or source is an input (not a valid wiring source)
      */
     template <typename T>
     void wire_input_with_gain(const std::string &input_name, const std::string &source_name,
@@ -991,6 +1014,12 @@ template <typename Scalar> class SignalRegistry {
 
         // Resolve the source signal
         auto source_handle = resolve<T>(source_name);
+
+        // Validate source is not an input (inputs cannot be wiring sources)
+        if (source_handle.descriptor()->kind == SignalKind::Input) {
+            throw WiringError("Cannot wire input '" + input_name + "' to source '" + source_name +
+                              "': source is an input, not an output");
+        }
 
         // Wire the input with gain
         auto *handle = static_cast<InputHandle<T> *>(it->second.handle_ptr);
