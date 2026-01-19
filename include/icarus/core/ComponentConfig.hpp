@@ -57,6 +57,10 @@ struct ComponentConfig {
     /// List-based config (for aggregators with variable source counts, etc.)
     std::vector<std::string> sources;
 
+    /// Frame-categorized source lists (for ForceAggregator frame transformations)
+    std::vector<std::string> body_sources; ///< Sources outputting in body frame
+    std::vector<std::string> ecef_sources; ///< Sources outputting in ECEF frame
+
     // =========================================================================
     // Typed Accessors
     // =========================================================================
@@ -331,9 +335,15 @@ template <>
 inline std::vector<std::string>
 ComponentConfig::Get<std::vector<std::string>>(const std::string &key,
                                                const std::vector<std::string> &def) const {
-    // Special case: "sources" returns the sources member
+    // Special case: known string list members
     if (key == "sources") {
         return sources.empty() ? def : sources;
+    }
+    if (key == "body_sources") {
+        return body_sources.empty() ? def : body_sources;
+    }
+    if (key == "ecef_sources") {
+        return ecef_sources.empty() ? def : ecef_sources;
     }
     return def;
 }
@@ -347,6 +357,18 @@ ComponentConfig::Require<std::vector<std::string>>(const std::string &key) const
         }
         return sources;
     }
+    if (key == "body_sources") {
+        if (body_sources.empty()) {
+            throw ConfigError("Component '" + FullPath() + "' missing required body_sources list");
+        }
+        return body_sources;
+    }
+    if (key == "ecef_sources") {
+        if (ecef_sources.empty()) {
+            throw ConfigError("Component '" + FullPath() + "' missing required ecef_sources list");
+        }
+        return ecef_sources;
+    }
     throw ConfigError("Component '" + FullPath() + "' missing required string list: " + key);
 }
 
@@ -354,6 +376,12 @@ template <>
 inline bool ComponentConfig::Has<std::vector<std::string>>(const std::string &key) const {
     if (key == "sources") {
         return !sources.empty();
+    }
+    if (key == "body_sources") {
+        return !body_sources.empty();
+    }
+    if (key == "ecef_sources") {
+        return !ecef_sources.empty();
     }
     return false;
 }

@@ -382,13 +382,25 @@ class TopologyAnalyzer {
                 throw ConfigError(oss.str());
             }
             case TopologyConfig::CycleHandling::Warn:
+            case TopologyConfig::CycleHandling::BreakAtDelay: {
                 // Caller should log warning
-                // Return partial order (whatever was resolved)
+                // Include cyclic components in execution order (one-step lag accepted)
+                // Find components that weren't included due to cycles
+                std::set<std::string> included(result.execution_order.begin(),
+                                               result.execution_order.end());
+                std::vector<std::string> all_nodes = graph.GetNodes();
+
+                // Sort for deterministic ordering
+                std::sort(all_nodes.begin(), all_nodes.end());
+
+                // Add missing (cyclic) components at the end
+                for (const auto &node : all_nodes) {
+                    if (included.find(node) == included.end()) {
+                        result.execution_order.push_back(node);
+                    }
+                }
                 break;
-            case TopologyConfig::CycleHandling::BreakAtDelay:
-                // TODO: Filter out edges with delay > 0 and retry
-                // For now, treat as Warn
-                break;
+            }
             }
         }
 

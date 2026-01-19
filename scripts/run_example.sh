@@ -24,15 +24,55 @@ fi
 
 
 INPUT_NAME="$1"
+shift  # Remove first arg, rest are passed to the example
 
-# Extract target name (basename without extension)
+# Extract target name and extension
 TARGET_NAME=$(basename "$INPUT_NAME")
+EXTENSION="${TARGET_NAME##*.}"
 TARGET_NAME="${TARGET_NAME%.*}"
 
-echo "Targeting example: $TARGET_NAME"
-
-# Build the specific target
 cd "$PROJECT_ROOT"
+
+# Handle Python files
+if [[ "$EXTENSION" == "py" || "$INPUT_NAME" == *.py ]]; then
+    echo "Running Python example: $INPUT_NAME"
+
+    # Check for the icarus Python package in build/python/
+    PYTHON_PKG_DIR="$PROJECT_ROOT/build/python"
+    if [ ! -d "$PYTHON_PKG_DIR/icarus" ]; then
+        echo "Python bindings not found. Building with --python..."
+        ./scripts/build.sh --python
+    fi
+
+    if [ ! -d "$PYTHON_PKG_DIR/icarus" ]; then
+        echo "Error: Could not find Python bindings. Build with --python or --all-interfaces."
+        exit 1
+    fi
+
+    # Resolve the input path
+    if [[ "$INPUT_NAME" == /* ]]; then
+        SCRIPT_PATH="$INPUT_NAME"
+    elif [ -f "$INPUT_NAME" ]; then
+        SCRIPT_PATH="$INPUT_NAME"
+    elif [ -f "examples/python/$INPUT_NAME" ]; then
+        SCRIPT_PATH="examples/python/$INPUT_NAME"
+    elif [ -f "examples/python/${TARGET_NAME}.py" ]; then
+        SCRIPT_PATH="examples/python/${TARGET_NAME}.py"
+    elif [ -f "tests/python/$INPUT_NAME" ]; then
+        SCRIPT_PATH="tests/python/$INPUT_NAME"
+    else
+        echo "Error: Could not find Python file: $INPUT_NAME"
+        exit 1
+    fi
+
+    echo "---------------------------------------------------"
+    PYTHONPATH="$PYTHON_PKG_DIR:$PYTHONPATH" python "$SCRIPT_PATH" "$@"
+    echo "---------------------------------------------------"
+    exit 0
+fi
+
+# Handle C++ examples
+echo "Targeting C++ example: $TARGET_NAME"
 
 # Ensure build directory exists
 if [ ! -d "build" ]; then
@@ -51,7 +91,7 @@ EXEC_PATH=$(find build -type f -name "$TARGET_NAME" -executable | head -n 1)
 if [ -n "$EXEC_PATH" ]; then
     echo "Running '$TARGET_NAME'..."
     echo "---------------------------------------------------"
-    "$EXEC_PATH"
+    "$EXEC_PATH" "$@"
     echo "---------------------------------------------------"
 else
     echo "Error: Could not find executable for target '$TARGET_NAME' in build directory."

@@ -80,7 +80,7 @@ cd "$PROJECT_ROOT"
         echo '=== Debug Tests ==='
         ./scripts/test.sh --debug "${INTERFACE_ARGS[@]}"
         echo '=== Debug Examples ==='
-        ./scripts/run_examples.sh
+        ./scripts/run_examples.sh "${INTERFACE_ARGS[@]}"
     fi
 
     if [[ "$MODE" == "all" ]]; then
@@ -93,7 +93,7 @@ cd "$PROJECT_ROOT"
         echo '=== Release Tests ==='
         ./scripts/test.sh --release "${INTERFACE_ARGS[@]}"
         echo '=== Release Examples ==='
-        ./scripts/run_examples.sh
+        ./scripts/run_examples.sh "${INTERFACE_ARGS[@]}"
     fi
 ) 2>&1 | tee -a "$LOG_FILE"
 

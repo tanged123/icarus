@@ -107,17 +107,11 @@ template <typename Scalar> class PointMassGravity : public Component<Scalar> {
      * not present in config.
      */
     void Stage(Backplane<Scalar> &) override {
-        const auto &config = this->GetConfig();
-
-        // Only override mu if explicitly set in config
-        if (config.template Has<double>("mu")) {
-            mu_ = config.template Get<double>("mu", vulcan::constants::earth::mu);
-        }
-
-        // Only override model if explicitly set in config
-        if (config.template Has<int>("model")) {
-            model_int_ = config.template Get<int>("model", 0);
-        }
+        // Read config using helpers (preserves defaults if not in config)
+        mu_ = this->template read_param<double>("mu", mu_);
+        // Note: model is often in scalars (as double), so read as double and cast
+        model_int_ = static_cast<int>(
+            this->template read_param<double>("model", static_cast<double>(model_int_)));
     }
 
     /**
