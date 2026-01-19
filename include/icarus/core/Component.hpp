@@ -11,6 +11,7 @@
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
+#include <janus/math/Quaternion.hpp>
 #include <string>
 #include <vector>
 #include <vulcan/time/Epoch.hpp>
@@ -165,6 +166,34 @@ template <typename Scalar> class Component {
             names.push_back(decl.name);
         }
         return names;
+    }
+
+    // =========================================================================
+    // Body Attachment API
+    // =========================================================================
+
+    /**
+     * @brief Whether this component has a body attachment (position/orientation).
+     * @return false for base Component; overridden in PhysicalComponent
+     */
+    [[nodiscard]] virtual bool HasBodyAttachment() const { return false; }
+
+    /**
+     * @brief Get the component's mounting position in vehicle body frame.
+     * @return Zero vector for components without attachment
+     */
+    [[nodiscard]] virtual Vec3<Scalar> GetBodyPosition() const { return Vec3<Scalar>::Zero(); }
+
+    /**
+     * @brief Get the component's mounting orientation (body-to-component rotation).
+     *
+     * Convention: Transforms vectors FROM body frame TO component local frame.
+     * To transform component outputs TO body frame, use conjugate().
+     *
+     * @return Identity quaternion for components without attachment
+     */
+    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
+        return janus::Quaternion<Scalar>();
     }
 
     // =========================================================================

@@ -29,6 +29,12 @@ icarus_add_test(test_condition_parser
     core/test_condition_parser.cpp
 )
 
+# Phase 9A: PhysicalComponent tests
+icarus_add_test(test_physical_component
+    core/test_physical_component.cpp
+)
+target_include_directories(test_physical_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # Signal backplane tests (Phase 1.3)
 icarus_add_test(test_signal
     signal/test_signal.cpp
