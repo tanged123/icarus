@@ -76,6 +76,12 @@ icarus_add_test(test_rigid_body_6dof
 )
 target_include_directories(test_rigid_body_6dof PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
+# Phase 9B: Vehicle6DOF tests
+icarus_add_test(test_vehicle6dof
+    components/test_vehicle6dof.cpp
+)
+target_include_directories(test_vehicle6dof PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # IO tests
 icarus_add_test(test_data_dictionary
     io/test_data_dictionary.cpp
