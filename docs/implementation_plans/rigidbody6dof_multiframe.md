@@ -3,6 +3,7 @@
 ## Summary
 
 Enhance RigidBody6DOF component to support:
+
 1. **LLA initialization** - Initialize position from Lat/Lon/Alt instead of just ECEF
 2. **Euler angle initialization** - Initialize attitude from yaw/pitch/roll relative to local NED
 3. **Multi-frame outputs** - Output position/velocity/attitude in multiple coordinate frames
@@ -10,6 +11,7 @@ Enhance RigidBody6DOF component to support:
 ## Background
 
 Currently RigidBody6DOF only supports:
+
 - Position initialization via ECEF (`initial_position: [x, y, z]`)
 - Attitude initialization via quaternion (`initial_attitude: [w, x, y, z]`)
 - Outputs in ECEF (position) and body frame (velocity)
@@ -84,7 +86,7 @@ void Stage(Backplane<Scalar> &) override {
 ```cpp
 void SetInitialPositionLLA(double lat_deg, double lon_deg, double alt_m) {
     constexpr double deg2rad = 3.14159265358979323846 / 180.0;
-    vulcan::LLA<double> lla{lon_deg * deg2rad, lat_deg * deg2rad, alt_m};
+    vulcan::LLA<double> lla{lat_deg * deg2rad, lon_deg * deg2rad, alt_m};
     Vec3<double> r_ecef = vulcan::lla_to_ecef(lla);
     position_ = Vec3<Scalar>{static_cast<Scalar>(r_ecef(0)),
                              static_cast<Scalar>(r_ecef(1)),
@@ -256,7 +258,7 @@ void Step(Scalar t, Scalar dt) override {
 
 ### Part 4: YAML Config Examples
 
-#### New rocket_ascent.yaml with LLA and Euler angles:
+#### New rocket_ascent.yaml with LLA and Euler angles
 
 ```yaml
 - type: RigidBody6DOF
@@ -279,7 +281,7 @@ void Step(Scalar t, Scalar dt) override {
     initial_omega_body: [0, 0, 0]
 ```
 
-#### Recording with new outputs:
+#### Recording with new outputs
 
 ```yaml
 recording:
@@ -310,6 +312,7 @@ recording:
 ## ECI Output (Future Enhancement)
 
 ECI requires time context (GMST) which the component doesn't currently have. Options:
+
 1. Add optional `time` input signal for GMST/epoch
 2. Add `simulation_time` as a standard backplane signal
 3. Accept `epoch` config parameter and compute GMST internally

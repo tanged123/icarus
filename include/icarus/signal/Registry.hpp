@@ -640,6 +640,7 @@ template <typename Scalar> class SignalRegistry {
         desc.unit = units;
         desc.description = description;
         desc.kind = SignalKind::Input;
+        desc.type = TypeTraits<T>::type_id;
         desc.semantic = typeid(T).name();
         desc.owner_component = current_component_;
         desc.data_ptr = static_cast<void *>(handle->data_ptr());
