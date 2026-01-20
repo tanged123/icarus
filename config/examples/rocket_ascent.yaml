@@ -1,17 +1,21 @@
 # Icarus Simulation Configuration
-# Example: Rocket Ascent with 6DOF Dynamics
+# Example: Rocket Ascent with 6DOF Dynamics (Vehicle6DOF)
 #
 # This example demonstrates a single-stage rocket ascent with:
 # - Mass depletion (FuelTank component)
 # - Throttleable engine (RocketEngine component)
-# - Full 6DOF rigid body dynamics
-# - Force/mass aggregation
+# - Full 6DOF rigid body dynamics with integrated mass/force aggregation
 #
-# Designed for Hermes integration - exports key signals to shared memory.
+# Uses Vehicle6DOF unified component which combines:
+# - MassAggregator (mass property aggregation)
+# - ForceAggregator (force/moment aggregation with ECEF→body transform)
+# - RigidBody6DOF (13-state quaternion dynamics)
+#
+# This eliminates ~20 signal routes compared to the separate component approach.
 
 simulation:
   name: "Rocket Ascent Example"
-  description: "Single-stage rocket for Hermes integration"
+  description: "Single-stage rocket using Vehicle6DOF unified component"
 
 time:
   start: 0.0
@@ -54,15 +58,6 @@ components:
       tank_cg: [1.0, 0, 0]
 
   # ---------------------------------------------------------------------------
-  # Mass Aggregator
-  # ---------------------------------------------------------------------------
-
-  - type: MassAggregator
-    name: Mass
-    entity: Rocket
-    sources: [Structure, FuelTank]
-
-  # ---------------------------------------------------------------------------
   # Force Sources
   # ---------------------------------------------------------------------------
 
@@ -86,22 +81,18 @@ components:
       nozzle_position: [0, 0, 0]
 
   # ---------------------------------------------------------------------------
-  # Force Aggregator
+  # Unified 6DOF Dynamics (replaces MassAggregator + ForceAggregator + RigidBody6DOF)
   # ---------------------------------------------------------------------------
 
-  - type: ForceAggregator
-    name: Forces
+  - type: Vehicle6DOF
+    name: Vehicle
     entity: Rocket
+    # Mass sources (replaces MassAggregator)
+    sources: [Structure, FuelTank]
+    # Force sources by frame (replaces ForceAggregator)
     body_sources: [Engine]      # Forces in body frame
     ecef_sources: [Gravity]     # Forces in ECEF frame (transformed to body)
-
-  # ---------------------------------------------------------------------------
-  # 6DOF Dynamics
-  # ---------------------------------------------------------------------------
-
-  - type: RigidBody6DOF
-    name: EOM
-    entity: Rocket
+    # Initial conditions (same as RigidBody6DOF)
     strings:
       position_init_mode: lla           # "lla" or "ecef"
       attitude_init_mode: euler_zyx     # "euler_zyx" or "quaternion"
@@ -113,77 +104,32 @@ components:
       initial_omega_body: [0, 0, 0]         # No initial rotation
 
 # =============================================================================
-# Signal Routing
+# Signal Routing (dramatically simplified with Vehicle6DOF)
 # =============================================================================
 routes:
   # --- Engine inputs ---
-  # Throttle command (external injection point for Hermes)
-  # For standalone testing, this defaults to 0
-
   # Engine mass flow → FuelTank
   - input: Rocket.FuelTank.mass_flow_rate
     output: Rocket.Engine.mass_flow_rate
 
   # --- Gravity inputs ---
-  # Position from EOM
+  # Position from Vehicle
   - input: Rocket.Gravity.position.x
-    output: Rocket.EOM.position.x
+    output: Rocket.Vehicle.position.x
   - input: Rocket.Gravity.position.y
-    output: Rocket.EOM.position.y
+    output: Rocket.Vehicle.position.y
   - input: Rocket.Gravity.position.z
-    output: Rocket.EOM.position.z
-  # Mass from aggregator
+    output: Rocket.Vehicle.position.z
+  # Mass from Vehicle
   - input: Rocket.Gravity.mass
-    output: Rocket.Mass.total_mass
+    output: Rocket.Vehicle.total_mass
 
-  # --- ForceAggregator inputs ---
-  # CG for moment transfer
-  - input: Rocket.Forces.cg.x
-    output: Rocket.Mass.cg.x
-  - input: Rocket.Forces.cg.y
-    output: Rocket.Mass.cg.y
-  - input: Rocket.Forces.cg.z
-    output: Rocket.Mass.cg.z
-  # Attitude for ECEF→body transformation
-  - input: Rocket.Forces.attitude.w
-    output: Rocket.EOM.attitude.w
-  - input: Rocket.Forces.attitude.x
-    output: Rocket.EOM.attitude.x
-  - input: Rocket.Forces.attitude.y
-    output: Rocket.EOM.attitude.y
-  - input: Rocket.Forces.attitude.z
-    output: Rocket.EOM.attitude.z
-
-  # --- EOM inputs ---
-  # Forces
-  - input: Rocket.EOM.total_force.x
-    output: Rocket.Forces.total_force.x
-  - input: Rocket.EOM.total_force.y
-    output: Rocket.Forces.total_force.y
-  - input: Rocket.EOM.total_force.z
-    output: Rocket.Forces.total_force.z
-  # Moments
-  - input: Rocket.EOM.total_moment.x
-    output: Rocket.Forces.total_moment.x
-  - input: Rocket.EOM.total_moment.y
-    output: Rocket.Forces.total_moment.y
-  - input: Rocket.EOM.total_moment.z
-    output: Rocket.Forces.total_moment.z
-  # Mass properties
-  - input: Rocket.EOM.total_mass
-    output: Rocket.Mass.total_mass
-  - input: Rocket.EOM.inertia.xx
-    output: Rocket.Mass.inertia.xx
-  - input: Rocket.EOM.inertia.yy
-    output: Rocket.Mass.inertia.yy
-  - input: Rocket.EOM.inertia.zz
-    output: Rocket.Mass.inertia.zz
-  - input: Rocket.EOM.inertia.xy
-    output: Rocket.Mass.inertia.xy
-  - input: Rocket.EOM.inertia.xz
-    output: Rocket.Mass.inertia.xz
-  - input: Rocket.EOM.inertia.yz
-    output: Rocket.Mass.inertia.yz
+# NOTE: The following routes are NO LONGER NEEDED with Vehicle6DOF:
+# - Mass→EOM routes (7 routes: total_mass, inertia.xx/yy/zz/xy/xz/yz)
+# - Forces→EOM routes (6 routes: total_force.x/y/z, total_moment.x/y/z)
+# - Mass→Forces routes (3 routes: cg.x/y/z)
+# - EOM→Forces routes (4 routes: attitude.w/x/y/z)
+# Total eliminated: 20 routes!
 
 # =============================================================================
 # Scheduler
@@ -192,7 +138,7 @@ scheduler:
   topology:
     mode: automatic
     log_order: true
-    cycle_detection: warn    # Accept one-step lag for EOM↔Forces cycle
+    cycle_detection: warn
   groups:
     - name: mass
       rate_hz: 100.0
@@ -202,8 +148,6 @@ scheduler:
           priority: 1
         - component: FuelTank
           priority: 2
-        - component: Mass
-          priority: 3
     - name: forces
       rate_hz: 100.0
       priority: 2
@@ -212,13 +156,11 @@ scheduler:
           priority: 1
         - component: Engine
           priority: 2
-        - component: Forces
-          priority: 3
     - name: dynamics
       rate_hz: 100.0
       priority: 3
       members:
-        - component: EOM
+        - component: Vehicle
           priority: 1
 
 # =============================================================================
@@ -229,16 +171,16 @@ recording:
   file: "rocket_ascent.h5"
   decimation: 10
   signals:
-    - Rocket.EOM.position.x
-    - Rocket.EOM.position.y
-    - Rocket.EOM.position.z
-    - Rocket.EOM.velocity_body.x
-    - Rocket.EOM.velocity_body.y
-    - Rocket.EOM.velocity_body.z
+    - Rocket.Vehicle.position.x
+    - Rocket.Vehicle.position.y
+    - Rocket.Vehicle.position.z
+    - Rocket.Vehicle.velocity_body.x
+    - Rocket.Vehicle.velocity_body.y
+    - Rocket.Vehicle.velocity_body.z
     - Rocket.Engine.thrust
     - Rocket.Engine.mass_flow_rate
     - Rocket.FuelTank.fuel_mass
-    - Rocket.Mass.total_mass
+    - Rocket.Vehicle.total_mass
 
 # =============================================================================
 # Logging
