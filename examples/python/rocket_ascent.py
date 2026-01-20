@@ -168,7 +168,7 @@ def main():
     fuel_final = sim['Rocket.FuelTank.fuel_mass']
 
     fuel_consumed = fuel_mass - fuel_final
-    alt_gained = alt_final - 100000.0  # Started at 100km
+    alt_gained = alt_final - 0.0  # Started at 0km
 
     print(f"Altitude:      {alt_final/1000:.2f} km (+{alt_gained/1000:.2f} km)")
     print(f"Velocity:      {vx_final:.1f} m/s (radially up)")
