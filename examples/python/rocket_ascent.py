@@ -11,7 +11,7 @@ Demonstrates a single-stage rocket ascent with:
 The Vehicle6DOF component combines MassAggregator + ForceAggregator + RigidBody6DOF
 into a single unified component, dramatically simplifying signal routing.
 
-The rocket starts at 100km altitude on the equator, pointing radially up (90 deg pitch),
+The rocket starts at sea level on the equator, pointing radially up (90 deg pitch),
 and fires its engine at full throttle. The simulation tracks altitude, velocity,
 fuel consumption, and verifies the physics are working correctly.
 

@@ -335,26 +335,25 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
                                  static_cast<Scalar>(r_ecef(2))};
     }
 
-    void SetInitialAttitudeEuler(double yaw_deg, double pitch_deg, double roll_deg) {
-        double yaw = yaw_deg * vulcan::constants::angle::deg2rad;
-        double pitch = pitch_deg * vulcan::constants::angle::deg2rad;
-        double roll = roll_deg * vulcan::constants::angle::deg2rad;
+    void SetInitialAttitudeEuler(Scalar yaw_deg, Scalar pitch_deg, Scalar roll_deg) {
+        Scalar yaw = yaw_deg * Scalar(vulcan::constants::angle::deg2rad);
+        Scalar pitch = pitch_deg * Scalar(vulcan::constants::angle::deg2rad);
+        Scalar roll = roll_deg * Scalar(vulcan::constants::angle::deg2rad);
 
-        Vec3<double> r_ecef{static_cast<double>(position_(0)), static_cast<double>(position_(1)),
-                            static_cast<double>(position_(2))};
-
-        auto ned = vulcan::local_ned_at(r_ecef);
+        // Use position_ directly (already Vec3<Scalar>)
+        auto ned = vulcan::local_ned_at(position_);
         auto body = vulcan::body_from_euler(ned, yaw, pitch, roll);
 
-        Mat3<double> dcm;
+        // Extract quaternion from body frame relative to NED, then convert to ECEF
+        // body_from_euler returns body frame in ECEF, so we build DCM from its axes
+        Mat3<Scalar> dcm;
         dcm.col(0) = body.x_axis;
         dcm.col(1) = body.y_axis;
         dcm.col(2) = body.z_axis;
-        auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(dcm);
+        auto q_body_to_ecef = janus::Quaternion<Scalar>::from_rotation_matrix(dcm);
 
-        attitude_ = Vec4<Scalar>{
-            static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
-            static_cast<Scalar>(q_body_to_ecef.y), static_cast<Scalar>(q_body_to_ecef.z)};
+        attitude_ =
+            Vec4<Scalar>{q_body_to_ecef.w, q_body_to_ecef.x, q_body_to_ecef.y, q_body_to_ecef.z};
     }
 
     void SetDefaultMass(Scalar mass) { default_mass_ = mass; }
