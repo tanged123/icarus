@@ -465,9 +465,12 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
                                      static_cast<Scalar>(r_ecef_double(1)),
                                      static_cast<Scalar>(r_ecef_double(2))};
         } else {
-            r_ecef_double =
-                config.template Get<Vec3<double>>("initial_position", Vec3<double>::Zero());
+            // Read position from config/programmatic value
             position_ = this->read_param_vec3("initial_position", position_);
+            // Convert position_ to double for coordinate transforms (local_ned_at, etc.)
+            r_ecef_double =
+                Vec3<double>{static_cast<double>(position_(0)), static_cast<double>(position_(1)),
+                             static_cast<double>(position_(2))};
         }
 
         // Velocity and omega
@@ -544,10 +547,19 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
         for (const auto &src : force_sources_) {
             Vec3<Scalar> F = src.GetForce();
             Vec3<Scalar> M = src.GetMoment();
-            Vec3<Scalar> app_point = src.GetApplicationPoint();
 
             // Transform ECEF forces to body frame
             if (src.is_ecef) {
+                // ECEF sources require ECEF reference frame - the attitude quaternion
+                // is body-to-ref, so we can only directly transform ECEF→body when
+                // ref == ECEF. Supporting ECI would require ECEF→ECI rotation at
+                // current epoch, which adds complexity.
+                if (reference_frame_ != "ecef") {
+                    throw ConfigError(
+                        "Vehicle6DOF: ECEF force source '" + src.name +
+                        "' requires reference_frame=\"ecef\", but reference_frame=\"" +
+                        reference_frame_ + "\". Use body-frame forces for ECI dynamics.");
+                }
                 F = q_body_to_ref.conjugate().rotate(F);
                 // Note: moments from ECEF sources are assumed to already be in body frame
                 // or zero (most ECEF forces like gravity don't produce moments directly)
@@ -556,10 +568,16 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
             // Sum forces
             sum_force += F;
 
-            // Transfer moment to CG: M_cg = M_app + r × F
-            Vec3<Scalar> r = app_point - cg_;
-            Vec3<Scalar> moment_transfer = r.cross(F);
-            sum_moment += M + moment_transfer;
+            // Add direct moment from source
+            sum_moment += M;
+
+            // Transfer moment to CG only if source has an application point
+            // Forces without an application point act at the CG (no moment transfer)
+            if (src.has_app_point) {
+                Vec3<Scalar> app_point = src.GetApplicationPoint();
+                Vec3<Scalar> r = app_point - cg_;
+                sum_moment += r.cross(F);
+            }
         }
 
         total_force_ = sum_force;
@@ -633,6 +651,22 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
     }
 
     void ComputeCoordinateFrameOutputs() {
+        // LLA/NED/Euler outputs require ECEF position and velocity.
+        // In ECI mode, position_ and velocity_ref_ are in ECI frame, so these
+        // outputs are not valid without an ECI→ECEF transform (which requires
+        // simulation time for GMST calculation).
+        if (reference_frame_ != "ecef") {
+            // Set outputs to zero - they are not meaningful in ECI mode.
+            // Users should not rely on position_lla, velocity_ned, or euler_zyx
+            // when reference_frame="eci". Use position and velocity_ref directly.
+            position_lla_ = Vec3<Scalar>::Zero();
+            velocity_ned_ = Vec3<Scalar>::Zero();
+            euler_zyx_ = Vec3<Scalar>::Zero();
+            return;
+        }
+
+        // ECEF mode: position_ and velocity_ref_ are in ECEF frame
+
         // Convert position to LLA
         vulcan::LLA<Scalar> lla = vulcan::ecef_to_lla(position_);
         position_lla_(0) = lla.lat;
