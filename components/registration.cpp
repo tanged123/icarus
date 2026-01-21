@@ -18,6 +18,7 @@
 #include <aggregators/MassAggregator.hpp>
 #include <dynamics/PointMass3DOF.hpp>
 #include <dynamics/RigidBody6DOF.hpp>
+#include <dynamics/Vehicle6DOF.hpp>
 #include <environment/AtmosphericDrag.hpp>
 #include <environment/PointMassGravity.hpp>
 #include <mass/StaticMass.hpp>
@@ -31,6 +32,7 @@
 // Dynamics
 ICARUS_REGISTER_COMPONENT_AS(icarus::components::PointMass3DOF, "PointMass3DOF")
 ICARUS_REGISTER_COMPONENT_AS(icarus::components::RigidBody6DOF, "RigidBody6DOF")
+ICARUS_REGISTER_COMPONENT_AS(icarus::components::Vehicle6DOF, "Vehicle6DOF")
 
 // Environment
 ICARUS_REGISTER_COMPONENT_AS(icarus::components::PointMassGravity, "PointMassGravity")

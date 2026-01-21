@@ -29,6 +29,12 @@ icarus_add_test(test_condition_parser
     core/test_condition_parser.cpp
 )
 
+# Phase 9A: PhysicalComponent tests
+icarus_add_test(test_physical_component
+    core/test_physical_component.cpp
+)
+target_include_directories(test_physical_component PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
 # Signal backplane tests (Phase 1.3)
 icarus_add_test(test_signal
     signal/test_signal.cpp
@@ -69,6 +75,12 @@ icarus_add_test(test_rigid_body_6dof
     components/test_rigid_body_6dof.cpp
 )
 target_include_directories(test_rigid_body_6dof PRIVATE ${PROJECT_SOURCE_DIR}/components)
+
+# Phase 9B: Vehicle6DOF tests
+icarus_add_test(test_vehicle6dof
+    components/test_vehicle6dof.cpp
+)
+target_include_directories(test_vehicle6dof PRIVATE ${PROJECT_SOURCE_DIR}/components)
 
 # IO tests
 icarus_add_test(test_data_dictionary

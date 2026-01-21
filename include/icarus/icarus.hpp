@@ -20,6 +20,7 @@
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
 #include <icarus/core/ErrorLogging.hpp>
+#include <icarus/core/PhysicalComponent.hpp>
 
 // Signal
 #include <icarus/signal/Backplane.hpp>
