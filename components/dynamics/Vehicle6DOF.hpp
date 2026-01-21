@@ -242,7 +242,7 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
         // Read default mass for when no sources are specified
         // Only override if explicitly configured
         if (config.template Has<double>("default_mass")) {
-            default_mass_ = this->template read_param<double>("default_mass", 1.0);
+            default_mass_ = Scalar(this->template read_param<double>("default_mass", 1.0));
         }
         auto default_inertia_vec =
             config.template Get<Vec3<double>>("default_inertia", Vec3<double>{1.0, 1.0, 1.0});
@@ -508,7 +508,7 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
     void AggregateMass() {
         if (mass_sources_.empty()) {
             // Use defaults
-            total_mass_ = static_cast<Scalar>(default_mass_);
+            total_mass_ = default_mass_;
             cg_ = Vec3<Scalar>::Zero();
             inertia_xx_ = default_inertia_diag_(0);
             inertia_yy_ = default_inertia_diag_(1);
@@ -668,7 +668,7 @@ template <typename Scalar> class Vehicle6DOF : public Component<Scalar> {
 
     // Configuration
     std::string reference_frame_ = "eci";
-    double default_mass_ = 1.0;
+    Scalar default_mass_ = Scalar(1);
     Vec3<Scalar> default_inertia_diag_ = Vec3<Scalar>{Scalar(1), Scalar(1), Scalar(1)};
 
     // Programmatic source names (used if config lists are empty)
