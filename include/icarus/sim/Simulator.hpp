@@ -1055,6 +1055,7 @@ inline void Simulator::Reset() {
     // Re-run Stage on components
     for (auto &comp : components_) {
         backplane_.set_context(comp->Entity(), comp->Name());
+        backplane_.clear_tracking();
         try {
             comp->Stage(backplane_);
         } catch (const Error &e) {
@@ -1062,6 +1063,7 @@ inline void Simulator::Reset() {
             LogError(e, 0.0, comp->FullName());
             throw;
         }
+        inputs_[comp.get()] = backplane_.resolved_inputs();
         backplane_.clear_context();
     }
 

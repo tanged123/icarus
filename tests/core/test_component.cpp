@@ -202,6 +202,50 @@ TEST(DummyComponent, Lifecycle) {
 // Simulator Integration Tests (Updated for new API)
 // =============================================================================
 
+template <typename Scalar> class ResolveSourceComponent : public Component<Scalar> {
+  public:
+    explicit ResolveSourceComponent(std::string name) : name_(std::move(name)) {}
+
+    [[nodiscard]] std::string Name() const override { return name_; }
+    [[nodiscard]] std::string Entity() const override { return ""; }
+    [[nodiscard]] std::string TypeName() const override { return "ResolveSourceComponent"; }
+
+    void Provision(Backplane<Scalar> &bp) override {
+        bp.template register_output<Scalar>("out", &out_, "1", "Source output");
+    }
+
+    void Stage(Backplane<Scalar> &) override {}
+    void Step(Scalar, Scalar) override {}
+
+  private:
+    std::string name_;
+    Scalar out_{Scalar(1.0)};
+};
+
+template <typename Scalar> class ConditionalResolveComponent : public Component<Scalar> {
+  public:
+    ConditionalResolveComponent(std::string name, bool *resolve_enabled)
+        : name_(std::move(name)), resolve_enabled_(resolve_enabled) {}
+
+    [[nodiscard]] std::string Name() const override { return name_; }
+    [[nodiscard]] std::string Entity() const override { return ""; }
+    [[nodiscard]] std::string TypeName() const override { return "ConditionalResolveComponent"; }
+
+    void Provision(Backplane<Scalar> &) override {}
+
+    void Stage(Backplane<Scalar> &bp) override {
+        if (resolve_enabled_ != nullptr && *resolve_enabled_) {
+            (void)bp.template resolve<Scalar>("Producer.out");
+        }
+    }
+
+    void Step(Scalar, Scalar) override {}
+
+  private:
+    std::string name_;
+    bool *resolve_enabled_;
+};
+
 TEST(Simulator, AddComponent) {
     Simulator sim;
     sim.AddComponent(std::make_unique<DummyComponent<double>>("Test"));
@@ -263,6 +307,37 @@ TEST(Simulator, EntityNamespacing) {
 
     EXPECT_TRUE(sim.GetBackplane().has_signal("Stage1.Engine.counter"));
     EXPECT_TRUE(sim.GetBackplane().has_signal("Stage2.Engine.counter"));
+}
+
+TEST(Simulator, IntrospectionGraphResolveEdgesRefreshAfterReset) {
+    bool resolve_enabled = true;
+
+    Simulator sim;
+    sim.AddComponent(std::make_unique<ResolveSourceComponent<double>>("Producer"));
+    sim.AddComponent(
+        std::make_unique<ConditionalResolveComponent<double>>("Consumer", &resolve_enabled));
+
+    sim.Stage();
+
+    auto count_resolve_edges = [](const IntrospectionGraph &graph) {
+        size_t count = 0;
+        for (const auto &edge : graph.edges) {
+            if (edge.kind == EdgeKind::Resolve && edge.source == "Producer.out" &&
+                edge.target == "Consumer") {
+                ++count;
+            }
+        }
+        return count;
+    };
+
+    auto graph_before_reset = sim.GetIntrospectionGraph();
+    EXPECT_EQ(count_resolve_edges(graph_before_reset), 1u);
+
+    resolve_enabled = false;
+    sim.Reset();
+
+    auto graph_after_reset = sim.GetIntrospectionGraph();
+    EXPECT_EQ(count_resolve_edges(graph_after_reset), 0u);
 }
 
 // =============================================================================
