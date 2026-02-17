@@ -321,6 +321,10 @@ def test_introspection_graph(minimal_config):
     assert "edges" in graph
     assert "total_edges" in graph["summary"]
     assert isinstance(graph["edges"], list)
+    assert graph["summary"]["total_edges"] >= 7
+
+    route_edges = [e for e in graph["edges"] if e.get("kind") == "route"]
+    assert len(route_edges) == 7
 
 
 def test_to_dict(minimal_config):

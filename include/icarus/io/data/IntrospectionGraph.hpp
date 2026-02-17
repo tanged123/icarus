@@ -80,49 +80,8 @@ struct IntrospectionGraph {
      * top-level "edges" array and "total_edges" in summary.
      */
     [[nodiscard]] nlohmann::json ToJSON() const {
-        nlohmann::json j;
-
-        // Summary (existing fields + total_edges)
-        j["summary"]["total_outputs"] = dictionary.total_outputs;
-        j["summary"]["total_inputs"] = dictionary.total_inputs;
-        j["summary"]["total_parameters"] = dictionary.total_parameters;
-        j["summary"]["total_config"] = dictionary.total_config;
-        j["summary"]["integrable_states"] = dictionary.integrable_states;
-        j["summary"]["unwired_inputs"] = dictionary.unwired_inputs;
+        nlohmann::json j = dictionary.ToJSONValue();
         j["summary"]["total_edges"] = edges.size();
-
-        // Components (identical to DataDictionary::ToJSON)
-        j["components"] = nlohmann::json::array();
-        for (const auto &comp : dictionary.components) {
-            nlohmann::json jcomp;
-            jcomp["name"] = comp.name;
-            jcomp["type"] = comp.type;
-
-            auto to_json_signals = [](const std::vector<SignalDescriptor> &signals) {
-                nlohmann::json arr = nlohmann::json::array();
-                for (const auto &sig : signals) {
-                    nlohmann::json jsig;
-                    jsig["name"] = sig.name;
-                    jsig["unit"] = sig.unit;
-                    jsig["description"] = sig.description;
-                    if (!sig.wired_to.empty()) {
-                        jsig["wired_to"] = sig.wired_to;
-                    }
-                    if (sig.is_state) {
-                        jsig["is_state"] = true;
-                    }
-                    arr.push_back(jsig);
-                }
-                return arr;
-            };
-
-            jcomp["outputs"] = to_json_signals(comp.outputs);
-            jcomp["inputs"] = to_json_signals(comp.inputs);
-            jcomp["parameters"] = to_json_signals(comp.parameters);
-            jcomp["config"] = to_json_signals(comp.config);
-
-            j["components"].push_back(jcomp);
-        }
 
         // Edges (NEW — additive)
         j["edges"] = nlohmann::json::array();
@@ -162,42 +121,7 @@ struct IntrospectionGraph {
         out << YAML::Key << "total_edges" << YAML::Value << edges.size();
         out << YAML::EndMap;
 
-        // Components (same as DataDictionary::ToYAML)
-        out << YAML::Key << "components" << YAML::Value << YAML::BeginSeq;
-        for (const auto &comp : dictionary.components) {
-            out << YAML::BeginMap;
-            out << YAML::Key << "name" << YAML::Value << comp.name;
-            out << YAML::Key << "type" << YAML::Value << comp.type;
-
-            auto emit_signals = [&out](const std::string &key,
-                                       const std::vector<SignalDescriptor> &signals) {
-                if (!signals.empty()) {
-                    out << YAML::Key << key << YAML::Value << YAML::BeginSeq;
-                    for (const auto &sig : signals) {
-                        out << YAML::BeginMap;
-                        out << YAML::Key << "name" << YAML::Value << sig.name;
-                        out << YAML::Key << "unit" << YAML::Value << sig.unit;
-                        out << YAML::Key << "description" << YAML::Value << sig.description;
-                        if (!sig.wired_to.empty()) {
-                            out << YAML::Key << "wired_to" << YAML::Value << sig.wired_to;
-                        }
-                        if (sig.is_state) {
-                            out << YAML::Key << "is_state" << YAML::Value << true;
-                        }
-                        out << YAML::EndMap;
-                    }
-                    out << YAML::EndSeq;
-                }
-            };
-
-            emit_signals("outputs", comp.outputs);
-            emit_signals("inputs", comp.inputs);
-            emit_signals("parameters", comp.parameters);
-            emit_signals("config", comp.config);
-
-            out << YAML::EndMap;
-        }
-        out << YAML::EndSeq;
+        dictionary.AppendComponentsToYAML(out);
 
         // Edges
         out << YAML::Key << "edges" << YAML::Value << YAML::BeginSeq;

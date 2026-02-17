@@ -6,6 +6,8 @@
  * Tests mass aggregation, force aggregation, and 6DOF dynamics
  */
 
+#include <algorithm>
+#include <casadi/casadi.hpp>
 #include <gtest/gtest.h>
 
 #include <dynamics/Vehicle6DOF.hpp>
@@ -621,11 +623,7 @@ TEST(Vehicle6DOF, ResolvedInputsTrackedByBackplane) {
 
     // Should include mass source signals
     auto contains = [&](const std::string &needle) {
-        for (const auto &s : resolved) {
-            if (s == needle)
-                return true;
-        }
-        return false;
+        return std::find(resolved.begin(), resolved.end(), needle) != resolved.end();
     };
 
     EXPECT_TRUE(contains("Rocket.Structure.mass"));
@@ -633,6 +631,57 @@ TEST(Vehicle6DOF, ResolvedInputsTrackedByBackplane) {
     EXPECT_TRUE(contains("Rocket.Structure.inertia.xx"));
 
     // Should include force source signals
+    EXPECT_TRUE(contains("Rocket.Engine.force.x"));
+    EXPECT_TRUE(contains("Rocket.Engine.force.y"));
+    EXPECT_TRUE(contains("Rocket.Engine.force.z"));
+}
+
+TEST(Vehicle6DOF, ResolvedInputsTrackedByBackplaneSymbolic) {
+    // Mirror the double test for casadi::MX to validate resolve tracking in symbolic mode.
+    icarus::SignalRegistry<casadi::MX> registry;
+    icarus::Backplane<casadi::MX> bp(registry);
+
+    TestMassProvider<casadi::MX> mass("Structure", "Rocket");
+    TestForceProvider<casadi::MX> engine("Engine", "Rocket");
+
+    Vehicle6DOF<casadi::MX> vehicle("Vehicle", "Rocket");
+    vehicle.AddMassSource("Structure");
+    vehicle.AddBodySource("Engine");
+
+    // Provision all
+    bp.set_context("Rocket", "Structure");
+    bp.clear_tracking();
+    mass.Provision(bp);
+    bp.set_context("Rocket", "Engine");
+    bp.clear_tracking();
+    engine.Provision(bp);
+    bp.set_context("Rocket", "Vehicle");
+    bp.clear_tracking();
+    vehicle.Provision(bp);
+
+    // Stage all - Vehicle6DOF calls resolve() for source handles
+    bp.set_context("Rocket", "Structure");
+    bp.clear_tracking();
+    mass.Stage(bp);
+    bp.set_context("Rocket", "Engine");
+    bp.clear_tracking();
+    engine.Stage(bp);
+    bp.set_context("Rocket", "Vehicle");
+    bp.clear_tracking();
+    vehicle.Stage(bp);
+
+    // Check that Vehicle6DOF's resolve() calls were tracked
+    auto resolved = bp.resolved_inputs();
+    EXPECT_FALSE(resolved.empty());
+
+    auto contains = [&](const std::string &needle) {
+        return std::find(resolved.begin(), resolved.end(), needle) != resolved.end();
+    };
+
+    EXPECT_TRUE(contains("Rocket.Structure.mass"));
+    EXPECT_TRUE(contains("Rocket.Structure.cg.x"));
+    EXPECT_TRUE(contains("Rocket.Structure.inertia.xx"));
+
     EXPECT_TRUE(contains("Rocket.Engine.force.x"));
     EXPECT_TRUE(contains("Rocket.Engine.force.y"));
     EXPECT_TRUE(contains("Rocket.Engine.force.z"));

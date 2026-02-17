@@ -1,4 +1,4 @@
 repos:
   primary: "."
   additional:
-    - "/home/tanged/.beads-planning"
+    - "~/.beads-planning"

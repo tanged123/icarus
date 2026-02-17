@@ -352,7 +352,8 @@ ICARUS_API const char *icarus_error_name(IcarusError error);
 /**
  * @brief Free string allocated by Icarus
  *
- * Use this to free strings returned by icarus_get_schema_json().
+ * Use this to free strings returned by icarus_get_schema_json() and
+ * icarus_get_introspection_graph_json().
  *
  * @param str String to free (safe to pass NULL)
  */

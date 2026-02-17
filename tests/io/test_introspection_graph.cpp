@@ -1,4 +1,6 @@
+#include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <icarus/core/Error.hpp>
 #include <icarus/io/data/IntrospectionGraph.hpp>
@@ -31,6 +33,12 @@ static icarus::IntrospectionGraph MakeTestGraph() {
     graph.edges.push_back({"Rocket.Structure.mass", "Rocket.Vehicle", icarus::EdgeKind::Resolve});
 
     return graph;
+}
+
+static std::filesystem::path MakeTempPath(const std::string &extension) {
+    auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() /
+           ("icarus_test_introspection_graph_" + std::to_string(stamp) + extension);
 }
 
 // ============================================================================
@@ -111,8 +119,8 @@ TEST(IntrospectionGraph, ToJSON_BackwardCompatible) {
 
 TEST(IntrospectionGraph, ToJSONFile_Success) {
     auto graph = MakeTestGraph();
-    std::string path = "test_introspection_graph.json";
-    EXPECT_NO_THROW(graph.ToJSONFile(path));
+    auto path = MakeTempPath(".json");
+    EXPECT_NO_THROW(graph.ToJSONFile(path.string()));
     EXPECT_TRUE(std::filesystem::exists(path));
 
     // Verify contents are valid JSON with edges
@@ -124,10 +132,10 @@ TEST(IntrospectionGraph, ToJSONFile_Success) {
     std::filesystem::remove(path);
 }
 
-TEST(IntrospectionGraph, ToJAMLFile_Success) {
+TEST(IntrospectionGraph, ToYAMLFile_Success) {
     auto graph = MakeTestGraph();
-    std::string path = "test_introspection_graph.yaml";
-    EXPECT_NO_THROW(graph.ToYAMLFile(path));
+    auto path = MakeTempPath(".yaml");
+    EXPECT_NO_THROW(graph.ToYAMLFile(path.string()));
     EXPECT_TRUE(std::filesystem::exists(path));
     std::filesystem::remove(path);
 }
