@@ -82,8 +82,8 @@ struct DataDictionary {
             if (!sig.wired_to.empty()) {
                 out << YAML::Key << "wired_to" << YAML::Value << sig.wired_to;
             }
-            if (sig.is_state) {
-                out << YAML::Key << "is_state" << YAML::Value << true;
+            if (sig.is_integrable) {
+                out << YAML::Key << "is_integrable" << YAML::Value << true;
             }
             out << YAML::EndMap;
         }
@@ -127,8 +127,8 @@ struct DataDictionary {
                 if (!sig.wired_to.empty()) {
                     jsig["wired_to"] = sig.wired_to;
                 }
-                if (sig.is_state) {
-                    jsig["is_state"] = true;
+                if (sig.is_integrable) {
+                    jsig["is_integrable"] = true;
                 }
                 arr.push_back(jsig);
             }
@@ -168,7 +168,7 @@ struct DataDictionary {
             total_config += comp.config.size();
 
             for (const auto &output : comp.outputs) {
-                if (output.is_state) {
+                if (output.is_integrable) {
                     ++integrable_states;
                 }
             }

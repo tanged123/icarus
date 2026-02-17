@@ -66,13 +66,13 @@ TEST(Signal, SignalDescriptor) {
     desc.type = icarus::SignalType::Double;
     desc.lifecycle = icarus::SignalLifecycle::Dynamic;
     desc.description = "Test signal";
-    desc.is_state = true;
+    desc.is_integrable = true;
 
     EXPECT_EQ(desc.name, "test.signal");
     EXPECT_EQ(desc.unit, "m/s");
     EXPECT_EQ(desc.type, icarus::SignalType::Double);
     EXPECT_EQ(desc.lifecycle, icarus::SignalLifecycle::Dynamic);
-    EXPECT_TRUE(desc.is_state);
+    EXPECT_TRUE(desc.is_integrable);
     EXPECT_EQ(desc.size_bytes(), 8); // Match Vulcan's wire format
 }
 
