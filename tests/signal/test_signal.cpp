@@ -752,9 +752,9 @@ TEST(DataDictionary, ComputeStats) {
 
     SignalDescriptor output1, output2, input1, param1, cfg1;
     output1.kind = SignalKind::Output;
-    output1.is_state = true;
+    output1.is_integrable = true;
     output2.kind = SignalKind::Output;
-    output2.is_state = false;
+    output2.is_integrable = false;
     input1.kind = SignalKind::Input;
     input1.wired_to = ""; // Unwired
     param1.kind = SignalKind::Parameter;

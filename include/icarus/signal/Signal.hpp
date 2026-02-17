@@ -128,7 +128,7 @@ template <> struct TypeTraits<SymbolicScalar> {
  * - `data_ptr`: For pointer-bind pattern (zero-overhead hot path)
  * - `description`: Human-readable documentation
  * - `min_value/max_value`: Value bounds for validation
- * - `is_state`: Flag for signals requiring integration
+ * - `is_integrable`: Flag for signals requiring integration
  * - `kind`: Interface classification (Output/Input/Parameter/Config)
  *
  * Compatible with Vulcan's telemetry system while adding simulation features.
@@ -153,7 +153,6 @@ struct SignalDescriptor {
     // Simulation metadata
     double min_value = -std::numeric_limits<double>::infinity();
     double max_value = std::numeric_limits<double>::infinity();
-    bool is_state = false;      ///< Requires integration
     bool is_optimizable = true; ///< False for Config kind
 
     // Phase 6: Unified state model

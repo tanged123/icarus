@@ -141,8 +141,8 @@ py::dict build_schema_dict(const icarus::DataDictionary &dict) {
                 if (!sig.wired_to.empty()) {
                     jsig["wired_to"] = sig.wired_to;
                 }
-                if (sig.is_state) {
-                    jsig["is_state"] = true;
+                if (sig.is_integrable) {
+                    jsig["is_integrable"] = true;
                 }
                 arr.push_back(jsig);
             }
