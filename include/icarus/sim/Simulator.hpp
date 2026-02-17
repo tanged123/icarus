@@ -20,6 +20,7 @@
 #include <icarus/io/MissionLogger.hpp>
 #include <icarus/io/SimulationLoader.hpp>
 #include <icarus/io/data/DataDictionary.hpp>
+#include <icarus/io/data/IntrospectionGraph.hpp>
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/SignalRouter.hpp>
@@ -190,6 +191,9 @@ class Simulator {
 
     /// Get data dictionary for the simulation
     [[nodiscard]] DataDictionary GetDataDictionary() const;
+
+    /// Get introspection graph (data dictionary + topology edges)
+    [[nodiscard]] IntrospectionGraph GetIntrospectionGraph() const;
 
     /// Get signal registry (for recording, introspection)
     [[nodiscard]] const SignalRegistry<double> &Registry() const { return registry_; }
@@ -1198,6 +1202,31 @@ inline DataDictionary Simulator::GetDataDictionary() const {
 
     dict.ComputeStats();
     return dict;
+}
+
+inline IntrospectionGraph Simulator::GetIntrospectionGraph() const {
+    IntrospectionGraph graph;
+    graph.dictionary = GetDataDictionary();
+
+    // 1. Explicit route edges (from SignalRouter)
+    for (const auto &route : router_.GetRoutes()) {
+        graph.edges.push_back({route.output_path, route.input_path, EdgeKind::Route});
+    }
+
+    // 2. Resolve-based edges (implicit source bindings)
+    // The inputs_ map is populated during Stage() from Backplane::resolved_inputs().
+    // Any component that calls bp.resolve() to read another component's output
+    // gets its dependency captured here automatically.
+    for (const auto &comp : components_) {
+        auto it = inputs_.find(comp.get());
+        if (it != inputs_.end()) {
+            for (const auto &resolved_signal : it->second) {
+                graph.edges.push_back({resolved_signal, comp->FullName(), EdgeKind::Resolve});
+            }
+        }
+    }
+
+    return graph;
 }
 
 inline void Simulator::InvokeInputSources() {

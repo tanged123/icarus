@@ -313,6 +313,11 @@ TEST(Vehicle6DOF, ForceAggregationEcefToBody) {
     vehicle.AddMassSource("Mass");
     vehicle.AddEcefSource("Gravity");
 
+    // ECEF sources require reference_frame="ecef"
+    icarus::ComponentConfig cfg;
+    cfg.strings["reference_frame"] = "ecef";
+    vehicle.SetConfig(cfg);
+
     // Set vehicle attitude: 90 deg rotation about Z
     // Body +X points to ECEF +Y, Body +Y points to ECEF -X
     double angle = M_PI / 2.0;
@@ -468,6 +473,11 @@ TEST(Vehicle6DOF, IntegratedRocketSimulation) {
     vehicle.AddBodySource("Engine");
     vehicle.AddEcefSource("Gravity");
 
+    // ECEF sources require reference_frame="ecef"
+    icarus::ComponentConfig cfg;
+    cfg.strings["reference_frame"] = "ecef";
+    vehicle.SetConfig(cfg);
+
     // Provision all
     bp.set_context("Rocket", "Structure");
     structure.Provision(bp);
@@ -560,4 +570,70 @@ TEST(Vehicle6DOF, OutputSignalsRegistered) {
     EXPECT_TRUE(registry.HasSignal("Test.Vehicle.velocity_ref.x"));
     EXPECT_TRUE(registry.HasSignal("Test.Vehicle.position_lla.lat"));
     EXPECT_TRUE(registry.HasSignal("Test.Vehicle.euler_zyx.yaw"));
+}
+
+// =============================================================================
+// Introspection: Resolve Tracking
+// =============================================================================
+
+TEST(Vehicle6DOF, ResolvedInputsTrackedByBackplane) {
+    // Verify that Backplane tracks Vehicle6DOF's resolve() calls
+    // during Stage(), capturing implicit source binding edges.
+    icarus::SignalRegistry<double> registry;
+    icarus::Backplane<double> bp(registry);
+
+    TestMassProvider<double> mass("Structure", "Rocket");
+    mass.SetMass(100.0);
+    mass.SetInertia(10.0, 10.0, 10.0);
+
+    TestForceProvider<double> engine("Engine", "Rocket");
+    engine.SetForce(Vec3<double>{1000.0, 0.0, 0.0});
+
+    Vehicle6DOF<double> vehicle("Vehicle", "Rocket");
+    vehicle.AddMassSource("Structure");
+    vehicle.AddBodySource("Engine");
+
+    // Provision all
+    bp.set_context("Rocket", "Structure");
+    bp.clear_tracking();
+    mass.Provision(bp);
+    bp.set_context("Rocket", "Engine");
+    bp.clear_tracking();
+    engine.Provision(bp);
+    bp.set_context("Rocket", "Vehicle");
+    bp.clear_tracking();
+    vehicle.Provision(bp);
+
+    // Stage all - Vehicle6DOF calls resolve() for source handles
+    bp.set_context("Rocket", "Structure");
+    bp.clear_tracking();
+    mass.Stage(bp);
+    bp.set_context("Rocket", "Engine");
+    bp.clear_tracking();
+    engine.Stage(bp);
+    bp.set_context("Rocket", "Vehicle");
+    bp.clear_tracking();
+    vehicle.Stage(bp);
+
+    // Check that Vehicle6DOF's resolve() calls were tracked
+    auto resolved = bp.resolved_inputs();
+    EXPECT_FALSE(resolved.empty());
+
+    // Should include mass source signals
+    auto contains = [&](const std::string &needle) {
+        for (const auto &s : resolved) {
+            if (s == needle)
+                return true;
+        }
+        return false;
+    };
+
+    EXPECT_TRUE(contains("Rocket.Structure.mass"));
+    EXPECT_TRUE(contains("Rocket.Structure.cg.x"));
+    EXPECT_TRUE(contains("Rocket.Structure.inertia.xx"));
+
+    // Should include force source signals
+    EXPECT_TRUE(contains("Rocket.Engine.force.x"));
+    EXPECT_TRUE(contains("Rocket.Engine.force.y"));
+    EXPECT_TRUE(contains("Rocket.Engine.force.z"));
 }

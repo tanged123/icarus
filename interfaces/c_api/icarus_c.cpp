@@ -443,6 +443,32 @@ ICARUS_API const char *icarus_get_schema_json(IcarusHandle *sim) {
     }
 }
 
+ICARUS_API const char *icarus_get_introspection_graph_json(IcarusHandle *sim) {
+    if (!sim || !sim->sim) {
+        return nullptr;
+    }
+
+    sim->ClearError();
+
+    try {
+        auto graph = sim->sim->GetIntrospectionGraph();
+        auto j = graph.ToJSON();
+
+        std::string json_str = j.dump(2);
+
+        char *result = static_cast<char *>(std::malloc(json_str.size() + 1));
+        if (!result) {
+            sim->SetError("Failed to allocate memory for JSON");
+            return nullptr;
+        }
+        std::strcpy(result, json_str.c_str());
+        return result;
+    } catch (const std::exception &e) {
+        sim->SetError(e.what());
+        return nullptr;
+    }
+}
+
 ICARUS_API size_t icarus_get_signal_count(IcarusHandle *sim) {
     if (!sim || !sim->sim) {
         return 0;

@@ -87,6 +87,10 @@ icarus_add_test(test_data_dictionary
     io/test_data_dictionary.cpp
 )
 
+icarus_add_test(test_introspection_graph
+    io/test_introspection_graph.cpp
+)
+
 icarus_add_test(test_logging
     io/test_logging.cpp
 )

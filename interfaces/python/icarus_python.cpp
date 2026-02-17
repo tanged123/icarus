@@ -334,6 +334,15 @@ For casual access, prefer sim.get(signal_name) or sim[signal_name].
             },
             "Data dictionary as Python dict")
 
+        .def_property_readonly(
+            "introspection_graph",
+            [](icarus::Simulator &self) {
+                auto graph = self.GetIntrospectionGraph();
+                auto j = graph.ToJSON();
+                return py::module_::import("json").attr("loads")(j.dump()).cast<py::dict>();
+            },
+            "Introspection graph as Python dict (components + topology edges)")
+
         // -----------------------------------------------------------------
         // Utilities
         // -----------------------------------------------------------------
