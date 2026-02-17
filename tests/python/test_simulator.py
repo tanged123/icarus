@@ -309,6 +309,24 @@ def test_schema_json(minimal_config):
     assert "components" in schema
 
 
+def test_introspection_graph(minimal_config):
+    """Test introspection graph property."""
+    sim = Simulator(minimal_config)
+    sim.stage()
+
+    graph = sim.introspection_graph
+    assert isinstance(graph, dict)
+    assert "summary" in graph
+    assert "components" in graph
+    assert "edges" in graph
+    assert "total_edges" in graph["summary"]
+    assert isinstance(graph["edges"], list)
+    assert graph["summary"]["total_edges"] >= 7
+
+    route_edges = [e for e in graph["edges"] if e.get("kind") == "route"]
+    assert len(route_edges) == 7
+
+
 def test_to_dict(minimal_config):
     """Test exporting signals as dict."""
     sim = Simulator(minimal_config)

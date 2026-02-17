@@ -288,6 +288,19 @@ ICARUS_API double icarus_get_end_time(IcarusHandle *sim);
 ICARUS_API const char *icarus_get_schema_json(IcarusHandle *sim);
 
 /**
+ * @brief Get introspection graph as JSON string
+ *
+ * Returns the data dictionary plus topology edges (route and resolve).
+ * Includes all explicit signal routes and implicit source bindings
+ * discovered via Backplane::resolve() during Stage().
+ * Caller must free the returned string with icarus_free_string().
+ *
+ * @param sim Simulator handle
+ * @return JSON string (caller must free), or NULL on error
+ */
+ICARUS_API const char *icarus_get_introspection_graph_json(IcarusHandle *sim);
+
+/**
  * @brief Get number of signals
  *
  * @param sim Simulator handle
@@ -339,7 +352,8 @@ ICARUS_API const char *icarus_error_name(IcarusError error);
 /**
  * @brief Free string allocated by Icarus
  *
- * Use this to free strings returned by icarus_get_schema_json().
+ * Use this to free strings returned by icarus_get_schema_json() and
+ * icarus_get_introspection_graph_json().
  *
  * @param str String to free (safe to pass NULL)
  */
