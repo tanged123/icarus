@@ -24,9 +24,9 @@
 #include <icarus/signal/InputHandle.hpp>
 
 #include <metis/math/Quaternion.hpp>
-#include <vulcan/coordinates/BodyFrames.hpp>
+#include <vulcan/coordinates/FrameLocal.hpp>
+#include <vulcan/coordinates/FrameVehicle.hpp>
 #include <vulcan/coordinates/Geodetic.hpp>
-#include <vulcan/coordinates/LocalFrames.hpp>
 #include <vulcan/core/Constants.hpp>
 #include <vulcan/dynamics/RigidBody.hpp>
 #include <vulcan/dynamics/RigidBodyTypes.hpp>
