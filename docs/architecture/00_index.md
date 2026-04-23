@@ -121,6 +121,6 @@ STEP (per Δt)        →  Read inputs, compute, write outputs
 
 ## Related Documents
 
-- `metis/docs/metis_usage_guide.md` - Metis math library usage
+- `references/metis/docs/metis_usage_guide.md` - Metis math library usage
 - `vulcan/docs/` - Physics utility library documentation
 - `design/signal_system_analysis.md` - Signal system design rationale

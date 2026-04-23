@@ -274,7 +274,7 @@ void Simulator<Scalar>::RunNumericTrim() {
     // Collect residuals
     metis::SymbolicVector residuals(n_residuals);
     for (int i = 0; i < n_residuals; ++i) {
-        residuals(i) = Peek<SymbolicScalar>(trim_cfg.zero_derivatives[i]);
+        residuals(i) = Peek<metis::SymbolicScalar>(trim_cfg.zero_derivatives[i]);
     }
 
     // Create F(controls) -> residuals function

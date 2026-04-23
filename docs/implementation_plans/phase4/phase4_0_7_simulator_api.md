@@ -118,8 +118,8 @@ public:
     void SetLogFile(const std::string&);
     void SetProfilingEnabled(bool);
     void ApplyLogConfig(const LogConfig&);
-    metis::Function GenerateGraph();
-    metis::Function GenerateJacobian();
+    std::optional<metis::Function> GetDynamicsGraph() const;
+    std::optional<metis::Function> GetJacobian() const;
 };
 ```
 
@@ -179,7 +179,7 @@ Everything else is either:
 │  │              EXPERT (Advanced users only)               ││
 │  │  - GetBackplane() → for signal introspection            ││
 │  │  - GetState() / SetState() → for optimization           ││
-│  │  - GenerateGraph() → symbolic mode                      ││
+│  │  - GetDynamicsGraph() / GetJacobian() → symbolic mode   ││
 │  │  - AdaptiveStep() → advanced integration                ││
 │  └─────────────────────────────────────────────────────────┘│
 │                                                             │
@@ -653,7 +653,7 @@ private:
 - [ ] Clean 4-operation core API: `FromConfig()`, `Stage()`, `Step()`, `~Simulator()`
 - [ ] Query interface: `Time()`, `Peek<T>()`, `GetDataDictionary()`
 - [ ] Control interface: `Poke<T>()`, `Reset()`, `SetInputSource()`
-- [ ] Expert interface: `GetState()`, `GenerateGraph()`, `AdaptiveStep()`
+- [ ] Expert interface: `GetState()`, `GetDynamicsGraph()`, `GetJacobian()`, `AdaptiveStep()`
 
 ### Lifecycle Implementation
 

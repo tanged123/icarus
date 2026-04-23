@@ -142,19 +142,20 @@ Symbolic graph generation (for trajectory optimization, AD, etc.) has specific i
 > [!IMPORTANT]
 > **Symbolic graph generation assumes single-rate execution by default.** The generated CasADi function represents one "snapshot" of the dynamics at the fastest rate.
 
-When you export a symbolic graph via `Simulator<MX>::GenerateGraph()`, all components execute once per call. Rate-group logic is **not** embedded in the graph.
+When you export a symbolic graph via `Simulator<MX>::GetDynamicsGraph()`, all components execute once per call. Rate-group logic is **not** embedded in the graph.
 
 ### 6.2 Embedding Rate Transitions (Advanced)
 
 For optimizers that need to respect multi-rate behavior, rate-transition blocks can be explicitly included in the symbolic graph:
 
 ```cpp
-// Rate transition appears as explicit interpolation in graph
-Scalar nav_position_interp = metis::lerp(
-    nav_position_prev,
-    nav_position_latest,
-    alpha  // Fixed coefficient based on rate ratio
-);
+// Rate transition appears as explicit interpolation in graph.
+// Metis does not ship a `lerp` helper — spell it out inline so the
+// optimizer sees a plain affine expression.
+Scalar nav_position_interp =
+    nav_position_prev + (nav_position_latest - nav_position_prev) * alpha;
+// `alpha` is a fixed coefficient derived from the rate ratio; for ZOH
+// substitute: Scalar nav_position_zoh = nav_position_prev;
 ```
 
 This makes the ZOH or interpolation visible to the optimizer, but increases graph complexity.

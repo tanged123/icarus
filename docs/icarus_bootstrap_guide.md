@@ -480,9 +480,12 @@ option(BUILD_COMPONENTS \"Build standard component models\" ON)
 find_package(Eigen3 3.4 REQUIRED)
 find_package(casadi REQUIRED)
 find_package(metis REQUIRED)
-find_package(vulcan REQUIRED)
+# HighFive must precede vulcan: vulcan's installed vulcanConfig.cmake
+# references HighFive::HighFive in its link interface, so HighFive has
+# to be discovered first.
 find_package(HDF5 REQUIRED COMPONENTS C CXX)
 find_package(HighFive REQUIRED)
+find_package(vulcan REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(spdlog REQUIRED)

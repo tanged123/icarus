@@ -106,7 +106,7 @@ double cl = table.lookup(alpha);
 Scalar cl = metis::interpn<Scalar>(points, values, query)(0);
 ```
 
-> **Reference:** See [metis/docs/user_guides/interpolation.md](file:///home/tanged/sources/metis/docs/user_guides/interpolation.md) for full API details.
+> **Reference:** See [metis/docs/user_guides/interpolation.md](../../references/metis/docs/user_guides/interpolation.md) for full API details.
 
 ### 5.1 Interpolation Methods
 

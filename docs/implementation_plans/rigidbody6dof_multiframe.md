@@ -42,8 +42,8 @@ Users working with real-world scenarios (like the rocket example at 100km altitu
 
 ```cpp
 #include <vulcan/coordinates/Geodetic.hpp>
-#include <vulcan/coordinates/LocalFrames.hpp>
-#include <vulcan/coordinates/BodyFrames.hpp>
+#include <vulcan/coordinates/FrameLocal.hpp>
+#include <vulcan/coordinates/FrameVehicle.hpp>
 ```
 
 #### 1.2 Update Stage() method
