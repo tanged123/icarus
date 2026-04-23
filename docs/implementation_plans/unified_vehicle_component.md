@@ -98,8 +98,8 @@ public:
     [[nodiscard]] virtual Vec3<Scalar> GetBodyPosition() const {
         return Vec3<Scalar>::Zero();
     }
-    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
-        return janus::Quaternion<Scalar>::identity();
+    [[nodiscard]] virtual metis::Quaternion<Scalar> GetBodyOrientation() const {
+        return metis::Quaternion<Scalar>::identity();
     }
 
     // ... existing lifecycle methods ...
@@ -110,7 +110,7 @@ template <typename Scalar>
 class PhysicalComponent : public Component<Scalar> {
 protected:
     Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();
-    janus::Quaternion<Scalar> body_orientation_;  // body-to-component, identity default
+    metis::Quaternion<Scalar> body_orientation_;  // body-to-component, identity default
     bool has_body_attachment_ = false;
 
     /**
@@ -133,11 +133,11 @@ protected:
             double yaw = euler_deg(0) * deg2rad;
             double pitch = euler_deg(1) * deg2rad;
             double roll = euler_deg(2) * deg2rad;
-            body_orientation_ = janus::Quaternion<Scalar>::from_euler_zyx(yaw, pitch, roll);
+            body_orientation_ = metis::Quaternion<Scalar>::from_euler_zyx(yaw, pitch, roll);
         } else {
             // Quaternion format
             auto q = this->read_param_vec4("body_orientation", Vec4<Scalar>{1,0,0,0});
-            body_orientation_ = janus::Quaternion<Scalar>{q(0), q(1), q(2), q(3)};
+            body_orientation_ = metis::Quaternion<Scalar>{q(0), q(1), q(2), q(3)};
         }
 
         has_body_attachment_ = true;
@@ -146,7 +146,7 @@ protected:
 public:
     [[nodiscard]] bool HasBodyAttachment() const override { return has_body_attachment_; }
     [[nodiscard]] Vec3<Scalar> GetBodyPosition() const override { return body_position_; }
-    [[nodiscard]] janus::Quaternion<Scalar> GetBodyOrientation() const override {
+    [[nodiscard]] metis::Quaternion<Scalar> GetBodyOrientation() const override {
         return body_orientation_;
     }
 };
@@ -575,7 +575,7 @@ void AggregateForces() {
     Vec3<Scalar> sum_moment = Vec3<Scalar>::Zero();
 
     // Vehicle attitude for ECEF transforms
-    janus::Quaternion<Scalar> q_body_to_ecef{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+    metis::Quaternion<Scalar> q_body_to_ecef{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
     for (const auto& src : force_sources_) {
         Vec3<Scalar> F_body;
@@ -631,7 +631,7 @@ void AggregateForces() {
 }
 
 void ComputeDynamics() {
-    janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+    metis::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
     vulcan::dynamics::RigidBodyState<Scalar> state;
     state.position = position_;
@@ -925,7 +925,7 @@ public:
      - `body_orientation_euler_zyx: [yaw, pitch, roll]` degrees support
    - Convention: body-to-component orientation
 3. Add `vulcan::mass::transform_inertia()` utility for inertia frame transformation
-4. Add `janus::Quaternion::from_euler_zyx()` if not already present
+4. Add `metis::Quaternion::from_euler_zyx()` if not already present
 5. Unit tests for attachment parsing and transformation
 
 ### Phase 2: Backplane Discovery API

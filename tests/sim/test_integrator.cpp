@@ -19,16 +19,16 @@ using namespace icarus;
 
 // Exponential decay: dx/dt = -x, x(0) = 1 => x(t) = e^(-t)
 template <typename Scalar>
-JanusVector<Scalar> exponential_decay(Scalar /*t*/, const JanusVector<Scalar> &x) {
+MetisVector<Scalar> exponential_decay(Scalar /*t*/, const MetisVector<Scalar> &x) {
     return -x;
 }
 
 // Harmonic oscillator: x'' + ω²x = 0
 // State: [x, v], dx/dt = v, dv/dt = -ω²x
 template <typename Scalar>
-JanusVector<Scalar> harmonic_oscillator(Scalar /*t*/, const JanusVector<Scalar> &x) {
+MetisVector<Scalar> harmonic_oscillator(Scalar /*t*/, const MetisVector<Scalar> &x) {
     const Scalar omega_sq = Scalar{4.0}; // ω = 2
-    JanusVector<Scalar> dx(2);
+    MetisVector<Scalar> dx(2);
     dx[0] = x[1];
     dx[1] = -omega_sq * x[0];
     return dx;
@@ -37,9 +37,9 @@ JanusVector<Scalar> harmonic_oscillator(Scalar /*t*/, const JanusVector<Scalar> 
 // Free fall: y'' = -g
 // State: [y, v], dy/dt = v, dv/dt = -g
 template <typename Scalar>
-JanusVector<Scalar> free_fall(Scalar /*t*/, const JanusVector<Scalar> &x) {
+MetisVector<Scalar> free_fall(Scalar /*t*/, const MetisVector<Scalar> &x) {
     const Scalar g = Scalar{9.81};
-    JanusVector<Scalar> dx(2);
+    MetisVector<Scalar> dx(2);
     dx[0] = x[1]; // dy/dt = v
     dx[1] = -g;   // dv/dt = -g
     return dx;
@@ -51,7 +51,7 @@ JanusVector<Scalar> free_fall(Scalar /*t*/, const JanusVector<Scalar> &x) {
 
 TEST(RK4Integrator, ExponentialDecay) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -69,7 +69,7 @@ TEST(RK4Integrator, ExponentialDecay) {
 
 TEST(RK4Integrator, HarmonicOscillator) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(2);
+    MetisVector<double> x(2);
     x[0] = 1.0; // Initial position
     x[1] = 0.0; // Initial velocity
 
@@ -92,7 +92,7 @@ TEST(RK4Integrator, HarmonicOscillator) {
 
 TEST(RK4Integrator, FreeFall) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(2);
+    MetisVector<double> x(2);
     double y0 = 100.0; // Initial height
     double v0 = 0.0;   // Initial velocity
     x[0] = y0;
@@ -146,7 +146,7 @@ TEST(RK2Integrator, OrderVerification) {
 
 TEST(EulerIntegrator, ExponentialDecay) {
     EulerIntegrator<double> euler;
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -168,7 +168,7 @@ TEST(EulerIntegrator, ExponentialDecay) {
 
 TEST(RK45Integrator, ExponentialDecay) {
     RK45Integrator<double> rk45(1e-8, 1e-8);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -185,7 +185,7 @@ TEST(RK45Integrator, ExponentialDecay) {
 
 TEST(RK45Integrator, AdaptiveStep) {
     RK45Integrator<double> rk45(1e-6, 1e-6);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -212,7 +212,7 @@ TEST(RK45Integrator, StepSizeSuggestion) {
 
 TEST(RK45Integrator, Statistics) {
     RK45Integrator<double> rk45(1e-6, 1e-6);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     rk45.ResetStatistics();
@@ -323,18 +323,18 @@ TEST(IntegratorFactory, RK45ConfigApplied) {
 // =============================================================================
 
 TEST(IntegratorSymbolic, RK4Compiles) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     RK4Integrator<MX> rk4;
-    auto x = janus::sym_vec("x", 1);
-    auto t = janus::sym("t");
-    auto dt = janus::sym("dt");
+    auto x = metis::sym_vec("x", 1);
+    auto t = metis::sym("t");
+    auto dt = metis::sym("dt");
 
     // Exponential decay: dx/dt = -x
-    auto x_next = rk4.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+    auto x_next = rk4.Step([](MX /*t*/, const MetisVector<MX> &x) { return -x; }, x, t, dt);
 
-    // Create Janus function for numerical evaluation
-    janus::Function step_fn("rk4_step", {janus::to_mx(x), t, dt}, {janus::to_mx(x_next)});
+    // Create Metis function for numerical evaluation
+    metis::Function step_fn("rk4_step", {metis::to_mx(x), t, dt}, {metis::to_mx(x_next)});
 
     // Evaluate numerically: x(0)=1, t=0, dt=0.1
     auto result = step_fn.eval(1.0, 0.0, 0.1);
@@ -346,16 +346,16 @@ TEST(IntegratorSymbolic, RK4Compiles) {
 }
 
 TEST(IntegratorSymbolic, EulerCompiles) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     EulerIntegrator<MX> euler;
-    auto x = janus::sym_vec("x", 1);
-    auto t = janus::sym("t");
-    auto dt = janus::sym("dt");
+    auto x = metis::sym_vec("x", 1);
+    auto t = metis::sym("t");
+    auto dt = metis::sym("dt");
 
-    auto x_next = euler.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+    auto x_next = euler.Step([](MX /*t*/, const MetisVector<MX> &x) { return -x; }, x, t, dt);
 
-    janus::Function step_fn("step", {janus::to_mx(x), t, dt}, {janus::to_mx(x_next)});
+    metis::Function step_fn("step", {metis::to_mx(x), t, dt}, {metis::to_mx(x_next)});
 
     auto res = step_fn.eval(1.0, 0.0, 0.01);
 
@@ -363,34 +363,34 @@ TEST(IntegratorSymbolic, EulerCompiles) {
 }
 
 TEST(IntegratorSymbolic, RK2Compiles) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     RK2Integrator<MX> rk2;
-    auto x = janus::sym_vec("x", 1);
-    auto t = janus::sym("t");
-    auto dt = janus::sym("dt");
+    auto x = metis::sym_vec("x", 1);
+    auto t = metis::sym("t");
+    auto dt = metis::sym("dt");
 
-    auto x_next = rk2.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+    auto x_next = rk2.Step([](MX /*t*/, const MetisVector<MX> &x) { return -x; }, x, t, dt);
 
     EXPECT_EQ(x_next.size(), 1);
 }
 
 TEST(IntegratorSymbolic, RK45Compiles) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     RK45Integrator<MX> rk45;
-    auto x = janus::sym_vec("x", 1);
-    auto t = janus::sym("t");
-    auto dt = janus::sym("dt");
+    auto x = metis::sym_vec("x", 1);
+    auto t = metis::sym("t");
+    auto dt = metis::sym("dt");
 
     // RK45 Step (fixed step mode)
-    auto x_next = rk45.Step([](MX /*t*/, const JanusVector<MX> &x) { return -x; }, x, t, dt);
+    auto x_next = rk45.Step([](MX /*t*/, const MetisVector<MX> &x) { return -x; }, x, t, dt);
 
     EXPECT_EQ(x_next.size(), 1);
 }
 
 TEST(IntegratorSymbolic, FactoryCreatesMX) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     // Test factory creates integrators for MX type
     auto euler = IntegratorFactory<MX>::Create("euler");

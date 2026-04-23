@@ -18,7 +18,7 @@
 #include <icarus/signal/Handle.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
-#include <janus/math/Quaternion.hpp>
+#include <metis/math/Quaternion.hpp>
 
 #include <vector>
 
@@ -223,7 +223,7 @@ template <typename Scalar> class ForceAggregator : public Component<Scalar> {
         Vec3<Scalar> cg{cg_x_.get(), cg_y_.get(), cg_z_.get()};
 
         // Get attitude quaternion (body-to-ECEF) for frame transformation
-        janus::Quaternion<Scalar> q_body_to_ecef{att_w_.get(), att_x_.get(), att_y_.get(),
+        metis::Quaternion<Scalar> q_body_to_ecef{att_w_.get(), att_x_.get(), att_y_.get(),
                                                  att_z_.get()};
 
         // Initialize accumulators

@@ -40,7 +40,7 @@ namespace icarus {
 template <typename Scalar> class IntegrationManager {
   public:
     /// Derivative function signature: (t, X) -> X_dot
-    using DerivativeFunc = std::function<JanusVector<Scalar>(Scalar, const JanusVector<Scalar> &)>;
+    using DerivativeFunc = std::function<MetisVector<Scalar>(Scalar, const MetisVector<Scalar> &)>;
 
     IntegrationManager() = default;
 
@@ -93,8 +93,8 @@ template <typename Scalar> class IntegrationManager {
      * @param dt Time step
      * @return New state at t + dt
      */
-    [[nodiscard]] JanusVector<Scalar> Step(const DerivativeFunc &deriv_func,
-                                           const JanusVector<Scalar> &X, Scalar t, Scalar dt) {
+    [[nodiscard]] MetisVector<Scalar> Step(const DerivativeFunc &deriv_func,
+                                           const MetisVector<Scalar> &X, Scalar t, Scalar dt) {
         if (!integrator_) {
             throw std::runtime_error(
                 "IntegrationManager: integrator not configured. Call Configure() first.");
@@ -114,7 +114,7 @@ template <typename Scalar> class IntegrationManager {
      * @return AdaptiveStepResult with actual step taken
      */
     [[nodiscard]] AdaptiveStepResult<Scalar> AdaptiveStep(const DerivativeFunc &deriv_func,
-                                                          const JanusVector<Scalar> &X, Scalar t,
+                                                          const MetisVector<Scalar> &X, Scalar t,
                                                           Scalar dt_request) {
         if (!integrator_) {
             throw std::runtime_error(

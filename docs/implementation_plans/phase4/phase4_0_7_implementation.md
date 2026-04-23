@@ -17,7 +17,7 @@ This phase establishes the **bones of implementation**:
 | Scheduler | Group-based multi-rate execution | Core |
 | Simulator lifecycle | `FromConfig()` → `Stage()` → `Step()` | Core |
 | Symbolic graphs | Already exists | See [symbolic_orbital_demo.cpp](../../../examples/symbolic/symbolic_orbital_demo.cpp) |
-| Jacobian computation | Already exists | Via `janus::jacobian()` |
+| Jacobian computation | Already exists | Via `metis::jacobian()` |
 
 ### Deferred to Future Phases
 
@@ -59,7 +59,7 @@ Advanced staging features build on this infrastructure:
 4. **4.0.7a5d** Implement environment variable expansion via `YamlEnv`
 5. **4.0.7a5e** Create error types: `ConfigError`, `MissingKeyError`, `TypeMismatchError`, `UnknownTypeError`
 6. **4.0.7a5f** Implement error messages with file path and hints
-7. **4.0.7a5g** Add Janus type support (Vec3, Quaternion, Mat3) via Vulcan
+7. **4.0.7a5g** Add Metis type support (Vec3, Quaternion, Mat3) via Vulcan
 8. **4.0.7a5h** Add unit tests for all parsing paths
 
 ### Phase B: Entity System
@@ -110,8 +110,8 @@ Advanced staging features build on this infrastructure:
 
 > **Deferred:** These features build on Phase 4.0.7 infrastructure but are not required for the core lifecycle.
 
-1. **Future** Implement `RunTrimOptimization()` using Janus NewtonSolver
-2. **Future** Implement IPOPT-based trim via `janus::Opti`
+1. **Future** Implement `RunTrimOptimization()` using Metis NewtonSolver
+2. **Future** Implement IPOPT-based trim via `metis::Opti`
 3. **Future** Add control bounds support
 4. **Future** Add parametric sweep capability
 
@@ -167,7 +167,7 @@ Advanced staging features build on this infrastructure:
 - [ ] Environment variable expansion via `YamlEnv`
 - [ ] Error types: `ConfigError`, `MissingKeyError`, `TypeMismatchError`, `UnknownTypeError`
 - [ ] Error messages include file path and hints
-- [ ] Janus type support (Vec3, Quaternion, Mat3) via Vulcan
+- [ ] Metis type support (Vec3, Quaternion, Mat3) via Vulcan
 - [ ] Unit tests for all parsing paths
 
 ### Entity System
@@ -232,7 +232,7 @@ Advanced staging features build on this infrastructure:
 
 > Basic `Stage()` lifecycle is in scope; full trim optimization is deferred.
 
-- [ ] *(Future)* `RunTrimOptimization()` using Janus optimization
+- [ ] *(Future)* `RunTrimOptimization()` using Metis optimization
 - [ ] *(Future)* Newton method for trim solver
 - [ ] *(Future)* Control bounds enforcement
 - [ ] *(Future)* Configurable zero_derivatives and control_signals
@@ -251,7 +251,7 @@ Advanced staging features build on this infrastructure:
 
 - [x] `TraceDynamics()` for dynamics graph extraction
 - [x] `TraceStep()` for discrete step function
-- [x] Jacobian computation via `janus::jacobian()`
+- [x] Jacobian computation via `metis::jacobian()`
 - [x] Graph visualization (HTML, DOT, PDF)
 - [x] Data dictionary export (YAML, JSON)
 - [ ] *(Future)* CasADi function serialization

@@ -33,7 +33,7 @@
 ### 1. Simulink/GNC Compatibility
 Aerospace engineers think in block diagrams. IDOA maps directly to this mental model—components are blocks, signals are wires.
 
-### 2. Janus Symbolic Compatibility
+### 2. Metis Symbolic Compatibility
 CasADi requires a linear execution trace to build symbolic graphs. Deep object hierarchies with virtual dispatch obscure this trace. Flat execution enables clean graph extraction.
 
 ### 3. Data Locality

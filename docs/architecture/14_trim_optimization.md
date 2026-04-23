@@ -1,6 +1,6 @@
 # Trim / Optimization Problem Definition
 
-**Related:** [13_configuration.md](13_configuration.md) | [04_lifecycle.md](04_lifecycle.md) | [07_janus_integration.md](07_janus_integration.md)
+**Related:** [13_configuration.md](13_configuration.md) | [04_lifecycle.md](04_lifecycle.md) | [07_metis_integration.md](07_metis_integration.md)
 
 ---
 

@@ -93,8 +93,8 @@ public:
      *
      * @return Identity quaternion for components without attachment
      */
-    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
-        return janus::Quaternion<Scalar>::identity();
+    [[nodiscard]] virtual metis::Quaternion<Scalar> GetBodyOrientation() const {
+        return metis::Quaternion<Scalar>::identity();
     }
 };
 ```
@@ -113,7 +113,7 @@ public:
 #pragma once
 
 #include "icarus/core/Component.hpp"
-#include "janus/math/Quaternion.hpp"
+#include "metis/math/Quaternion.hpp"
 #include <cmath>
 
 namespace icarus {
@@ -184,7 +184,7 @@ protected:
     Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();
 
     /// Rotation from body frame to component local frame (identity by default)
-    janus::Quaternion<Scalar> body_orientation_ = janus::Quaternion<Scalar>::identity();
+    metis::Quaternion<Scalar> body_orientation_ = metis::Quaternion<Scalar>::identity();
 
     /// True after ReadAttachmentFromConfig() is called
     bool has_body_attachment_ = false;
@@ -227,8 +227,8 @@ protected:
             double roll_rad = euler_deg[2] * deg2rad;
 
             // Build quaternion from ZYX Euler angles
-            // Note: Janus from_euler() takes (roll, pitch, yaw) order for ZYX sequence
-            body_orientation_ = janus::Quaternion<Scalar>::from_euler(
+            // Note: Metis from_euler() takes (roll, pitch, yaw) order for ZYX sequence
+            body_orientation_ = metis::Quaternion<Scalar>::from_euler(
                 static_cast<Scalar>(roll_rad),
                 static_cast<Scalar>(pitch_rad),
                 static_cast<Scalar>(yaw_rad)
@@ -243,7 +243,7 @@ protected:
                 throw ConfigError("body_orientation must have 4 elements [w, x, y, z]");
             }
 
-            body_orientation_ = janus::Quaternion<Scalar>{
+            body_orientation_ = metis::Quaternion<Scalar>{
                 static_cast<Scalar>(q[0]),  // w
                 static_cast<Scalar>(q[1]),  // x
                 static_cast<Scalar>(q[2]),  // y
@@ -265,7 +265,7 @@ protected:
      * @param orientation Rotation from body to component frame
      */
     void SetBodyAttachment(const Vec3<Scalar>& position,
-                          const janus::Quaternion<Scalar>& orientation) {
+                          const metis::Quaternion<Scalar>& orientation) {
         body_position_ = position;
         body_orientation_ = orientation;
         has_body_attachment_ = true;
@@ -291,7 +291,7 @@ public:
         return body_position_;
     }
 
-    [[nodiscard]] janus::Quaternion<Scalar> GetBodyOrientation() const override {
+    [[nodiscard]] metis::Quaternion<Scalar> GetBodyOrientation() const override {
         return body_orientation_;
     }
 
@@ -305,7 +305,7 @@ public:
      *
      * @return Quaternion that transforms component vectors to body frame
      */
-    [[nodiscard]] janus::Quaternion<Scalar> GetComponentToBodyRotation() const {
+    [[nodiscard]] metis::Quaternion<Scalar> GetComponentToBodyRotation() const {
         return body_orientation_.conjugate();
     }
 
@@ -331,11 +331,11 @@ public:
 }  // namespace icarus
 ```
 
-### Task 3: Leverage Existing Janus Quaternion API (No New Code Required)
+### Task 3: Leverage Existing Metis Quaternion API (No New Code Required)
 
-The `janus::Quaternion<Scalar>` class already provides Euler angle conversions:
+The `metis::Quaternion<Scalar>` class already provides Euler angle conversions:
 
-**Existing Methods in `janus/math/Quaternion.hpp`:**
+**Existing Methods in `metis/math/Quaternion.hpp`:**
 
 ```cpp
 // Create quaternion from Euler angles (ZYX sequence)
@@ -355,16 +355,16 @@ Quaternion normalized() const;         // Unit quaternion
 **Important Convention Note:**
 
 The YAML config uses `body_orientation_euler_zyx: [yaw, pitch, roll]` (degrees, aerospace order),
-but Janus `from_euler()` expects `(roll, pitch, yaw)` (radians). The `ReadAttachmentFromConfig()`
+but Metis `from_euler()` expects `(roll, pitch, yaw)` (radians). The `ReadAttachmentFromConfig()`
 method handles this conversion:
 
 ```cpp
 // YAML: [yaw_deg, pitch_deg, roll_deg]
-// Janus: from_euler(roll_rad, pitch_rad, yaw_rad)
-body_orientation_ = janus::Quaternion<Scalar>::from_euler(roll_rad, pitch_rad, yaw_rad);
+// Metis: from_euler(roll_rad, pitch_rad, yaw_rad)
+body_orientation_ = metis::Quaternion<Scalar>::from_euler(roll_rad, pitch_rad, yaw_rad);
 ```
 
-**No additional rotation utilities are required** — use the existing Janus API.
+**No additional rotation utilities are required** — use the existing Metis API.
 
 ### Task 4: Add Include to Core Module
 
@@ -563,7 +563,7 @@ TEST_F(PhysicalComponentTest, ProgrammaticAttachment) {
     EXPECT_FALSE(comp.HasBodyAttachment());
 
     Vec3<double> pos{5.0, 0.0, 0.0};
-    auto q = janus::Quaternion<double>::from_axis_angle({0, 1, 0}, M_PI/4);
+    auto q = metis::Quaternion<double>::from_axis_angle({0, 1, 0}, M_PI/4);
 
     // Use protected method via test-friendly accessor
     // In real code, subclass would expose this or call in Stage()
@@ -596,11 +596,11 @@ TEST_F(PhysicalComponentTest, ProgrammaticAttachment) {
 - [x] Override all three virtual methods from Component
 - [x] Add transform helper methods
 
-### Step 3: Verify Janus Quaternion API Usage
+### Step 3: Verify Metis Quaternion API Usage
 
-- [x] Janus provides `Quaternion::from_euler(roll, pitch, yaw)` — **no new code needed**
-- [x] Janus provides `Quaternion::to_euler()` for extraction
-- [x] Verify parameter order in `ReadAttachmentFromConfig()` matches Janus convention
+- [x] Metis provides `Quaternion::from_euler(roll, pitch, yaw)` — **no new code needed**
+- [x] Metis provides `Quaternion::to_euler()` for extraction
+- [x] Verify parameter order in `ReadAttachmentFromConfig()` matches Metis convention
 
 ### Step 4: Update Build System
 

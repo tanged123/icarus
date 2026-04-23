@@ -505,7 +505,7 @@ namespace io {
 /**
  * @brief Loads component configurations from YAML files
  *
- * Uses Vulcan's YamlNode for parsing with Janus type support.
+ * Uses Vulcan's YamlNode for parsing with Metis type support.
  */
 class ConfigLoader {
 public:
@@ -1282,7 +1282,7 @@ config/
 >
 > auto config = vulcan::io::YamlNode::LoadFile("rocket.yaml");
 > auto mass = config["vehicle"].Require<double>("mass");
-> auto position = config.Require<janus::Vec3<double>>("initial_position");
+> auto position = config.Require<metis::Vec3<double>>("initial_position");
 > ```
 
 ---

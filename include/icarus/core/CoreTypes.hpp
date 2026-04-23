@@ -6,7 +6,7 @@
  *
  * Consolidates: Types.hpp, Concepts.hpp, Config.hpp
  *
- * Re-exports Janus types for dual-backend (numeric/symbolic) compatibility.
+ * Re-exports Metis types for dual-backend (numeric/symbolic) compatibility.
  * All Icarus components should use these types for Scalar, vectors, and matrices.
  */
 
@@ -14,9 +14,9 @@
 #include <cstdint>
 #include <string>
 
-// Re-export Janus types and concepts
-#include <janus/core/JanusConcepts.hpp>
-#include <janus/core/JanusTypes.hpp>
+// Re-export Metis types and concepts
+#include <metis/core/MetisConcepts.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 namespace icarus {
 
@@ -32,61 +32,61 @@ constexpr bool kDebugMode = false;
 #endif
 
 // =============================================================================
-// Janus Type Re-exports
+// Metis Type Re-exports
 // =============================================================================
 
 // Matrix and vector types (templated on Scalar)
-using janus::JanusMatrix;
-using janus::JanusVector;
+using metis::MetisMatrix;
+using metis::MetisVector;
 
 // Fixed-size types
-using janus::Mat2;
-using janus::Mat3;
-using janus::Mat4;
-using janus::Vec2;
-using janus::Vec3;
-using janus::Vec4;
+using metis::Mat2;
+using metis::Mat3;
+using metis::Mat4;
+using metis::Vec2;
+using metis::Vec3;
+using metis::Vec4;
 
 // Concrete backend types
-using janus::NumericMatrix;
-using janus::NumericScalar;
-using janus::NumericVector;
-using janus::SymbolicMatrix;
-using janus::SymbolicScalar;
-using janus::SymbolicVector;
+using metis::NumericMatrix;
+using metis::NumericScalar;
+using metis::NumericVector;
+using metis::SymbolicMatrix;
+using metis::SymbolicScalar;
+using metis::SymbolicVector;
 
 // Sparse types (numeric only)
-using janus::SparseMatrix;
-using janus::SparseTriplet;
+using metis::SparseMatrix;
+using metis::SparseTriplet;
 
 // Symbolic variable creation
-using janus::as_mx;
-using janus::as_vector;
-using janus::sym;
-using janus::sym_vec;
-using janus::sym_vector;
-using janus::to_eigen;
-using janus::to_mx;
+using metis::as_mx;
+using metis::as_vector;
+using metis::sym;
+using metis::sym_vec;
+using metis::sym_vector;
+using metis::to_eigen;
+using metis::to_mx;
 
 // =============================================================================
 // Scalar Concepts
 // =============================================================================
 
 /**
- * @brief Re-export JanusScalar concept
+ * @brief Re-export MetisScalar concept
  *
  * Satisfied by floating point types (double, float) or CasADi symbolic (MX).
  * All Icarus components must be templated on types satisfying this concept.
  */
-using janus::JanusScalar;
+using metis::MetisScalar;
 
 /**
  * @brief Alias for Icarus-specific documentation
  *
- * Identical to JanusScalar, provided for clarity in Icarus context.
+ * Identical to MetisScalar, provided for clarity in Icarus context.
  */
 template <typename T>
-concept IcarusScalar = JanusScalar<T>;
+concept IcarusScalar = MetisScalar<T>;
 
 // =============================================================================
 // Simulation Lifecycle

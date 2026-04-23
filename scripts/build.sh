@@ -16,7 +16,7 @@ BUILD_C_API="${BUILD_C_API:-OFF}"  # C API bindings
 BUILD_PYTHON="${BUILD_PYTHON:-OFF}"  # Python bindings (requires pybind11)
 
 # Default jobs: half of available cores, capped at 6 (minimum 2)
-# This prevents OOM on 32GB systems with heavy template code (CasADi/Janus)
+# This prevents OOM on 32GB systems with heavy template code (CasADi/Metis)
 DEFAULT_JOBS=$(( $(nproc) / 2 ))
 [ "$DEFAULT_JOBS" -lt 2 ] && DEFAULT_JOBS=2
 [ "$DEFAULT_JOBS" -gt 6 ] && DEFAULT_JOBS=6

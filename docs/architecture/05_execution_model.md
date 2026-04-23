@@ -150,7 +150,7 @@ For optimizers that need to respect multi-rate behavior, rate-transition blocks 
 
 ```cpp
 // Rate transition appears as explicit interpolation in graph
-Scalar nav_position_interp = janus::lerp(
+Scalar nav_position_interp = metis::lerp(
     nav_position_prev,
     nav_position_latest,
     alpha  // Fixed coefficient based on rate ratio

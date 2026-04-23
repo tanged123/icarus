@@ -32,7 +32,7 @@ namespace icarus::io {
  * - Single-file mode: all configuration inline
  * - Multi-file mode: !include directive for modular configs
  * - Environment variables: ${VAR} and ${VAR:default}
- * - Janus type support via Vulcan
+ * - Metis type support via Vulcan
  *
  * Example usage:
  * @code

@@ -1,6 +1,6 @@
 # Memory Layout & State Ownership
 
-**Related:** [03_signal_backplane.md](03_signal_backplane.md) | [04_lifecycle.md](04_lifecycle.md) | [07_janus_integration.md](07_janus_integration.md)
+**Related:** [03_signal_backplane.md](03_signal_backplane.md) | [04_lifecycle.md](04_lifecycle.md) | [07_metis_integration.md](07_metis_integration.md)
 
 ---
 
@@ -43,8 +43,8 @@ flowchart TB
 // The Simulator owns the authoritative state
 template <typename Scalar>
 class Simulator {
-    JanusVector<Scalar> X_global_;      // Continuous state (integrated)
-    JanusVector<Scalar> X_dot_global_;  // State derivatives
+    MetisVector<Scalar> X_global_;      // Continuous state (integrated)
+    MetisVector<Scalar> X_dot_global_;  // State derivatives
 
     // State layout metadata
     struct StateSlice {
@@ -165,7 +165,7 @@ This layout exposes the simulation as a standard ODE function:
 
 ```cpp
 // This function signature is compatible with CVODES, scipy, MATLAB ode45
-JanusVector<Scalar> Simulator::ComputeDerivatives(Scalar t, const JanusVector<Scalar>& X) {
+MetisVector<Scalar> Simulator::ComputeDerivatives(Scalar t, const MetisVector<Scalar>& X) {
     // X is already scattered to components via pointers
     for (auto* comp : scheduled_components_) {
         comp->Step(t, dt_nominal_);

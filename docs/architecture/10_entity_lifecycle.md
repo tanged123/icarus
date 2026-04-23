@@ -211,14 +211,14 @@ public:
             Scalar was_ever_born = *rule.born_flag;
 
             // Birth: condition met AND not currently active AND never born before
-            Scalar do_birth = janus::where(
+            Scalar do_birth = metis::where(
                 (should_birth > 0.5) & (currently_active < 0.5) & (was_ever_born < 0.5),
                 Scalar(1),
                 Scalar(0)
             );
 
             // Set active
-            *rule.active_signal = janus::where(
+            *rule.active_signal = metis::where(
                 do_birth > 0.5,
                 Scalar(1),
                 currently_active
@@ -244,7 +244,7 @@ public:
             Scalar currently_active = *rule.active_signal;
 
             // Death: condition met AND currently active
-            *rule.active_signal = janus::where(
+            *rule.active_signal = metis::where(
                 (should_die > 0.5) & (currently_active > 0.5),
                 Scalar(0),
                 currently_active
@@ -331,7 +331,7 @@ class RigidAttachment : public Component<Scalar> {
             vulcan::quat_rotate(parent_att, attachment_offset_);
 
         // Blend between constrained and free based on attachment
-        *child_position_ = janus::where(attached > 0.5,
+        *child_position_ = metis::where(attached > 0.5,
             child_pos_world,
             *child_position_free_);
     }
@@ -376,14 +376,14 @@ class SeparationManager : public Component<Scalar> {
             Scalar condition = *sep.condition_signal;
             Scalar already_separated = *sep.separated_flag;
 
-            Scalar do_separate = janus::where(
+            Scalar do_separate = metis::where(
                 (condition > 0.5) & (already_separated < 0.5),
                 Scalar(1),
                 Scalar(0)
             );
 
             // Deactivate parent
-            *sep.parent_active = janus::where(
+            *sep.parent_active = metis::where(
                 do_separate > 0.5,
                 Scalar(0),
                 *sep.parent_active
@@ -391,7 +391,7 @@ class SeparationManager : public Component<Scalar> {
 
             // Activate and initialize children
             for (auto& child : sep.children) {
-                *child.active_signal = janus::where(
+                *child.active_signal = metis::where(
                     do_separate > 0.5,
                     Scalar(1),
                     *child.active_signal
@@ -402,7 +402,7 @@ class SeparationManager : public Component<Scalar> {
             }
 
             // Mark as separated (one-shot)
-            *sep.separated_flag = janus::where(
+            *sep.separated_flag = metis::where(
                 do_separate > 0.5,
                 Scalar(1),
                 already_separated
@@ -420,7 +420,7 @@ class SeparationManager : public Component<Scalar> {
         Vec3<Scalar> new_pos = parent_pos + offset_world;
         Vec3<Scalar> current_pos = GetEntityPosition(child.entity);
 
-        SetEntityPosition(child.entity, janus::where(
+        SetEntityPosition(child.entity, metis::where(
             do_separate > 0.5,
             new_pos,
             current_pos
@@ -433,7 +433,7 @@ class SeparationManager : public Component<Scalar> {
         Vec3<Scalar> new_vel = parent_vel + delta_v_world;
         Vec3<Scalar> current_vel = GetEntityVelocity(child.entity);
 
-        SetEntityVelocity(child.entity, janus::where(
+        SetEntityVelocity(child.entity, metis::where(
             do_separate > 0.5,
             new_vel,
             current_vel
@@ -441,7 +441,7 @@ class SeparationManager : public Component<Scalar> {
 
         // Attitude: inherit parent attitude
         Quat<Scalar> current_att = GetEntityAttitude(child.entity);
-        SetEntityAttitude(child.entity, janus::where(
+        SetEntityAttitude(child.entity, metis::where(
             do_separate > 0.5,
             parent_att,
             current_att
@@ -483,7 +483,7 @@ For symbolic mode, collision checks are gated:
 Scalar CheckCollisionSymbolic(const Entity& a, const Entity& b) {
     Scalar both_active = (*a.active) * (*b.active);
     Scalar distance = ComputeDistance(a, b);
-    Scalar collision_raw = janus::where(distance < threshold_, Scalar(1), Scalar(0));
+    Scalar collision_raw = metis::where(distance < threshold_, Scalar(1), Scalar(0));
 
     // Only report collision if both entities are active
     return collision_raw * both_active;

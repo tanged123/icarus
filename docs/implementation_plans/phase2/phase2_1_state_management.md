@@ -82,7 +82,7 @@ Step 4: Integrator reads X_dot_global_, computes X_new
 | File | Contents | Status |
 |:-----|:---------|:-------|
 | [`Component.hpp`](file:///home/tanged/sources/icarus/include/icarus/core/Component.hpp) | `StateSize()` virtual method | ✅ Complete |
-| [`Types.hpp`](file:///home/tanged/sources/icarus/include/icarus/core/Types.hpp) | `JanusVector<Scalar>` typedef | ✅ Available |
+| [`Types.hpp`](file:///home/tanged/sources/icarus/include/icarus/core/Types.hpp) | `MetisVector<Scalar>` typedef | ✅ Available |
 | [`Simulator.hpp`](file:///home/tanged/sources/icarus/include/icarus/sim/Simulator.hpp) | Lifecycle orchestration | ✅ Complete |
 | [`Backplane.hpp`](file:///home/tanged/sources/icarus/include/icarus/signal/Backplane.hpp) | Signal registration/resolution | ✅ Complete |
 
@@ -156,7 +156,7 @@ public:
      *
      * Returns a copy of X_global_ (for integrator use).
      */
-    [[nodiscard]] JanusVector<Scalar> GetState() const {
+    [[nodiscard]] MetisVector<Scalar> GetState() const {
         return X_global_;
     }
 
@@ -165,7 +165,7 @@ public:
      *
      * Copies values into X_global_. Called by integrator after advancing.
      */
-    void SetState(const JanusVector<Scalar>& X) {
+    void SetState(const MetisVector<Scalar>& X) {
         if (X.size() != X_global_.size()) {
             throw StateError("State size mismatch: expected " +
                            std::to_string(X_global_.size()) +
@@ -183,7 +183,7 @@ public:
      * @param t Current time
      * @return Derivative vector X_dot_global_
      */
-    const JanusVector<Scalar>& ComputeDerivatives(Scalar t) {
+    const MetisVector<Scalar>& ComputeDerivatives(Scalar t) {
         // Zero derivatives (components accumulate into them)
         for (std::size_t i = 0; i < X_dot_global_.size(); ++i) {
             X_dot_global_[i] = Scalar{0};
@@ -208,7 +208,7 @@ public:
     /**
      * @brief Get derivative vector (after ComputeDerivatives)
      */
-    [[nodiscard]] const JanusVector<Scalar>& GetDerivatives() const {
+    [[nodiscard]] const MetisVector<Scalar>& GetDerivatives() const {
         return X_dot_global_;
     }
 
@@ -235,8 +235,8 @@ private:
     // ... existing members ...
 
     // State management (Phase 2.1)
-    JanusVector<Scalar> X_global_;               ///< Global state vector
-    JanusVector<Scalar> X_dot_global_;           ///< Global derivative vector
+    MetisVector<Scalar> X_global_;               ///< Global state vector
+    MetisVector<Scalar> X_dot_global_;           ///< Global derivative vector
     std::vector<StateSlice<Scalar>> state_layout_; ///< Per-component metadata
     Scalar dt_nominal_{0.01};                    ///< Nominal timestep
 };
@@ -570,7 +570,7 @@ TEST(StateManagement, SetAndGetState) {
     sim.Stage();
 
     // Set state
-    JanusVector<double> new_state = {1.0, 2.0, 3.0, 4.0};
+    MetisVector<double> new_state = {1.0, 2.0, 3.0, 4.0};
     sim.SetState(new_state);
 
     // Get state
@@ -590,7 +590,7 @@ TEST(StateManagement, ComputeDerivatives) {
     sim.Stage();
 
     // Set initial state
-    JanusVector<double> X0 = {1.0, 2.0, 3.0};
+    MetisVector<double> X0 = {1.0, 2.0, 3.0};
     sim.SetState(X0);
 
     // Compute derivatives (x_dot = -x for StatefulComponent)
@@ -664,7 +664,7 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
     // Set symbolic state
     MX x0 = MX::sym("x0");
     MX x1 = MX::sym("x1");
-    JanusVector<MX> X = {x0, x1};
+    MetisVector<MX> X = {x0, x1};
     sim.SetState(X);
 
     // Compute derivatives (symbolic)
@@ -681,8 +681,8 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 
 ### Task 2.1a: State Vectors in Simulator
 
-- [x] Add `JanusVector<Scalar> X_global_` member
-- [x] Add `JanusVector<Scalar> X_dot_global_` member
+- [x] Add `MetisVector<Scalar> X_global_` member
+- [x] Add `MetisVector<Scalar> X_dot_global_` member
 - [x] Add `std::vector<StateSlice<Scalar>> state_layout_` member
 - [x] Add `Scalar dt_nominal_` member with default
 - [x] Implement `GetTotalStateSize()` method
@@ -800,14 +800,14 @@ TEST(StateManagementSymbolic, DerivativeComputation) {
 
 ---
 
-## Janus Compatibility Checklist
+## Metis Compatibility Checklist
 
-All code in Phase 2.1 must be Janus-compatible:
+All code in Phase 2.1 must be Metis-compatible:
 
 - [x] All functions templated on `Scalar` (not `double`)
-- [x] Use `JanusVector<Scalar>` (not `std::vector<double>`)
-- [x] No `std::` math functions (use `janus::` namespace)
-- [x] No `if/else` branching on `Scalar` values (use `janus::where()`)
+- [x] Use `MetisVector<Scalar>` (not `std::vector<double>`)
+- [x] No `std::` math functions (use `metis::` namespace)
+- [x] No `if/else` branching on `Scalar` values (use `metis::where()`)
 - [x] Verify `Simulator<casadi::MX>` compiles and runs
 
 ---
@@ -829,7 +829,7 @@ All code in Phase 2.1 must be Janus-compatible:
 | Dependency | Purpose | Status |
 |:-----------|:--------|:-------|
 | Phase 1.4/1.5 | Component base, Simulator shell | ✅ Complete |
-| Janus `JanusVector` | Symbolic-compatible vector type | ✅ Available |
+| Metis `MetisVector` | Symbolic-compatible vector type | ✅ Available |
 | GoogleTest | Testing framework | ✅ Available |
 
 ---
@@ -839,7 +839,7 @@ All code in Phase 2.1 must be Janus-compatible:
 After Phase 2.1 completes, Phase 2.2 (Integrator Interface) will:
 
 1. Define abstract `Integrator<Scalar>` interface
-2. Implement `RK4Integrator` using Janus `rk4_step()`
+2. Implement `RK4Integrator` using Metis `rk4_step()`
 3. Implement `RK45Integrator` for adaptive stepping
 4. Modify `Simulator::Step()` to use integrator
 
@@ -864,6 +864,6 @@ sim.SetState(X_new);
 |:------|:---------|
 | State ownership & vectors | [09_memory_state_ownership.md](../../architecture/09_memory_state_ownership.md) |
 | Lifecycle & Stage binding | [04_lifecycle.md](../../architecture/04_lifecycle.md) |
-| Janus template paradigm | [07_janus_integration.md](../../architecture/07_janus_integration.md) |
+| Metis template paradigm | [07_metis_integration.md](../../architecture/07_metis_integration.md) |
 | Symbolic constraints | [21_symbolic_constraints.md](../../architecture/21_symbolic_constraints.md) |
 | Component protocol | [02_component_protocol.md](../../architecture/02_component_protocol.md) |

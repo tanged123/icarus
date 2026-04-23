@@ -34,7 +34,7 @@ namespace fs = std::filesystem;
  *
  * H_inertial = R_body_to_inertial * (I * omega_body)
  */
-Vec3<double> ComputeAngularMomentumInertial(const janus::Quaternion<double> &q,
+Vec3<double> ComputeAngularMomentumInertial(const metis::Quaternion<double> &q,
                                             const Vec3<double> &omega_body, double Ix, double Iy,
                                             double Iz) {
     Mat3<double> I = Mat3<double>::Zero();
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
     // =========================================================================
 
     auto state0 = sim->GetState();
-    janus::Quaternion<double> q0(state0[6], state0[7], state0[8], state0[9]);
+    metis::Quaternion<double> q0(state0[6], state0[7], state0[8], state0[9]);
     Vec3<double> omega0{state0[10], state0[11], state0[12]};
 
     Vec3<double> H0 = ComputeAngularMomentumInertial(q0, omega0, Ix, Iy, Iz);
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
         if (++step % print_interval == 0) {
             auto state = sim->GetState();
 
-            janus::Quaternion<double> q(state[6], state[7], state[8], state[9]);
+            metis::Quaternion<double> q(state[6], state[7], state[8], state[9]);
             Vec3<double> omega{state[10], state[11], state[12]};
 
             Vec3<double> H = ComputeAngularMomentumInertial(q, omega, Ix, Iy, Iz);
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
     // =========================================================================
 
     auto final_state = sim->GetState();
-    janus::Quaternion<double> q_final(final_state[6], final_state[7], final_state[8],
+    metis::Quaternion<double> q_final(final_state[6], final_state[7], final_state[8],
                                       final_state[9]);
     Vec3<double> omega_final{final_state[10], final_state[11], final_state[12]};
 

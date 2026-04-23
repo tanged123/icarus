@@ -369,7 +369,7 @@ Add HDF5 C++ library:
 
 ```diff
  buildInputs = [
-   janus
+   metis
    vulcan
 +  hdf5-cpp
  ];

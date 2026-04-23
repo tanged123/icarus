@@ -12,7 +12,7 @@
 
 #include <icarus/staging/LinearModel.hpp>
 
-#include <janus/core/Function.hpp>
+#include <metis/core/Function.hpp>
 
 #include <optional>
 #include <string>
@@ -48,13 +48,13 @@ struct TrimResult {
 /**
  * @brief Symbolic dynamics representation
  *
- * Holds janus::Function objects for dynamics and Jacobians.
+ * Holds metis::Function objects for dynamics and Jacobians.
  * Produced by SymbolicStager during Stage().
  */
 struct SymbolicDynamics {
-    std::optional<janus::Function> dynamics;   ///< f(t, x) -> xdot
-    std::optional<janus::Function> jacobian_x; ///< df/dx
-    std::optional<janus::Function> jacobian_u; ///< df/du (if controls specified)
+    std::optional<metis::Function> dynamics;   ///< f(t, x) -> xdot
+    std::optional<metis::Function> jacobian_x; ///< df/dx
+    std::optional<metis::Function> jacobian_u; ///< df/du (if controls specified)
 
     std::vector<std::string> state_names;
     std::vector<std::string> control_names;

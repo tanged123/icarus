@@ -20,24 +20,24 @@ Staging occurs after `Provision()` (wiring complete) and before `Step()` (simula
 |:--------|:------|:-------|
 | Basic `Stage()` lifecycle | **4.0.7** | Core infrastructure |
 | Symbolic graph extraction | **Exists** | See [symbolic_orbital_demo.cpp](../../../examples/symbolic/symbolic_orbital_demo.cpp) |
-| Jacobian computation | **Exists** | Via `janus::jacobian()` |
+| Jacobian computation | **Exists** | Via `metis::jacobian()` |
 | Trim optimization | Future | Newton/IPOPT integration |
 | Linearization export | Future | MATLAB/NumPy/JSON |
 | Trajectory optimization | Future | DirectCollocation/MultipleShooting |
 
 > **Phase 4.0.7 Focus:** The current phase establishes the configuration infrastructure and lifecycle (`FromConfig` → `Stage` → `Step`). Advanced staging features (trim, linearization, trajectory optimization) build on this foundation in later phases.
 
-### Janus Integration
+### Metis Integration
 
-Staging leverages Janus's optimization and rootfinding capabilities:
+Staging leverages Metis's optimization and rootfinding capabilities:
 
-| Capability | Janus API | Documentation |
+| Capability | Metis API | Documentation |
 |:-----------|:----------|:--------------|
-| Newton rootfinding | `janus::NewtonSolver` | [RootFinding.hpp](../../../references/janus/include/janus/math/RootFinding.hpp) |
-| Constrained optimization | `janus::Opti` (IPOPT) | [optimization.md](../../../references/janus/docs/user_guides/optimization.md) |
-| Parametric sweeps | `opti.solve_sweep()` | [Opti.hpp](../../../references/janus/include/janus/optimization/Opti.hpp) |
-| Automatic differentiation | `janus::jacobian()` | [AutoDiff.hpp](../../../references/janus/include/janus/math/AutoDiff.hpp) |
-| Symbolic functions | `janus::Function` | [Function.hpp](../../../references/janus/include/janus/core/Function.hpp) |
+| Newton rootfinding | `metis::NewtonSolver` | [RootFinding.hpp](../../../references/metis/include/metis/math/RootFinding.hpp) |
+| Constrained optimization | `metis::Opti` (IPOPT) | [optimization.md](../../../references/metis/docs/user_guides/optimization.md) |
+| Parametric sweeps | `opti.solve_sweep()` | [Opti.hpp](../../../references/metis/include/metis/optimization/Opti.hpp) |
+| Automatic differentiation | `metis::jacobian()` | [AutoDiff.hpp](../../../references/metis/include/metis/math/AutoDiff.hpp) |
+| Symbolic functions | `metis::Function` | [Function.hpp](../../../references/metis/include/metis/core/Function.hpp) |
 
 ---
 
@@ -59,8 +59,8 @@ entity:
       enabled: true
 
       # Solver selection:
-      #   "newton" - janus::NewtonSolver (fast, for simple F(x)=0)
-      #   "ipopt"  - janus::Opti/IPOPT (flexible, supports inequality constraints)
+      #   "newton" - metis::NewtonSolver (fast, for simple F(x)=0)
+      #   "ipopt"  - metis::Opti/IPOPT (flexible, supports inequality constraints)
       method: newton
 
       # Which derivatives should be zero at trim?
@@ -229,12 +229,12 @@ Find control inputs that drive specified derivatives to zero, achieving equilibr
 
 ### Two Trim Modes
 
-Janus provides two approaches for trim optimization:
+Metis provides two approaches for trim optimization:
 
 | Mode | Backend | Best For | Features |
 |:-----|:--------|:---------|:---------|
-| **Numeric** | `janus::NewtonSolver` | Fast runtime trim | Direct Newton solve, simple F(x)=0 |
-| **Symbolic** | `janus::Opti` (IPOPT) | Complex constraints | Inequality bounds, warm-starting, parametric sweeps |
+| **Numeric** | `metis::NewtonSolver` | Fast runtime trim | Direct Newton solve, simple F(x)=0 |
+| **Symbolic** | `metis::Opti` (IPOPT) | Complex constraints | Inequality bounds, warm-starting, parametric sweeps |
 
 ### Algorithm
 
@@ -248,9 +248,9 @@ Janus provides two approaches for trim optimization:
 
 ### Numeric Trim (Newton Rootfinding)
 
-Uses `janus::NewtonSolver` for direct F(controls) = 0 solution. Fast and simple for typical trim problems.
+Uses `metis::NewtonSolver` for direct F(controls) = 0 solution. Fast and simple for typical trim problems.
 
-See: [references/janus/examples/interpolation/rootfinding_demo.cpp](../../../references/janus/examples/interpolation/rootfinding_demo.cpp)
+See: [references/metis/examples/interpolation/rootfinding_demo.cpp](../../../references/metis/examples/interpolation/rootfinding_demo.cpp)
 
 ```cpp
 void Simulator<Scalar>::RunNumericTrim() {
@@ -261,7 +261,7 @@ void Simulator<Scalar>::RunNumericTrim() {
     const int n_residuals = trim_cfg.zero_derivatives.size();
 
     // Build symbolic residual function F(controls) -> derivatives
-    auto [controls, controls_mx] = janus::sym_vec_pair("controls", n_controls);
+    auto [controls, controls_mx] = metis::sym_vec_pair("controls", n_controls);
 
     // Apply symbolic controls to simulation
     for (int i = 0; i < n_controls; ++i) {
@@ -272,24 +272,24 @@ void Simulator<Scalar>::RunNumericTrim() {
     ComputeDerivatives(time_);
 
     // Collect residuals
-    janus::SymbolicVector residuals(n_residuals);
+    metis::SymbolicVector residuals(n_residuals);
     for (int i = 0; i < n_residuals; ++i) {
         residuals(i) = Peek<SymbolicScalar>(trim_cfg.zero_derivatives[i]);
     }
 
     // Create F(controls) -> residuals function
-    janus::Function F("TrimResidual",
-                      {janus::SymbolicArg(controls_mx)},
-                      {janus::to_mx(residuals)});
+    metis::Function F("TrimResidual",
+                      {metis::SymbolicArg(controls_mx)},
+                      {metis::to_mx(residuals)});
 
     // Configure Newton solver
-    janus::RootFinderOptions opts;
+    metis::RootFinderOptions opts;
     opts.abstol = trim_cfg.tolerance;
     opts.max_iter = trim_cfg.max_iterations;
     opts.line_search = true;
     opts.verbose = false;
 
-    janus::NewtonSolver solver(F, opts);
+    metis::NewtonSolver solver(F, opts);
 
     // Initial guess from config or current values
     Eigen::VectorXd x0(n_controls);
@@ -320,19 +320,19 @@ void Simulator<Scalar>::RunNumericTrim() {
 
 ### Symbolic Trim (IPOPT Optimization)
 
-Uses `janus::Opti` with IPOPT for constrained optimization. More flexible for complex trim problems with inequality constraints.
+Uses `metis::Opti` with IPOPT for constrained optimization. More flexible for complex trim problems with inequality constraints.
 
-See: [references/janus/docs/user_guides/optimization.md](../../../references/janus/docs/user_guides/optimization.md)
+See: [references/metis/docs/user_guides/optimization.md](../../../references/metis/docs/user_guides/optimization.md)
 
 ```cpp
 void Simulator<Scalar>::RunSymbolicTrim() {
     const auto& trim_cfg = config_.staging.trim;
     if (!trim_cfg.enabled || trim_cfg.method != "ipopt") return;
 
-    janus::Opti opti;
+    metis::Opti opti;
 
     // Create optimization variables for controls
-    std::vector<janus::SymbolicScalar> control_vars;
+    std::vector<metis::SymbolicScalar> control_vars;
     for (const auto& sig : trim_cfg.control_signals) {
         // Get initial guess
         double init = Peek<double>(sig);
@@ -358,19 +358,19 @@ void Simulator<Scalar>::RunSymbolicTrim() {
     }
 
     // Compute derivatives symbolically
-    ComputeDerivatives(janus::SymbolicScalar(time_));
+    ComputeDerivatives(metis::SymbolicScalar(time_));
 
     // Build objective: minimize sum of squared derivatives
-    janus::SymbolicScalar objective = 0;
+    metis::SymbolicScalar objective = 0;
     for (const auto& deriv_name : trim_cfg.zero_derivatives) {
-        auto deriv = Peek<janus::SymbolicScalar>(deriv_name);
+        auto deriv = Peek<metis::SymbolicScalar>(deriv_name);
         objective = objective + deriv * deriv;
     }
     opti.minimize(objective);
 
     // Solve with IPOPT
-    janus::OptiOptions opts;
-    opts.solver = janus::Solver::IPOPT;
+    metis::OptiOptions opts;
+    opts.solver = metis::Solver::IPOPT;
     opts.max_iter = trim_cfg.max_iterations;
     opts.tol = trim_cfg.tolerance;
     opts.verbose = false;
@@ -391,12 +391,12 @@ void Simulator<Scalar>::RunSymbolicTrim() {
 
 ### Parametric Trim Sweeps
 
-For analyzing trim across flight conditions, use `janus::Opti::solve_sweep()`:
+For analyzing trim across flight conditions, use `metis::Opti::solve_sweep()`:
 
 ```cpp
 void Simulator<Scalar>::RunTrimSweep(const std::string& sweep_param,
                                       const std::vector<double>& values) {
-    janus::Opti opti;
+    metis::Opti opti;
 
     // Create sweep parameter
     auto param = opti.parameter(values[0]);
@@ -439,10 +439,10 @@ y = Cx + Du    (output equation)
 
 ```cpp
 struct LinearModel {
-    janus::Matrix<Scalar> A;  // n_states x n_states
-    janus::Matrix<Scalar> B;  // n_states x n_inputs
-    janus::Matrix<Scalar> C;  // n_outputs x n_states
-    janus::Matrix<Scalar> D;  // n_outputs x n_inputs
+    metis::Matrix<Scalar> A;  // n_states x n_states
+    metis::Matrix<Scalar> B;  // n_states x n_inputs
+    metis::Matrix<Scalar> C;  // n_outputs x n_states
+    metis::Matrix<Scalar> D;  // n_outputs x n_inputs
 
     std::vector<std::string> state_names;
     std::vector<std::string> input_names;
@@ -466,34 +466,34 @@ LinearModel Simulator<Scalar>::ComputeLinearModel() {
     const size_t ny = lin_cfg.outputs.size();
 
     // Use automatic differentiation to compute Jacobians
-    // This leverages Janus symbolic capabilities
+    // This leverages Metis symbolic capabilities
 
     // Get current state/input values
     auto x0 = GetStateSubset(lin_cfg.states);
     auto u0 = GetInputSubset(lin_cfg.inputs);
 
     // Compute A = df/dx using AD
-    model.A = janus::jacobian([&](const auto& x) {
+    model.A = metis::jacobian([&](const auto& x) {
         SetStateSubset(lin_cfg.states, x);
         ComputeDerivatives(time_);
         return GetDerivativeSubset(lin_cfg.states);
     }, x0);
 
     // Compute B = df/du using AD
-    model.B = janus::jacobian([&](const auto& u) {
+    model.B = metis::jacobian([&](const auto& u) {
         SetInputSubset(lin_cfg.inputs, u);
         ComputeDerivatives(time_);
         return GetDerivativeSubset(lin_cfg.states);
     }, u0);
 
     // Compute C = dg/dx
-    model.C = janus::jacobian([&](const auto& x) {
+    model.C = metis::jacobian([&](const auto& x) {
         SetStateSubset(lin_cfg.states, x);
         return GetOutputSubset(lin_cfg.outputs);
     }, x0);
 
     // Compute D = dg/du
-    model.D = janus::jacobian([&](const auto& u) {
+    model.D = metis::jacobian([&](const auto& u) {
         SetInputSubset(lin_cfg.inputs, u);
         return GetOutputSubset(lin_cfg.outputs);
     }, u0);
@@ -518,12 +518,12 @@ Generate symbolic computation graphs for:
 ```cpp
 template <typename S = Scalar,
           typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-janus::Function Simulator<Scalar>::GenerateGraph() {
+metis::Function Simulator<Scalar>::GenerateGraph() {
     const auto& sym_cfg = config_.staging.symbolics;
 
     // Create symbolic inputs
-    auto x_sym = janus::symbolic::Variable("x", GetState().size());
-    auto u_sym = janus::symbolic::Variable("u", GetInputSize());
+    auto x_sym = metis::symbolic::Variable("x", GetState().size());
+    auto u_sym = metis::symbolic::Variable("u", GetInputSize());
 
     // Set symbolic state
     SetState(x_sym);
@@ -534,10 +534,10 @@ janus::Function Simulator<Scalar>::GenerateGraph() {
     }
 
     // Compute derivatives symbolically
-    auto x_dot = ComputeDerivatives(janus::symbolic::Variable("t"));
+    auto x_dot = ComputeDerivatives(metis::symbolic::Variable("t"));
 
     // Build function
-    janus::Function f("dynamics", {x_sym, u_sym}, {x_dot});
+    metis::Function f("dynamics", {x_sym, u_sym}, {x_dot});
 
     // Export if configured
     if (!sym_cfg.output_dir.empty()) {
@@ -549,7 +549,7 @@ janus::Function Simulator<Scalar>::GenerateGraph() {
 
 template <typename S = Scalar,
           typename = std::enable_if_t<std::is_same_v<S, SymbolicScalar>>>
-janus::Function Simulator<Scalar>::GenerateJacobian() {
+metis::Function Simulator<Scalar>::GenerateJacobian() {
     auto f = GenerateGraph();
 
     // Compute Jacobians
@@ -603,8 +603,8 @@ auto model = sim.ComputeLinearModel();
 model.ExportMatlab("./control_design/aircraft_ss.mat");
 
 // Check controllability
-auto W_c = janus::controllability_gramian(model.A, model.B);
-std::cout << "System is controllable: " << janus::rank(W_c) << " == " << model.A.rows() << std::endl;
+auto W_c = metis::controllability_gramian(model.A, model.B);
+std::cout << "System is controllable: " << metis::rank(W_c) << " == " << model.A.rows() << std::endl;
 ```
 
 ---
@@ -622,8 +622,8 @@ struct TrimConfig {
     bool enabled = false;
 
     // Solver selection
-    // "newton" - janus::NewtonSolver (fast, for simple F(x)=0 problems)
-    // "ipopt"  - janus::Opti/IPOPT (flexible, supports inequality constraints)
+    // "newton" - metis::NewtonSolver (fast, for simple F(x)=0 problems)
+    // "ipopt"  - metis::Opti/IPOPT (flexible, supports inequality constraints)
     std::string method = "newton";
 
     // Trim targets: which derivatives should be zero?
@@ -697,16 +697,16 @@ struct StageConfig {
 
 ### Beyond Static Trim: Optimal Trajectories
 
-Static trim finds a single equilibrium point. Trajectory optimization finds **optimal control histories** over time. Janus provides two transcription methods:
+Static trim finds a single equilibrium point. Trajectory optimization finds **optimal control histories** over time. Metis provides two transcription methods:
 
 | Method | Class | Best For |
 |:-------|:------|:---------|
-| **Direct Collocation** | `janus::DirectCollocation` | Smooth trajectories, path constraints |
-| **Multiple Shooting** | `janus::MultipleShooting` | Stiff systems, high-accuracy integration |
+| **Direct Collocation** | `metis::DirectCollocation` | Smooth trajectories, path constraints |
+| **Multiple Shooting** | `metis::MultipleShooting` | Stiff systems, high-accuracy integration |
 
 See:
-- [collocation.md](../../../references/janus/docs/user_guides/collocation.md)
-- [multiple_shooting.md](../../../references/janus/docs/user_guides/multiple_shooting.md)
+- [collocation.md](../../../references/metis/docs/user_guides/collocation.md)
+- [multiple_shooting.md](../../../references/metis/docs/user_guides/multiple_shooting.md)
 
 ### Use Cases
 
@@ -724,7 +724,7 @@ Trajectory optimization would use Icarus components as the dynamics model:
 
 ```cpp
 // Future API concept
-auto sim = Simulator<janus::SymbolicScalar>::FromConfig("vehicle.yaml");
+auto sim = Simulator<metis::SymbolicScalar>::FromConfig("vehicle.yaml");
 sim.Stage();  // Prepare symbolic simulation
 
 // Extract dynamics function from simulation
@@ -737,15 +737,15 @@ auto dynamics = [&](const auto& x, const auto& u, const auto& t) {
 };
 
 // Set up trajectory optimization
-janus::Opti opti;
-janus::DirectCollocation dc(opti);
+metis::Opti opti;
+metis::DirectCollocation dc(opti);
 
 auto T = opti.variable(300.0);  // Final time (decision variable)
 auto [x, u, tau] = dc.setup(
     sim.StateSize(),     // n_states from simulation
     2,                   // n_controls (throttle, gimbal)
     0.0, T,
-    {.scheme = janus::CollocationScheme::HermiteSimpson, .n_nodes = 51}
+    {.scheme = metis::CollocationScheme::HermiteSimpson, .n_nodes = 51}
 );
 
 dc.set_dynamics(dynamics);
@@ -773,16 +773,16 @@ auto sol = opti.solve();
 
 ```cpp
 // Direct Collocation - polynomial defect constraints
-janus::DirectCollocation dc(opti);
+metis::DirectCollocation dc(opti);
 dc.setup(n_states, n_controls, t0, tf, {
-    .scheme = janus::CollocationScheme::HermiteSimpson,  // 4th order
+    .scheme = metis::CollocationScheme::HermiteSimpson,  // 4th order
     .n_nodes = 51
 });
 dc.set_dynamics(dynamics);
 dc.add_defect_constraints();  // Polynomial constraints
 
 // Multiple Shooting - numerical integration constraints
-janus::MultipleShooting ms(opti);
+metis::MultipleShooting ms(opti);
 ms.setup(n_states, n_controls, t0, tf, {
     .n_intervals = 20,
     .integrator = "cvodes",  // SUNDIALS integrator
@@ -872,14 +872,14 @@ staging:
 
 - [x] `TraceDynamics()` for dynamics graph extraction
 - [x] `TraceStep()` for discrete step function
-- [x] Jacobian computation via `janus::jacobian()`
+- [x] Jacobian computation via `metis::jacobian()`
 - [x] Graph visualization (HTML, DOT, PDF)
 - [x] Data dictionary export (YAML, JSON)
 
 ### Future: Trim Optimization
 
-- [ ] *(Future)* `RunNumericTrim()` using `janus::NewtonSolver`
-- [ ] *(Future)* `RunSymbolicTrim()` using `janus::Opti` / IPOPT
+- [ ] *(Future)* `RunNumericTrim()` using `metis::NewtonSolver`
+- [ ] *(Future)* `RunSymbolicTrim()` using `metis::Opti` / IPOPT
 - [ ] *(Future)* `RunTrimSweep()` for parametric analysis
 - [ ] *(Future)* Configurable zero_derivatives and control_signals
 - [ ] *(Future)* Control bounds enforcement

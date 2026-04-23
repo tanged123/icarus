@@ -106,8 +106,8 @@ endif()
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
-    janus = {
-      url = "github:tanged123/janus";
+    metis = {
+      url = "github:tanged123/metis";
     };
     vulcan = {
       url = "github:tanged123/vulcan";
@@ -120,7 +120,7 @@ endif()
       nixpkgs,
       flake-utils,
       treefmt-nix,
-      janus,
+      metis,
       vulcan,
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -130,7 +130,7 @@ endif()
         stdenv = pkgs.llvmPackages_latest.stdenv;
         python = pkgs.python3;
 
-        janusPackage = janus.packages.${system}.default;
+        metisPackage = metis.packages.${system}.default;
         vulcanPackage = vulcan.packages.${system}.default;
 
         # Treefmt configuration
@@ -163,7 +163,7 @@ endif()
             pkgs.nlohmann_json
             pkgs.yaml-cpp
             pkgs.spdlog
-            janusPackage
+            metisPackage
             vulcanPackage
           ];
 
@@ -198,7 +198,7 @@ endif()
             pkgs.nlohmann_json
             pkgs.yaml-cpp
             pkgs.spdlog
-            janusPackage
+            metisPackage
             vulcanPackage
             python.pkgs.pybind11
           ];
@@ -287,14 +287,14 @@ endif()
               lcov
               llvmPackages_latest.llvm
               pythonEnv
-              janusPackage
+              metisPackage
               vulcanPackage
               treefmtEval.config.build.wrapper
               cachix
             ];
 
           shellHook = ''
-            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${pythonEnv}/${python.sitePackages}/pybind11:${janusPackage}:${vulcanPackage}
+            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${pythonEnv}/${python.sitePackages}/pybind11:${metisPackage}:${vulcanPackage}
           '';
         };
 

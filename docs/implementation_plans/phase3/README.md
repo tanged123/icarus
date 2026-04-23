@@ -7,13 +7,13 @@
 
 ## Overview
 
-Phase 3 validates that Icarus runs correctly with `SymbolicScalar` (Janus's `janus::SymbolicScalar`, wrapping `casadi::MX`) as the scalar backend, enabling automatic differentiation, optimization, and trajectory analysis.
+Phase 3 validates that Icarus runs correctly with `SymbolicScalar` (Metis's `metis::SymbolicScalar`, wrapping `casadi::MX`) as the scalar backend, enabling automatic differentiation, optimization, and trajectory analysis.
 
 ### Key Deliverables
 
 1. **SimulationBuilder**: Fluent API for simulation configuration
 2. **SimulationRunner**: Standardized execution with lifecycle management
-3. **SymbolicTracer**: Extract `janus::Function` from simulation dynamics
+3. **SymbolicTracer**: Extract `metis::Function` from simulation dynamics
 4. **Dual-Mode Validation**: Prove numeric/symbolic equivalence
 
 ---
@@ -38,7 +38,7 @@ Phase 3 validates that Icarus runs correctly with `SymbolicScalar` (Janus's `jan
 | SignalRegistry | ✅ Ready | Templated on `<Scalar>` |
 | Simulator | ✅ Ready | Clean template chain |
 | Components | ✅ Ready | No `std::` math violations |
-| Integrator | ✅ Ready | JanusVector throughout |
+| Integrator | ✅ Ready | MetisVector throughout |
 
 ### New Components
 
@@ -55,10 +55,10 @@ include/icarus/
 ### Exit Criteria
 
 - [ ] `Simulator<SymbolicScalar>` compiles
-- [ ] `GenerateGraph()` returns valid `janus::Function`
+- [ ] `GenerateGraph()` returns valid `metis::Function`
 - [ ] Numeric/symbolic match within 1e-10
 - [ ] Jacobian extraction works
-- [ ] Zero Janus violations
+- [ ] Zero Metis violations
 - [ ] Examples use SimulationBuilder
 
 ---
@@ -75,6 +75,6 @@ include/icarus/
 
 ## Related Architecture Documents
 
-- [07_janus_integration.md](../../architecture/07_janus_integration.md) - Template-first paradigm
-- [21_symbolic_constraints.md](../../architecture/21_symbolic_constraints.md) - Janus compliance rules
+- [07_metis_integration.md](../../architecture/07_metis_integration.md) - Template-first paradigm
+- [21_symbolic_constraints.md](../../architecture/21_symbolic_constraints.md) - Metis compliance rules
 - [14_trim_optimization.md](../../architecture/14_trim_optimization.md) - Future optimization use

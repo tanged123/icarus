@@ -20,11 +20,11 @@ namespace icarus {
 namespace {
 
 // =============================================================================
-// Helper: Create JanusVector from values
+// Helper: Create MetisVector from values
 // =============================================================================
 
-template <typename Scalar> JanusVector<Scalar> make_state(std::initializer_list<double> values) {
-    JanusVector<Scalar> v(static_cast<Eigen::Index>(values.size()));
+template <typename Scalar> MetisVector<Scalar> make_state(std::initializer_list<double> values) {
+    MetisVector<Scalar> v(static_cast<Eigen::Index>(values.size()));
     Eigen::Index i = 0;
     for (double val : values) {
         v[i++] = Scalar{val};
@@ -191,7 +191,7 @@ TEST(StateManagement, StateRegistrationCreatesSignals) {
 // =============================================================================
 
 TEST(StateManagementSymbolic, AllocationCompiles) {
-    using MX = janus::SymbolicScalar;
+    using MX = metis::SymbolicScalar;
 
     // Only test component-level symbolic capability
     StatefulComponent<MX> comp("A", 4);

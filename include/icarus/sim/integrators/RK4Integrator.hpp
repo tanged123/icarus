@@ -8,7 +8,7 @@
  */
 
 #include <icarus/sim/integrators/Integrator.hpp>
-#include <janus/math/IntegratorStep.hpp>
+#include <metis/math/IntegratorStep.hpp>
 
 namespace icarus {
 
@@ -20,7 +20,7 @@ namespace icarus {
  * @brief Forward Euler integrator (1st order)
  *
  * Simplest integrator, mainly for testing and comparison.
- * Wraps janus::euler_step() for dual-mode compatibility.
+ * Wraps metis::euler_step() for dual-mode compatibility.
  *
  * @tparam Scalar Numeric type (double or casadi::MX)
  */
@@ -28,9 +28,9 @@ template <typename Scalar> class EulerIntegrator : public Integrator<Scalar> {
   public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(const DerivativeFunc &f, const JanusVector<Scalar> &x, Scalar t,
+    MetisVector<Scalar> Step(const DerivativeFunc &f, const MetisVector<Scalar> &x, Scalar t,
                              Scalar dt) override {
-        return janus::euler_step(f, x, t, dt);
+        return metis::euler_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "Euler"; }
@@ -46,7 +46,7 @@ template <typename Scalar> class EulerIntegrator : public Integrator<Scalar> {
  * @brief Heun's method / RK2 integrator (2nd order)
  *
  * Two-stage method, useful for comparison studies.
- * Wraps janus::rk2_step() for dual-mode compatibility.
+ * Wraps metis::rk2_step() for dual-mode compatibility.
  *
  * @tparam Scalar Numeric type (double or casadi::MX)
  */
@@ -54,9 +54,9 @@ template <typename Scalar> class RK2Integrator : public Integrator<Scalar> {
   public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(const DerivativeFunc &f, const JanusVector<Scalar> &x, Scalar t,
+    MetisVector<Scalar> Step(const DerivativeFunc &f, const MetisVector<Scalar> &x, Scalar t,
                              Scalar dt) override {
-        return janus::rk2_step(f, x, t, dt);
+        return metis::rk2_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "RK2"; }
@@ -72,7 +72,7 @@ template <typename Scalar> class RK2Integrator : public Integrator<Scalar> {
  * @brief Classic 4th-order Runge-Kutta integrator
  *
  * Fixed-step method with 4 function evaluations per step.
- * Wraps janus::rk4_step() for dual-mode compatibility.
+ * Wraps metis::rk4_step() for dual-mode compatibility.
  *
  * **Butcher Tableau:**
  * ```
@@ -89,9 +89,9 @@ template <typename Scalar> class RK4Integrator : public Integrator<Scalar> {
   public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(const DerivativeFunc &f, const JanusVector<Scalar> &x, Scalar t,
+    MetisVector<Scalar> Step(const DerivativeFunc &f, const MetisVector<Scalar> &x, Scalar t,
                              Scalar dt) override {
-        return janus::rk4_step(f, x, t, dt);
+        return metis::rk4_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "RK4"; }

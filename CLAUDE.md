@@ -9,7 +9,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 Please refer to that file for:
 
 - Project Overview
-- Janus Compatibility Rules
+- Metis Compatibility Rules
 - Beads (bd) Workflow
 - Landing the Plane (Session Completion)
 - Build/Test Commands

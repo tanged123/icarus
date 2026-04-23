@@ -94,7 +94,7 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
         Scalar vz = velocity_z_.get();
 
         // Compute altitude: h = |r| - R_earth
-        Scalar r = janus::sqrt(px * px + py * py + pz * pz);
+        Scalar r = metis::sqrt(px * px + py * py + pz * pz);
         Scalar altitude = r - vulcan::constants::earth::R_eq;
         altitude_ = altitude;
 
@@ -104,7 +104,7 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
 
         // Compute velocity magnitude squared
         Scalar v_sq = vx * vx + vy * vy + vz * vz;
-        Scalar v_mag = janus::sqrt(v_sq);
+        Scalar v_mag = metis::sqrt(v_sq);
 
         // Dynamic pressure: q = 0.5 * ρ * v²
         Scalar q = Scalar{0.5} * rho * v_sq;
@@ -117,7 +117,7 @@ template <typename Scalar> class AtmosphericDrag : public Component<Scalar> {
         // F_drag = -D * v_hat = -D * v / |v|
         // Use if_else_zero pattern for safe division (0 when v_mag is tiny)
         constexpr double eps = 1e-10;
-        Scalar scale = janus::where(v_mag > eps, D_mag / v_mag, Scalar{0});
+        Scalar scale = metis::where(v_mag > eps, D_mag / v_mag, Scalar{0});
 
         force_(0) = -scale * vx;
         force_(1) = -scale * vy;

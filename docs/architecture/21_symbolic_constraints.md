@@ -1,8 +1,8 @@
-# Symbolic Mode Constraints (Janus Compatibility)
+# Symbolic Mode Constraints (Metis Compatibility)
 
-**Related:** [07_janus_integration.md](07_janus_integration.md) | [08_vulcan_integration.md](08_vulcan_integration.md)
+**Related:** [07_metis_integration.md](07_metis_integration.md) | [08_vulcan_integration.md](08_vulcan_integration.md)
 
-> **Reference:** See `janus/docs/janus_usage_guide.md` for complete details.
+> **Reference:** See `metis/docs/metis_usage_guide.md` for complete details.
 
 ---
 
@@ -11,18 +11,18 @@
 | Rule | Correct | Wrong |
 |------|---------|-------|
 | **Template on Scalar** | `template <typename Scalar>` | Hardcoded `double` |
-| **Use janus:: math** | `janus::sin(x)`, `janus::pow(x,2)` | `std::sin(x)`, `std::pow(x,2)` |
-| **Branching** | `janus::where(cond, a, b)` | `if (cond) { a } else { b }` |
+| **Use metis:: math** | `metis::sin(x)`, `metis::pow(x,2)` | `std::sin(x)`, `std::pow(x,2)` |
+| **Branching** | `metis::where(cond, a, b)` | `if (cond) { a } else { b }` |
 | **Loops** | `for (int i=0; i<N; ++i)` (fixed N) | `while (error > tol)` (dynamic) |
-| **Types** | `janus::Vec3<Scalar>` | `Eigen::Vector3d` |
+| **Types** | `metis::Vec3<Scalar>` | `Eigen::Vector3d` |
 
 ---
 
 ## 2. Multi-way Branching
 
 ```cpp
-// Use janus::select for multiple conditions
-Scalar cd = janus::select(
+// Use metis::select for multiple conditions
+Scalar cd = metis::select(
     {mach < 0.3, mach < 0.8, mach < 1.2},
     {Scalar(0.02), Scalar(0.025), Scalar(0.05)},
     Scalar(0.03));  // default
@@ -52,8 +52,8 @@ if (altitude > 10000) {
     thrust = 0;
 }
 
-// CORRECT: janus::where
-thrust = janus::where(altitude > 10000, max_thrust, Scalar(0));
+// CORRECT: metis::where
+thrust = metis::where(altitude > 10000, max_thrust, Scalar(0));
 ```
 
 ### Math Functions
@@ -63,9 +63,9 @@ thrust = janus::where(altitude > 10000, max_thrust, Scalar(0));
 double q = 0.5 * rho * std::pow(v, 2);
 double angle = std::atan2(y, x);
 
-// CORRECT: janus:: functions
-Scalar q = 0.5 * rho * janus::pow(v, 2);
-Scalar angle = janus::atan2(y, x);
+// CORRECT: metis:: functions
+Scalar q = 0.5 * rho * metis::pow(v, 2);
+Scalar angle = metis::atan2(y, x);
 ```
 
 ### Vector/Matrix Types
@@ -74,8 +74,8 @@ Scalar angle = janus::atan2(y, x);
 // WRONG: Eigen with hardcoded double
 Eigen::Vector3d force;
 
-// CORRECT: Janus vector templated on Scalar
-janus::Vec3<Scalar> force;
+// CORRECT: Metis vector templated on Scalar
+metis::Vec3<Scalar> force;
 ```
 
 ### Loops
@@ -88,7 +88,7 @@ while (residual > tolerance) {
 
 // CORRECT: Fixed loop bounds
 for (int i = 0; i < MAX_ITERATIONS; ++i) {
-    // iterate with early-exit via janus::where
+    // iterate with early-exit via metis::where
 }
 ```
 
@@ -102,11 +102,11 @@ Lookup tables require special handling for symbolic mode:
 // WRONG: Standard interpolation (not differentiable)
 double cl = table.lookup(alpha);
 
-// CORRECT: Use janus::interpn (CasADi-compatible)
-Scalar cl = janus::interpn<Scalar>(points, values, query)(0);
+// CORRECT: Use metis::interpn (CasADi-compatible)
+Scalar cl = metis::interpn<Scalar>(points, values, query)(0);
 ```
 
-> **Reference:** See [janus/docs/user_guides/interpolation.md](file:///home/tanged/sources/janus/docs/user_guides/interpolation.md) for full API details.
+> **Reference:** See [metis/docs/user_guides/interpolation.md](file:///home/tanged/sources/metis/docs/user_guides/interpolation.md) for full API details.
 
 ### 5.1 Interpolation Methods
 
@@ -121,28 +121,28 @@ Scalar cl = janus::interpn<Scalar>(points, values, query)(0);
 
 ```cpp
 // 1D: Cl vs alpha
-janus::NumericVector alpha_pts, cl_vals;
-janus::JanusMatrix<Scalar> query(1, 1);
+metis::NumericVector alpha_pts, cl_vals;
+metis::MetisMatrix<Scalar> query(1, 1);
 query(0, 0) = alpha;
-Scalar cl = janus::interpn<Scalar>({alpha_pts}, cl_vals, query)(0);
+Scalar cl = metis::interpn<Scalar>({alpha_pts}, cl_vals, query)(0);
 
 // 2D: Cd vs (Mach, alpha)
-janus::JanusMatrix<Scalar> query2d(1, 2);
+metis::MetisMatrix<Scalar> query2d(1, 2);
 query2d << mach, alpha;
-Scalar cd = janus::interpn<Scalar>({mach_pts, alpha_pts}, cd_grid, query2d,
-    janus::InterpolationMethod::BSpline)(0);
+Scalar cd = metis::interpn<Scalar>({mach_pts, alpha_pts}, cd_grid, query2d,
+    metis::InterpolationMethod::BSpline)(0);
 ```
 
 ### 5.3 Extrapolation Modes
 
 ```cpp
 // Default: Clamp to boundary (safe, but zero gradient outside bounds)
-auto result = janus::interpn<Scalar>(points, values, query);
+auto result = metis::interpn<Scalar>(points, values, query);
 
 // Linear extrapolation with output bounds (maintains gradient for optimization)
-janus::Interpolator interp(x_pts, y_vals,
-    janus::InterpolationMethod::BSpline,
-    janus::ExtrapolationConfig::linear(lower_bound, upper_bound));
+metis::Interpolator interp(x_pts, y_vals,
+    metis::InterpolationMethod::BSpline,
+    metis::ExtrapolationConfig::linear(lower_bound, upper_bound));
 ```
 
 | Mode | Behavior | Use Case |
@@ -161,13 +161,13 @@ void Aero::Provision(Backplane& bp, const ComponentConfig& cfg) {
     auto [mach_pts, alpha_pts, cd_grid] = load_table(cfg.get("cd_table_path"));
 
     // Store for later use (Interpolator caches CasADi function)
-    cd_interp_ = janus::Interpolator({mach_pts, alpha_pts}, cd_grid,
-        janus::InterpolationMethod::BSpline);
+    cd_interp_ = metis::Interpolator({mach_pts, alpha_pts}, cd_grid,
+        metis::InterpolationMethod::BSpline);
 }
 
 void Aero::Step(Scalar t, Scalar dt) {
     // Works for both double and MX
-    janus::JanusMatrix<Scalar> query(1, 2);
+    metis::MetisMatrix<Scalar> query(1, 2);
     query << mach, alpha;
     Scalar cd = cd_interp_(query)(0);
 }
@@ -192,7 +192,7 @@ TEST(AeroComponent, SymbolicModeTraces) {
     AeroComponent<casadi::MX> aero;
     aero.provision(config);
     aero.stage(bp);
-    aero.step(janus::sym("t"), janus::sym("dt"));
+    aero.step(metis::sym("t"), metis::sym("dt"));
 
     // Verify output is a valid MX expression
     auto lift = bp.get("Aero.Lift");
@@ -202,20 +202,20 @@ TEST(AeroComponent, SymbolicModeTraces) {
 
 ---
 
-## 7. Quick Reference: janus:: Math Functions
+## 7. Quick Reference: metis:: Math Functions
 
-| Operation | janus:: Function |
+| Operation | metis:: Function |
 |-----------|------------------|
-| Power | `janus::pow(x, n)` |
-| Square root | `janus::sqrt(x)` |
-| Trig | `janus::sin(x)`, `janus::cos(x)`, `janus::tan(x)` |
-| Inverse trig | `janus::asin(x)`, `janus::acos(x)`, `janus::atan(x)` |
-| atan2 | `janus::atan2(y, x)` |
-| Exponential | `janus::exp(x)`, `janus::log(x)` |
-| Absolute | `janus::abs(x)` |
-| Min/Max | `janus::fmin(a, b)`, `janus::fmax(a, b)` |
-| Conditional | `janus::where(cond, if_true, if_false)` |
-| Multi-select | `janus::select({conds}, {values}, default)` |
+| Power | `metis::pow(x, n)` |
+| Square root | `metis::sqrt(x)` |
+| Trig | `metis::sin(x)`, `metis::cos(x)`, `metis::tan(x)` |
+| Inverse trig | `metis::asin(x)`, `metis::acos(x)`, `metis::atan(x)` |
+| atan2 | `metis::atan2(y, x)` |
+| Exponential | `metis::exp(x)`, `metis::log(x)` |
+| Absolute | `metis::abs(x)` |
+| Min/Max | `metis::fmin(a, b)`, `metis::fmax(a, b)` |
+| Conditional | `metis::where(cond, if_true, if_false)` |
+| Multi-select | `metis::select({conds}, {values}, default)` |
 
 ---
 
@@ -224,7 +224,7 @@ TEST(AeroComponent, SymbolicModeTraces) {
 When symbolic tracing fails:
 
 1. **Check for `std::` functions** - grep for `std::sin`, `std::pow`, etc.
-2. **Check for `if/else` on Scalar** - replace with `janus::where`
+2. **Check for `if/else` on Scalar** - replace with `metis::where`
 3. **Check for dynamic loops** - convert to fixed iteration with masking
 4. **Check types** - ensure all math uses `Scalar`, not `double`
 5. **Run symbolic test** - instantiate with `casadi::MX` to catch issues early
@@ -234,5 +234,5 @@ When symbolic tracing fails:
 ## 9. See Also
 
 - [05_execution_model.md#6-symbolic-mode--multi-rate-interaction](05_execution_model.md) - Multi-rate scheduling and symbolic mode
-- [07_janus_integration.md](07_janus_integration.md) - Full Janus integration guide
+- [07_metis_integration.md](07_metis_integration.md) - Full Metis integration guide
 - [08_vulcan_integration.md](08_vulcan_integration.md) - Vulcan physics models

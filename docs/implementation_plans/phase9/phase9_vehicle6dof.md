@@ -153,7 +153,7 @@ routes:
 #include "icarus/signal/Handle.hpp"
 #include "vulcan/dynamics/RigidBody.hpp"
 #include "vulcan/mass/MassProperties.hpp"
-#include "janus/math/Quaternion.hpp"
+#include "metis/math/Quaternion.hpp"
 #include <vector>
 #include <string>
 
@@ -231,7 +231,7 @@ public:
     // Accessors
     [[nodiscard]] Vec3<Scalar> GetPosition() const { return position_; }
     [[nodiscard]] Vec3<Scalar> GetVelocityBody() const { return velocity_body_; }
-    [[nodiscard]] janus::Quaternion<Scalar> GetAttitude() const;
+    [[nodiscard]] metis::Quaternion<Scalar> GetAttitude() const;
     [[nodiscard]] Scalar GetTotalMass() const { return total_mass_; }
 
 private:
@@ -478,7 +478,7 @@ void Vehicle6DOF<Scalar>::AggregateForces() {
     Vec3<Scalar> sum_force = Vec3<Scalar>::Zero();
     Vec3<Scalar> sum_moment = Vec3<Scalar>::Zero();
 
-    janus::Quaternion<Scalar> q_body_to_ref{
+    metis::Quaternion<Scalar> q_body_to_ref{
         attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
     for (const auto& src : force_sources_) {

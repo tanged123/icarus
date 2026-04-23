@@ -38,7 +38,7 @@ TEST(AeroComponent, SymbolicModeTraces) {
     AeroComponent<casadi::MX> aero;
     aero.provision(config);
     aero.stage(bp);
-    aero.step(janus::sym("t"), janus::sym("dt"));
+    aero.step(metis::sym("t"), metis::sym("dt"));
 
     // Verify output is a valid MX expression
     auto lift = bp.get("Aero.Lift");

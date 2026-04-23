@@ -1,6 +1,6 @@
 # Icarus Repository Bootstrap Guide
 
-> **Purpose**: This document provides comprehensive instructions for bootstrapping the **Icarus** 6DOF simulation engine repository. Icarus is a data-oriented simulation framework that utilizes both **Janus** (math library) and **Vulcan** (engineering utilities) as dependencies.
+> **Purpose**: This document provides comprehensive instructions for bootstrapping the **Icarus** 6DOF simulation engine repository. Icarus is a data-oriented simulation framework that utilizes both **Metis** (math library) and **Vulcan** (engineering utilities) as dependencies.
 
 ---
 
@@ -33,8 +33,8 @@
 - **Data-Oriented Architecture**: Flat component topology where all simulation elements (gravity, atmosphere, propulsion, aerodynamics) are structural peers
 - **Component-Based Design**: Modular components that implement `Provision()`, `Stage()`, and `Step()` lifecycle methods
 - **Signal Backplane**: Centralized registry for all observable/configurable numeric data
-- **Dual-Mode Execution**: Numeric (`double`) for real-time simulation and Symbolic (`casadi::MX`) for optimization, utilizing the Janus (`janus::Scalar`) type system
-- **Integration with Janus/Vulcan**: Uses Janus for math and Vulcan for physics utilities
+- **Dual-Mode Execution**: Numeric (`double`) for real-time simulation and Symbolic (`casadi::MX`) for optimization, utilizing the Metis (`metis::Scalar`) type system
+- **Integration with Metis/Vulcan**: Uses Metis for math and Vulcan for physics utilities
 
 ### The Icarus Stack
 
@@ -46,7 +46,7 @@
 │                        VULCAN                                │
 │   (Physics Utilities: Atmosphere, Gravity, Coordinates)      │
 ├─────────────────────────────────────────────────────────────┤
-│                        JANUS                                 │
+│                        METIS                                 │
 │   (Math Library: Autodiff, Optimization, Linear Algebra)     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -58,7 +58,7 @@
 There is no "World" object that *contains* the vehicle. There is a simulation that contains a list of components, some of which calculate gravity, and some of which calculate fuel flow. This design:
 
 1. **Aligns with Simulink/GNC patterns**: Block diagram modeling, not inheritance trees
-2. **Enables Janus symbolic compatibility**: Linear execution trace for graph generation
+2. **Enables Metis symbolic compatibility**: Linear execution trace for graph generation
 3. **Optimizes data locality**: Contiguous state vectors for ODE solvers
 
 ---
@@ -303,7 +303,7 @@ target_link_libraries(my_sim PRIVATE icarus::icarus my_components)
 | Aspect | Vulcan | Icarus |
 |:-------|:-------|:-------|
 | **Library Type** | Header-only (INTERFACE) | Compiled static library |
-| **Dependencies** | Janus only | Janus + Vulcan |
+| **Dependencies** | Metis only | Metis + Vulcan |
 | **Scope** | Stateless utilities | Stateful simulation engine |
 | **Primary Users** | C++ developers | Vehicle builders (config + Python) |
 | **Bindings** | None | C API, Python, MATLAB |
@@ -314,7 +314,7 @@ target_link_libraries(my_sim PRIVATE icarus::icarus my_components)
 
 ### flake.nix
 
-Create a Nix flake that brings in both Janus and Vulcan as dependencies:
+Create a Nix flake that brings in both Metis and Vulcan as dependencies:
 
 ```nix
 {
@@ -326,10 +326,10 @@ Create a Nix flake that brings in both Janus and Vulcan as dependencies:
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
     # Dependencies as flake inputs
-    janus = {
-      url = "github:tanged123/janus";
+    metis = {
+      url = "github:tanged123/metis";
       # For local development:
-      # url = "path:/home/tanged/sources/janus";
+      # url = "path:/home/tanged/sources/metis";
     };
     vulcan = {
       url = "github:tanged123/vulcan";
@@ -338,14 +338,14 @@ Create a Nix flake that brings in both Janus and Vulcan as dependencies:
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, treefmt-nix, janus, vulcan }:
+  outputs = { self, nixpkgs, flake-utils, treefmt-nix, metis, vulcan }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         stdenv = pkgs.llvmPackages_latest.stdenv;
 
         # Get packages from inputs
-        janusPackage = janus.packages.${system}.default;
+        metisPackage = metis.packages.${system}.default;
         vulcanPackage = vulcan.packages.${system}.default;
 
         # Treefmt configuration
@@ -376,7 +376,7 @@ Create a Nix flake that brings in both Janus and Vulcan as dependencies:
             pkgs.nlohmann_json  # For configuration parsing
             pkgs.yaml-cpp       # For YAML config support
             pkgs.spdlog         # For structured logging
-            janusPackage
+            metisPackage
             vulcanPackage
           ];
 
@@ -409,13 +409,13 @@ Create a Nix flake that brings in both Janus and Vulcan as dependencies:
             python3
             python3Packages.pybind11
           ] ++ [
-            janusPackage
+            metisPackage
             vulcanPackage
             treefmtEval.config.build.wrapper
           ];
 
           shellHook = ''
-            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${janusPackage}:${vulcanPackage}
+            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${metisPackage}:${vulcanPackage}
           '';
         };
 
@@ -431,12 +431,12 @@ Create a Nix flake that brings in both Janus and Vulcan as dependencies:
 
 ### Local Development Configuration
 
-For development with local Janus and Vulcan:
+For development with local Metis and Vulcan:
 
 ```nix
 # In flake.nix inputs section:
-janus = {
-  url = "path:/home/tanged/sources/janus";
+metis = {
+  url = "path:/home/tanged/sources/metis";
 };
 vulcan = {
   url = "path:/home/tanged/sources/vulcan";
@@ -444,7 +444,7 @@ vulcan = {
 ```
 
 > [!TIP]
-> When developing locally with path inputs, run `nix flake update janus vulcan` after making changes to the dependencies.
+> When developing locally with path inputs, run `nix flake update metis vulcan` after making changes to the dependencies.
 
 ---
 
@@ -479,7 +479,7 @@ option(BUILD_COMPONENTS \"Build standard component models\" ON)
 # --- Dependencies ---
 find_package(Eigen3 3.4 REQUIRED)
 find_package(casadi REQUIRED)
-find_package(janus REQUIRED)
+find_package(metis REQUIRED)
 find_package(vulcan REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C CXX)
 find_package(HighFive REQUIRED)
@@ -583,7 +583,7 @@ target_link_libraries(icarus_core
   PUBLIC
     Eigen3::Eigen
     casadi
-    janus::janus
+    metis::metis
     vulcan::vulcan
     HighFive
     HDF5::HDF5
@@ -1167,7 +1167,7 @@ Every Icarus module must have tests for both numeric AND symbolic modes:
 ```cpp
 #include <gtest/gtest.h>
 #include <icarus/core/Component.hpp>
-#include <janus/janus.hpp>
+#include <metis/metis.hpp>
 
 // ============================================
 // Numeric Tests
@@ -1215,14 +1215,14 @@ TEST(GravityComponent, NumericMode) {
 }
 
 TEST(GravityComponent, SymbolicMode) {
-    auto alt = janus::sym("altitude");
+    auto alt = metis::sym("altitude");
     auto accel = test_gravity_component(alt);
 
     // Verify graph was created
     EXPECT_FALSE(accel.is_constant());
 
     // Evaluate
-    double result = janus::eval(accel, {{"altitude", 100000.0}});
+    double result = metis::eval(accel, {{"altitude", 100000.0}});
     EXPECT_NEAR(result, 9.51, 0.01);
 }
 ```
@@ -1271,7 +1271,7 @@ examples/rocket_launch/
 int main() {
     std::cout << "Icarus v" << icarus::Version() << std::endl;
     std::cout << "6DOF Simulation Engine" << std::endl;
-    std::cout << "Built on Janus (Math) + Vulcan (Physics)" << std::endl;
+    std::cout << "Built on Metis (Math) + Vulcan (Physics)" << std::endl;
     return 0;
 }
 ```
@@ -1598,7 +1598,7 @@ jobs:
 ```markdown
 # Agent Ruleset: Icarus Project
 
-You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Janus and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
+You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Metis and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
 
 ## Global Behavioral Rules
 
@@ -1611,20 +1611,20 @@ You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation
     *   Read all provided context before generating code.
     *   Double-check types, templates, and constraints.
     *   When refactoring, ensure no functionality is lost.
-4.  **No Hallucinations**: Do not invent APIs. Search the Janus/Vulcan/Icarus codebase first.
+4.  **No Hallucinations**: Do not invent APIs. Search the Metis/Vulcan/Icarus codebase first.
 5.  **Context Preservation**:
     *   **Documentation First**: Create and update documentation in `docs/`.
     *   **Handover**: Write down your plan and progress so the next agent can resume.
 
 ## Icarus-Specific Rules (CRITICAL)
 
-### 1. Janus Compatibility (The "Red Line")
+### 1. Metis Compatibility (The "Red Line")
 *   **Template-First**: ALL components and physics MUST be templated on `Scalar`.
 *   **Dual-Backend**: Code must work for both `double` and `casadi::MX`.
 
 ### 2. Math & Control Flow (MANDATORY)
-*   **Math Dispatch**: ALWAYS use `janus::` namespace (e.g., `janus::sin`, `janus::pow`).
-*   **Branching**: NEVER use `if/else` on `Scalar` types. Use `janus::where()`.
+*   **Math Dispatch**: ALWAYS use `metis::` namespace (e.g., `metis::sin`, `metis::pow`).
+*   **Branching**: NEVER use `if/else` on `Scalar` types. Use `metis::where()`.
 *   **Loops**: Bounds must be structural (integers/constants).
 
 ### 3. Component Design
@@ -1662,7 +1662,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Project Overview
 
-Icarus is a 6DOF simulation engine for aerospace applications, built on Janus (math) and Vulcan (physics utilities). It uses a data-oriented architecture where all simulation components are structural peers.
+Icarus is a 6DOF simulation engine for aerospace applications, built on Metis (math) and Vulcan (physics utilities). It uses a data-oriented architecture where all simulation components are structural peers.
 
 ## Build Commands
 
@@ -1675,7 +1675,7 @@ Icarus is a 6DOF simulation engine for aerospace applications, built on Janus (m
 nix develop                 # Enter dev environment
 ```
 
-## Critical Janus Compatibility Rules
+## Critical Metis Compatibility Rules
 
 **These rules are INVIOLABLE. Breaking them causes symbolic mode to fail.**
 
@@ -1686,15 +1686,15 @@ Scalar my_function(const Scalar& x);  // CORRECT
 double my_function(double x);          // WRONG
 ```
 
-### 2. Math Dispatch - Use `janus::` Namespace
+### 2. Math Dispatch - Use `metis::` Namespace
 ```cpp
-janus::sin(x), janus::pow(x, 2)  // CORRECT
+metis::sin(x), metis::pow(x, 2)  // CORRECT
 std::sin(x), std::pow(x, 2)      // WRONG
 ```
 
-### 3. Branching - Use `janus::where()`
+### 3. Branching - Use `metis::where()`
 ```cpp
-Scalar result = janus::where(x > 0, x, -x);  // CORRECT
+Scalar result = metis::where(x > 0, x, -x);  // CORRECT
 if (x > 0) { result = x; }                   // WRONG
 ```
 
@@ -1709,7 +1709,7 @@ if (x > 0) { result = x; }                   // WRONG
 
 ## Key Dependencies
 
-- **Janus**: Math, autodiff, optimization, linear algebra
+- **Metis**: Math, autodiff, optimization, linear algebra
 - **Vulcan**: Atmosphere, gravity, coordinates, rotations, time
 
 ## Documentation
@@ -1874,7 +1874,7 @@ Before considering the repository "bootstrapped", verify:
   - [ ] Numeric mode evaluation works
   - [ ] Symbolic mode graph generation works
 - [ ] Dependencies are properly linked:
-  - [ ] Janus headers and functions accessible
+  - [ ] Metis headers and functions accessible
   - [ ] Vulcan headers and functions accessible
 
 ---
@@ -1887,7 +1887,7 @@ A minimal verification that the repo is set up correctly:
 // examples/intro/hello_world.cpp
 #include <icarus/icarus.hpp>
 #include <vulcan/vulcan.hpp>
-#include <janus/janus.hpp>
+#include <metis/metis.hpp>
 #include <iostream>
 
 int main() {
@@ -1898,15 +1898,15 @@ int main() {
     double rho = vulcan::atmosphere::standard::density(10000.0);
     std::cout << "Vulcan: rho at 10km = " << rho << " kg/m³" << std::endl;
 
-    // Verify Janus integration (numeric)
-    double x = janus::sin(0.5);
-    std::cout << "Janus (numeric): sin(0.5) = " << x << std::endl;
+    // Verify Metis integration (numeric)
+    double x = metis::sin(0.5);
+    std::cout << "Metis (numeric): sin(0.5) = " << x << std::endl;
 
-    // Verify Janus integration (symbolic)
-    auto sym_x = janus::sym("x");
-    auto sym_y = janus::sin(sym_x);
-    double y = janus::eval(sym_y, {{"x", 0.5}});
-    std::cout << "Janus (symbolic): sin(0.5) = " << y << std::endl;
+    // Verify Metis integration (symbolic)
+    auto sym_x = metis::sym("x");
+    auto sym_y = metis::sin(sym_x);
+    double y = metis::eval(sym_y, {{"x", 0.5}});
+    std::cout << "Metis (symbolic): sin(0.5) = " << y << std::endl;
 
     return 0;
 }
@@ -1914,4 +1914,4 @@ int main() {
 
 ---
 
-This document provides all the context needed to bootstrap the Icarus repository with proper structure, tooling, and Janus/Vulcan integration. The modular roadmap allows incremental implementation while maintaining architectural consistency.
+This document provides all the context needed to bootstrap the Icarus repository with proper structure, tooling, and Metis/Vulcan integration. The modular roadmap allows incremental implementation while maintaining architectural consistency.

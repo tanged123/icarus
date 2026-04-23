@@ -216,7 +216,7 @@ ForceAggregator:
 - [ ] Implement `RigidBody6DOF<Scalar>` component
   - [ ] 13 states: [px,py,pz, vx,vy,vz, qw,qx,qy,qz, ωx,ωy,ωz]
   - [ ] Uses `vulcan::dynamics::compute_6dof_derivatives()`
-  - [ ] Uses `janus::Quaternion<Scalar>` for attitude
+  - [ ] Uses `metis::Quaternion<Scalar>` for attitude
 - [ ] Inputs:
   - [ ] `total_force` (Vec3 in body frame)
   - [ ] `total_moment` (Vec3 about CG, body frame)
@@ -414,8 +414,8 @@ tests/
 | `vulcan::dynamics::compute_6dof_derivatives()` | 6DOF EOM | ✓ Available |
 | `vulcan::dynamics::translational_dynamics()` | Body-frame F=ma | ✓ Available |
 | `vulcan::dynamics::rotational_dynamics()` | Euler's equations | ✓ Available |
-| `janus::Quaternion<Scalar>` | Quaternion math | ✓ Available |
-| `janus::cross()` | Symbolic-safe cross product | ✓ Available |
+| `metis::Quaternion<Scalar>` | Quaternion math | ✓ Available |
+| `metis::cross()` | Symbolic-safe cross product | ✓ Available |
 
 ---
 
@@ -518,8 +518,8 @@ void Stage(Backplane<Scalar>& bp, const ComponentConfig& cfg) override {
 ### Pattern 5: Symbolic Compatibility
 
 - [ ] Template on `Scalar`
-- [ ] Use `janus::` math functions
-- [ ] Use `janus::where()` for branching
+- [ ] Use `metis::` math functions
+- [ ] Use `metis::where()` for branching
 - [ ] No `std::` math in hot path
 - [ ] No string lookups in `Step()`
 

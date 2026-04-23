@@ -84,8 +84,8 @@ components:
 
 1. **No allocation in `Step()`** — all memory allocated in `Provision()`
 2. **No string lookups in `Step()`** — resolve pointers in `Stage()`
-3. **Use `janus::` math** — `janus::sin()`, not `std::sin()`
-4. **Use `janus::where()` for branching** — no `if/else` on `Scalar`
+3. **Use `metis::` math** — `metis::sin()`, not `std::sin()`
+4. **Use `metis::where()` for branching** — no `if/else` on `Scalar`
 5. **Template on `Scalar`** — enables both `double` and `casadi::MX`
 
 ---
@@ -94,8 +94,8 @@ components:
 
 ```cpp
 // ✅ Correct
-Scalar y = janus::where(x > 0, a, b);
-Scalar z = janus::sin(angle);
+Scalar y = metis::where(x > 0, a, b);
+Scalar z = metis::sin(angle);
 
 // ❌ Wrong
 if (x > 0) { y = a; } else { y = b; }
@@ -109,4 +109,4 @@ double z = std::sin(angle);
 - [02_component_protocol.md](02_component_protocol.md) — Full protocol details
 - [03_signal_backplane.md](03_signal_backplane.md) — Signal registration & types
 - [04_lifecycle.md](04_lifecycle.md) — Provision/Stage/Step in depth
-- [21_symbolic_constraints.md](21_symbolic_constraints.md) — Janus compatibility rules
+- [21_symbolic_constraints.md](21_symbolic_constraints.md) — Metis compatibility rules

@@ -90,7 +90,7 @@ A unified dynamics component that:
 
 - Phase 6: Unified signal model (complete)
 - Vulcan: Mass aggregation, 6DOF dynamics
-- Janus: Quaternion operations
+- Metis: Quaternion operations
 
 ---
 

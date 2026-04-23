@@ -9,7 +9,7 @@
  * Computes linear state-space model (A, B, C, D) at current operating point.
  * Two modes:
  *   - Numeric (FiniteDifferenceLinearizer): Uses central differences
- *   - Symbolic (SymbolicLinearizer): Uses exact Jacobians via janus::jacobian
+ *   - Symbolic (SymbolicLinearizer): Uses exact Jacobians via metis::jacobian
  */
 
 #include <icarus/core/Error.hpp>
@@ -19,7 +19,7 @@
 // Include SymbolicSimulatorCore and AutoDiff here (outside namespace)
 // to avoid namespace resolution issues
 #include <icarus/staging/SymbolicSimulatorCore.hpp>
-#include <janus/math/AutoDiff.hpp>
+#include <metis/math/AutoDiff.hpp>
 
 #include <Eigen/Dense>
 #include <memory>
@@ -95,7 +95,7 @@ class FiniteDifferenceLinearizer : public Linearizer {
 /**
  * @brief Linearizer using symbolic Jacobians
  *
- * Uses janus::jacobian() for exact derivatives.
+ * Uses metis::jacobian() for exact derivatives.
  * Requires symbolic components (SymbolicSimulatorCore).
  */
 class SymbolicLinearizer : public Linearizer {
@@ -387,7 +387,7 @@ FiniteDifferenceLinearizer::Compute(::icarus::Simulator &sim, const Linearizatio
 
 inline ::icarus::staging::LinearModel
 SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig &config) {
-    using Scalar = janus::SymbolicScalar;
+    using Scalar = metis::SymbolicScalar;
 
     ::icarus::staging::LinearModel model;
     model.state_names = config.states;
@@ -419,14 +419,14 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     const std::size_t n_states_total = sym_sim.GetStateSize();
 
     // Create symbolic variables - MUST use sym_vec_pair to get pure symbolic MX
-    auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states_total));
-    Scalar t_sym = janus::sym("t");
+    auto [x_vec, x_mx] = metis::sym_vec_pair("x", static_cast<int>(n_states_total));
+    Scalar t_sym = metis::sym("t");
 
     // Create symbolic inputs
     std::vector<Scalar> u_elements;
     Scalar u_mx;
     if (nu > 0) {
-        auto [u_v, u_m] = janus::sym_vec_pair("u", nu);
+        auto [u_v, u_m] = metis::sym_vec_pair("u", nu);
         for (int i = 0; i < nu; ++i) {
             u_elements.push_back(u_v(i));
         }
@@ -443,7 +443,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
     }
 
     // Compute derivatives symbolically
-    JanusVector<Scalar> xdot_vec = sym_sim.ComputeDerivatives();
+    MetisVector<Scalar> xdot_vec = sym_sim.ComputeDerivatives();
 
     // Find indices of selected states in global state vector using state bindings
     std::vector<int> state_indices;
@@ -496,12 +496,12 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     // Compute A = df/dx using symbolic Jacobian
     // Use the full x_mx symbol (pure MX) for differentiation, then extract relevant columns
-    Scalar A_full_sym = janus::jacobian({xdot_mx}, {x_mx});
+    Scalar A_full_sym = metis::jacobian({xdot_mx}, {x_mx});
 
     // Compute B = df/du
     Scalar B_sym;
     if (nu > 0) {
-        B_sym = janus::jacobian({xdot_mx}, {u_mx});
+        B_sym = metis::jacobian({xdot_mx}, {u_mx});
     }
 
     // Build symbolic outputs
@@ -520,23 +520,23 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
         Scalar y_mx = Scalar::vertcat(y_elements);
 
         // Compute C = dg/dx (full Jacobian)
-        C_full_sym = janus::jacobian({y_mx}, {x_mx});
+        C_full_sym = metis::jacobian({y_mx}, {x_mx});
 
         // Compute D = dg/du
         if (nu > 0) {
-            D_sym = janus::jacobian({y_mx}, {u_mx});
+            D_sym = metis::jacobian({y_mx}, {u_mx});
         }
     }
 
-    // Create janus::Functions for evaluation
-    std::vector<janus::SymbolicArg> all_inputs;
+    // Create metis::Functions for evaluation
+    std::vector<metis::SymbolicArg> all_inputs;
     all_inputs.push_back(t_sym);
     all_inputs.push_back(x_mx);
     if (nu > 0) {
         all_inputs.push_back(u_mx);
     }
 
-    janus::Function A_full_func("A_full", all_inputs, {A_full_sym});
+    metis::Function A_full_func("A_full", all_inputs, {A_full_sym});
 
     // Build full state vector for evaluation:
     // - Start with the full operating-point state from the simulator
@@ -575,7 +575,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     // Evaluate B matrix
     if (nu > 0) {
-        janus::Function B_func("B", all_inputs, {B_sym});
+        metis::Function B_func("B", all_inputs, {B_sym});
         auto B_result = B_func(model.t0, full_state, model.u0);
         model.B.resize(nx, nu);
         for (int i = 0; i < nx; ++i) {
@@ -589,7 +589,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     // Evaluate C matrix (full) and extract selected columns
     if (ny > 0) {
-        janus::Function C_full_func("C_full", all_inputs, {C_full_sym});
+        metis::Function C_full_func("C_full", all_inputs, {C_full_sym});
         std::vector<Eigen::MatrixXd> C_full_result;
         if (nu > 0) {
             C_full_result = C_full_func(model.t0, full_state, model.u0);
@@ -609,7 +609,7 @@ SymbolicLinearizer::Compute(::icarus::Simulator &sim, const LinearizationConfig 
 
     // Evaluate D matrix
     if (ny > 0 && nu > 0) {
-        janus::Function D_func("D", all_inputs, {D_sym});
+        metis::Function D_func("D", all_inputs, {D_sym});
         auto D_result = D_func(model.t0, full_state, model.u0);
         model.D.resize(ny, nu);
         for (int i = 0; i < ny; ++i) {

@@ -32,14 +32,14 @@ Phase 4–7 (horizontal expansion)
 
 - [x] **1.1 Repository Bootstrap**
   - [x] Set up repository structure (see [Repository Structure](../icarus_bootstrap_guide.md#4-repository-structure))
-  - [x] Configure Nix flake with Janus + Vulcan dependencies
+  - [x] Configure Nix flake with Metis + Vulcan dependencies
   - [x] Configure CMake build system
   - [x] Set up CI/CD workflows
   - [x] Create agent rules (`.cursorrules`, `CLAUDE.md`)
 
 - [x] **1.2 Types & Concepts**
   - [x] `include/icarus/core/Types.hpp` — Scalar template, lifecycle enum
-  - [x] `include/icarus/core/Concepts.hpp` — JanusScalar constraints
+  - [x] `include/icarus/core/Concepts.hpp` — MetisScalar constraints
   - [x] Basic error handling (`include/icarus/core/Error.hpp`)
 
 - [x] **1.3 Signal Backplane**
@@ -155,12 +155,12 @@ Phase 4–7 (horizontal expansion)
 
 | Topic | Document |
 |:------|:---------|
-| Template-first paradigm | [07_janus_integration.md](../architecture/07_janus_integration.md) |
-| `janus::where()`, math rules | [21_symbolic_constraints.md](../architecture/21_symbolic_constraints.md) |
+| Template-first paradigm | [07_metis_integration.md](../architecture/07_metis_integration.md) |
+| `metis::where()`, math rules | [21_symbolic_constraints.md](../architecture/21_symbolic_constraints.md) |
 
 ### Exit Criteria
 
-- [x] Extract symbolic dynamics as `janus::Function`
+- [x] Extract symbolic dynamics as `metis::Function`
 - [x] Evaluate numerically, match `Simulator<double>` output
 - [x] Zero template violations in codebase
 
@@ -334,7 +334,7 @@ Phase 4–7 (horizontal expansion)
 ### Tasks
 
 - [ ] **8.1 OptiTrim Solver**
-  - [ ] Symbolic NLP formulation using `janus::Opti`
+  - [ ] Symbolic NLP formulation using `metis::Opti`
   - [ ] IPOPT integration for constrained optimization
   - [ ] Weighted residuals for over-determined systems
   - [ ] Optimal trim (minimize fuel, maximize range)

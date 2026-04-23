@@ -17,7 +17,7 @@
 #include <icarus/staging/SymbolicSimulatorCore.hpp>
 #include <icarus/staging/SymbolicStager.hpp>
 
-#include <janus/core/JanusTypes.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 using namespace icarus;
 using namespace icarus::staging;
@@ -181,7 +181,7 @@ TEST_F(SymbolicSimulatorCoreTest, SymbolicState) {
     SymbolicSimulatorCore sym_sim(config_);
 
     // Create symbolic state
-    auto [x_vec, x_mx] = janus::sym_vec_pair("x", 1);
+    auto [x_vec, x_mx] = metis::sym_vec_pair("x", 1);
 
     // Set state
     EXPECT_NO_THROW(sym_sim.SetState(x_vec));

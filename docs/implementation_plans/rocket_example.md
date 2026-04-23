@@ -95,7 +95,7 @@ vectors:
 
 ```cpp
 // Core calculation in Step():
-Scalar throttle = janus::clamp(throttle_cmd_.get(), Scalar(0), Scalar(1));
+Scalar throttle = metis::clamp(throttle_cmd_.get(), Scalar(0), Scalar(1));
 
 // Exhaust velocity from Isp
 Scalar Ve = vulcan::propulsion::rocket::exhaust_velocity(isp_vacuum_);
@@ -105,7 +105,7 @@ Scalar F_vac = throttle * max_thrust_;
 
 // Optional: altitude compensation
 // F = F_vac - P_atm * A_exit
-Scalar F = janus::where(
+Scalar F = metis::where(
     has_altitude_compensation_,
     vulcan::propulsion::altitude_thrust(F_vac, ambient_pressure_.get(), 0.0, nozzle_exit_area_),
     F_vac
@@ -172,7 +172,7 @@ vectors:
 fuel_mass_dot_ = -mass_flow_rate_.get();
 
 // Clamp to non-negative
-fuel_mass_dot_ = janus::where(fuel_mass_ <= Scalar(0), Scalar(0), fuel_mass_dot_);
+fuel_mass_dot_ = metis::where(fuel_mass_ <= Scalar(0), Scalar(0), fuel_mass_dot_);
 
 // Total mass
 mass_ = dry_mass_ + fuel_mass_;
@@ -485,7 +485,7 @@ bp.template register_state<Scalar>("fuel_mass", &fuel_mass_, &fuel_mass_dot_, "k
 
 // In Step():
 fuel_mass_dot_ = -mass_flow_rate_.get();
-fuel_mass_dot_ = janus::where(fuel_mass_ <= Scalar(0), Scalar(0), fuel_mass_dot_);
+fuel_mass_dot_ = metis::where(fuel_mass_ <= Scalar(0), Scalar(0), fuel_mass_dot_);
 mass_ = dry_mass_ + fuel_mass_;
 ```
 

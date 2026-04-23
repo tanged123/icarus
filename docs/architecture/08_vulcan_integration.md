@@ -1,16 +1,16 @@
 # Vulcan Integration (Engineering Library)
 
-**Related:** [07_janus_integration.md](07_janus_integration.md) | [01_core_philosophy.md](01_core_philosophy.md) | [12_force_aggregation.md](12_force_aggregation.md)
+**Related:** [07_metis_integration.md](07_metis_integration.md) | [01_core_philosophy.md](01_core_philosophy.md) | [12_force_aggregation.md](12_force_aggregation.md)
 
 ---
 
-**Vulcan** is the domain-specific engineering library that sits between Janus (Math) and Icarus (Architecture).
+**Vulcan** is the domain-specific engineering library that sits between Metis (Math) and Icarus (Architecture).
 
 ---
 
 ## 1. Division of Responsibility: "Bricks vs. Houses"
 
-* **Janus:** The **Math** (Matrices, Autodiff, Solvers).
+* **Metis:** The **Math** (Matrices, Autodiff, Solvers).
 * **Vulcan:** The **Physics Utilities** (Stateless). Pure functions for dynamics, atmospherics, gravity. No internal state.
 * **Icarus:** The **Systems & State** (Stateful). Owns Component lifecycle, state vectors, and signal wiring.
 
@@ -26,7 +26,7 @@
 > **Why this split matters for Trajectory Optimization:**
 > By keeping the physics math in Vulcan as pure functions, you can use the *exact same dynamics code* in both:
 > 1. `Simulator<double>` for numeric simulation (real-time, Monte Carlo)
-> 2. `janus::Opti<MX>` for symbolic optimization (direct collocation, MPC)
+> 2. `metis::Opti<MX>` for symbolic optimization (direct collocation, MPC)
 >
 > No need to maintain separate "low-fidelity" models for optimization.
 

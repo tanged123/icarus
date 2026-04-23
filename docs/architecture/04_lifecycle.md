@@ -95,7 +95,7 @@ The `Stage(RunConfig)` function acts as a solver pipeline:
 
 1. **Zeroing:** Wipe state derivatives ($\dot{x}$) and time ($t=0$).
 2. **Hard Constraints (Reset):** Apply fixed values from config (e.g., `Position = [0,0,1000]`).
-3. **Soft Constraints (Trim):** If `RunConfig.mode == EQUILIBRIUM`, we can leverage the **Dual-Headed** nature of Janus:
+3. **Soft Constraints (Trim):** If `RunConfig.mode == EQUILIBRIUM`, we can leverage the **Dual-Headed** nature of Metis:
     * *Numeric Trim:* Simple Newton-Raphson on the C++ `double` step function for basic cases.
     * *Symbolic Trim:* Instantiate a temporary `Simulator<casadi::MX>`, trace the forces calculation graph $\sum F(x, u)$, and pass it to a robust nonlinear solver (IPOPT/Kinsol) to find the exact trim state. This is significantly more robust for complex, highly nonlinear vehicles.
 4. **Binding:** Resolve input pointers from the Backplane.

@@ -1,15 +1,15 @@
 #!/bin/bash
 # =============================================================================
-# janus_audit.sh - Janus Compliance Audit for Icarus
+# metis_audit.sh - Metis Compliance Audit for Icarus
 # =============================================================================
 #
-# Scans the Icarus codebase for potential Janus violations:
-# 1. std:: math functions (should use janus:: versions)
-# 2. if/else branching on Scalar types (should use janus::where)
+# Scans the Icarus codebase for potential Metis violations:
+# 1. std:: math functions (should use metis:: versions)
+# 2. if/else branching on Scalar types (should use metis::where)
 # 3. while loops with dynamic bounds (should use structural for loops)
 # 4. Hardcoded 'double' in template functions
 #
-# Usage: ./scripts/janus_audit.sh
+# Usage: ./scripts/metis_audit.sh
 #
 # Exit codes:
 #   0 - No violations found
@@ -33,16 +33,16 @@ cd "$PROJECT_ROOT"
 VIOLATIONS_FOUND=0
 
 echo "=============================================="
-echo "       Janus Compliance Audit for Icarus"
+echo "       Metis Compliance Audit for Icarus"
 echo "=============================================="
 
 # =============================================================================
 # Check 1: std:: math functions
 # =============================================================================
 echo -e "\n${YELLOW}[1/4] Checking for std:: math usage...${NC}"
-echo "      (Should use janus:: equivalents for Scalar compatibility)"
+echo "      (Should use metis:: equivalents for Scalar compatibility)"
 
-# List of math functions that should use janus:: versions
+# List of math functions that should use metis:: versions
 MATH_FUNCS="sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|sqrt|pow|exp|log|log10|log2|abs|fabs|fmod|floor|ceil|round|fmax|fmin|hypot"
 
 # Exclude test files and known safe locations
@@ -61,7 +61,7 @@ fi
 # Check 2: if/else on Scalar types (heuristic)
 # =============================================================================
 echo -e "\n${YELLOW}[2/4] Checking for potential if/else on Scalar...${NC}"
-echo "      (Should use janus::where for branching on Scalar values)"
+echo "      (Should use metis::where for branching on Scalar values)"
 
 # This is a heuristic - look for patterns like "if (x > 0)" where x could be Scalar
 # We look for comparisons involving common variable patterns
@@ -70,7 +70,7 @@ if grep -rn $EXCLUDE_PATTERN --include="*.hpp" --include="*.cpp" \
     include/ src/ components/ 2>/dev/null | \
     grep -v "size\|count\|index\|phase\|mode\|flag\|state_\|Phase::\|if constexpr" | head -20; then
     echo -e "${YELLOW}  WARNING: Potential if/else on Scalar (false positives possible)${NC}"
-    echo "           Review the above lines manually for Janus compliance"
+    echo "           Review the above lines manually for Metis compliance"
 else
     echo -e "${GREEN}  PASS: No obvious if/Scalar patterns found${NC}"
 fi

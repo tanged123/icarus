@@ -39,9 +39,9 @@
 #include <unordered_set>
 #include <vector>
 
-// Janus includes for symbolic graph generation
-#include <janus/core/Function.hpp>
-#include <janus/core/JanusTypes.hpp>
+// Metis includes for symbolic graph generation
+#include <metis/core/Function.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 // Vulcan time infrastructure
 #include <vulcan/time/Epoch.hpp>
@@ -270,13 +270,13 @@ class Simulator {
      * @brief Get symbolic dynamics graph
      * Available after Stage() if symbolics.enabled = true.
      */
-    [[nodiscard]] std::optional<janus::Function> GetDynamicsGraph() const;
+    [[nodiscard]] std::optional<metis::Function> GetDynamicsGraph() const;
 
     /**
      * @brief Get symbolic Jacobian
      * Available after Stage() if symbolics.generate_jacobian = true.
      */
-    [[nodiscard]] std::optional<janus::Function> GetJacobian() const;
+    [[nodiscard]] std::optional<metis::Function> GetJacobian() const;
 
     /**
      * @brief Get trim result
@@ -381,8 +381,8 @@ class Simulator {
     int frame_count_ = 0;
 
     // Symbolic results (optional, after Stage)
-    std::optional<janus::Function> dynamics_graph_;
-    std::optional<janus::Function> jacobian_;
+    std::optional<metis::Function> dynamics_graph_;
+    std::optional<metis::Function> jacobian_;
 
     // Recording (optional, when enabled in config)
     std::unique_ptr<HDF5Recorder> recorder_;
@@ -980,7 +980,7 @@ inline void Simulator::Step(double dt) {
     } else {
         // Create derivative function for integrator
         auto deriv_func = [this, &ctx, dt](double t,
-                                           const JanusVector<double> &x) -> JanusVector<double> {
+                                           const MetisVector<double> &x) -> MetisVector<double> {
             state_manager_.SetState(x);
             state_manager_.ZeroDerivatives();
 
@@ -997,8 +997,8 @@ inline void Simulator::Step(double dt) {
 
         // Integrate
         try {
-            JanusVector<double> X = state_manager_.GetState();
-            JanusVector<double> X_new = integration_manager_.Step(deriv_func, X, t, dt);
+            MetisVector<double> X = state_manager_.GetState();
+            MetisVector<double> X_new = integration_manager_.Step(deriv_func, X, t, dt);
             state_manager_.SetState(X_new);
         } catch (const Error &e) {
             LogError(e, t, "Integrator");
@@ -1047,8 +1047,8 @@ inline void Simulator::Reset() {
 
     // Zero state
     if (state_manager_.TotalSize() > 0) {
-        JanusVector<double> zero =
-            JanusVector<double>::Zero(static_cast<Eigen::Index>(state_manager_.TotalSize()));
+        MetisVector<double> zero =
+            MetisVector<double>::Zero(static_cast<Eigen::Index>(state_manager_.TotalSize()));
         state_manager_.SetState(zero);
     }
 
@@ -1146,7 +1146,7 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
 
     // Derivative function with scheduler filtering
     auto deriv_func = [this, &ctx,
-                       dt_request](double t, const JanusVector<double> &x) -> JanusVector<double> {
+                       dt_request](double t, const MetisVector<double> &x) -> MetisVector<double> {
         state_manager_.SetState(x);
         state_manager_.ZeroDerivatives();
 
@@ -1161,7 +1161,7 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
         return state_manager_.GetDerivatives(ctx.active_components);
     };
 
-    JanusVector<double> X = state_manager_.GetState();
+    MetisVector<double> X = state_manager_.GetState();
     AdaptiveStepResult<double> result;
     try {
         result = integration_manager_.AdaptiveStep(deriv_func, X, t, dt_request);
@@ -1182,11 +1182,11 @@ inline AdaptiveStepResult<double> Simulator::AdaptiveStep(double dt_request) {
     return result;
 }
 
-inline std::optional<janus::Function> Simulator::GetDynamicsGraph() const {
+inline std::optional<metis::Function> Simulator::GetDynamicsGraph() const {
     return dynamics_graph_;
 }
 
-inline std::optional<janus::Function> Simulator::GetJacobian() const { return jacobian_; }
+inline std::optional<metis::Function> Simulator::GetJacobian() const { return jacobian_; }
 
 inline DataDictionary Simulator::GetDataDictionary() const {
     DataDictionary dict;

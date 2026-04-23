@@ -63,7 +63,7 @@ Icarus remains single-threaded per instance; Hydra handles parallelism.
 | **Backplane** | NOT thread-safe (single writer per signal) |
 | **Simulator** | NOT thread-safe (single-threaded execution) |
 | **Vulcan functions** | Thread-safe (stateless, pure functions) |
-| **Janus math** | Thread-safe (no mutable state) |
+| **Metis math** | Thread-safe (no mutable state) |
 
 ---
 

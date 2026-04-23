@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
         // Export interactive HTML graph visualization
         fs::create_directories("output");
         try {
-            janus::export_graph_deep(f, "output/dynamics_graph", janus::DeepGraphFormat::HTML,
+            metis::export_graph_deep(f, "output/dynamics_graph", metis::DeepGraphFormat::HTML,
                                      "Orbital Dynamics");
             std::cout << "  📊 Exported: output/dynamics_graph.html\n";
         } catch (const std::exception &e) {

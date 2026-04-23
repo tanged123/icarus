@@ -15,7 +15,7 @@
 
 #include <icarus/icarus.hpp>
 
-#include <janus/math/Quaternion.hpp>
+#include <metis/math/Quaternion.hpp>
 
 #include <cmath>
 #include <filesystem>
@@ -41,7 +41,7 @@ class TumblingBodyTest : public ::testing::Test {
     /**
      * @brief Compute angular momentum in inertial frame
      */
-    Vec3<double> ComputeAngularMomentumInertial(const janus::Quaternion<double> &q,
+    Vec3<double> ComputeAngularMomentumInertial(const metis::Quaternion<double> &q,
                                                 const Vec3<double> &omega_body) const {
         Mat3<double> I = Mat3<double>::Zero();
         I(0, 0) = Ix;
@@ -93,7 +93,7 @@ TEST_F(TumblingBodyTest, AngularMomentumConserved) {
     auto state0 = sim->GetState();
     ASSERT_EQ(state0.size(), 13u);
 
-    janus::Quaternion<double> q0(state0[6], state0[7], state0[8], state0[9]);
+    metis::Quaternion<double> q0(state0[6], state0[7], state0[8], state0[9]);
     Vec3<double> omega0_state{state0[10], state0[11], state0[12]};
     Vec3<double> H0 = ComputeAngularMomentumInertial(q0, omega0_state);
     double H0_mag = H0.norm();
@@ -108,7 +108,7 @@ TEST_F(TumblingBodyTest, AngularMomentumConserved) {
 
     // Check final
     auto state = sim->GetState();
-    janus::Quaternion<double> q(state[6], state[7], state[8], state[9]);
+    metis::Quaternion<double> q(state[6], state[7], state[8], state[9]);
     Vec3<double> omega{state[10], state[11], state[12]};
     Vec3<double> H = ComputeAngularMomentumInertial(q, omega);
 

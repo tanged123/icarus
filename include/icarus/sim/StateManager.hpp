@@ -101,10 +101,10 @@ template <typename Scalar> class StateManager {
     /**
      * @brief Get copy of current state as a vector
      *
-     * Gathers state values from component-owned storage into a JanusVector.
+     * Gathers state values from component-owned storage into a MetisVector.
      */
-    [[nodiscard]] JanusVector<Scalar> GetState() const {
-        JanusVector<Scalar> X(static_cast<Eigen::Index>(bindings_.size()));
+    [[nodiscard]] MetisVector<Scalar> GetState() const {
+        MetisVector<Scalar> X(static_cast<Eigen::Index>(bindings_.size()));
         for (std::size_t i = 0; i < bindings_.size(); ++i) {
             X(static_cast<Eigen::Index>(i)) = *bindings_[i].value_ptr;
         }
@@ -114,11 +114,11 @@ template <typename Scalar> class StateManager {
     /**
      * @brief Set state from external vector
      *
-     * Scatters values from JanusVector back to component-owned storage.
+     * Scatters values from MetisVector back to component-owned storage.
      *
      * @param X New state vector (must match size)
      */
-    void SetState(const JanusVector<Scalar> &X) {
+    void SetState(const MetisVector<Scalar> &X) {
         if (static_cast<std::size_t>(X.size()) != bindings_.size()) {
             throw std::invalid_argument("State vector size mismatch: expected " +
                                         std::to_string(bindings_.size()) + ", got " +
@@ -134,8 +134,8 @@ template <typename Scalar> class StateManager {
      *
      * Gathers derivative values from component-owned storage.
      */
-    [[nodiscard]] JanusVector<Scalar> GetDerivatives() const {
-        JanusVector<Scalar> X_dot(static_cast<Eigen::Index>(bindings_.size()));
+    [[nodiscard]] MetisVector<Scalar> GetDerivatives() const {
+        MetisVector<Scalar> X_dot(static_cast<Eigen::Index>(bindings_.size()));
         for (std::size_t i = 0; i < bindings_.size(); ++i) {
             X_dot(static_cast<Eigen::Index>(i)) = *bindings_[i].derivative_ptr;
         }
@@ -152,9 +152,9 @@ template <typename Scalar> class StateManager {
      *                          Empty set means all components are active.
      * @return Derivative vector with zeros for inactive components
      */
-    [[nodiscard]] JanusVector<Scalar>
+    [[nodiscard]] MetisVector<Scalar>
     GetDerivatives(const std::unordered_set<std::string> &active_components) const {
-        JanusVector<Scalar> X_dot(static_cast<Eigen::Index>(bindings_.size()));
+        MetisVector<Scalar> X_dot(static_cast<Eigen::Index>(bindings_.size()));
         for (std::size_t i = 0; i < bindings_.size(); ++i) {
             bool is_active = active_components.empty() ||
                              active_components.contains(bindings_[i].component_name);
