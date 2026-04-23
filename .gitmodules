@@ -1,6 +1,6 @@
 [submodule "references/vulcan"]
 	path = references/vulcan
 	url = https://github.com/tanged123/vulcan.git
-[submodule "references/janus"]
-	path = references/janus
-	url = https://github.com/tanged123/janus.git
+[submodule "references/metis"]
+	path = references/metis
+	url = https://github.com/tanged123/metis.git
