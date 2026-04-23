@@ -235,7 +235,7 @@ TEST(YamlIntegration, MultiStepSimulation) {
     sim.Stage();
 
     // Set non-zero initial state
-    JanusVector<double> x0(2);
+    MetisVector<double> x0(2);
     x0 << 10.0, 5.0;
     sim.SetState(x0);
 

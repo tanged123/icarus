@@ -24,7 +24,7 @@ namespace icarus {
  * @tparam Scalar Numeric type (double or casadi::MX)
  */
 template <typename Scalar> struct AdaptiveStepResult {
-    JanusVector<Scalar> state; ///< New state at t + dt_actual
+    MetisVector<Scalar> state; ///< New state at t + dt_actual
     Scalar dt_actual;          ///< Actual step taken (may differ from requested)
     Scalar error_estimate;     ///< Local truncation error estimate
     bool accepted;             ///< Whether step was accepted
@@ -52,7 +52,7 @@ template <typename Scalar> class Integrator {
      * Maps (t, X) → dX/dt
      */
     using DerivativeFunc =
-        std::function<JanusVector<Scalar>(Scalar t, const JanusVector<Scalar> &x)>;
+        std::function<MetisVector<Scalar>(Scalar t, const MetisVector<Scalar> &x)>;
 
     /**
      * @brief Advance state by one step
@@ -63,7 +63,7 @@ template <typename Scalar> class Integrator {
      * @param dt Requested time step
      * @return New state at t + dt
      */
-    virtual JanusVector<Scalar> Step(const DerivativeFunc &f, const JanusVector<Scalar> &x,
+    virtual MetisVector<Scalar> Step(const DerivativeFunc &f, const MetisVector<Scalar> &x,
                                      Scalar t, Scalar dt) = 0;
 
     /**
@@ -114,7 +114,7 @@ template <typename Scalar> class AdaptiveIntegrator : public Integrator<Scalar> 
      * @return Result with actual step, error, and acceptance status
      */
     virtual AdaptiveStepResult<Scalar>
-    AdaptiveStep(const DerivativeFunc &f, const JanusVector<Scalar> &x, Scalar t, Scalar dt) = 0;
+    AdaptiveStep(const DerivativeFunc &f, const MetisVector<Scalar> &x, Scalar t, Scalar dt) = 0;
 
     [[nodiscard]] bool IsAdaptive() const override { return true; }
 

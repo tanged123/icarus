@@ -441,7 +441,7 @@ TEST(ForceAggregator, CombinedMomentAndTransfer) {
 // =============================================================================
 
 TEST(ForceAggregatorSymbolic, BasicCompiles) {
-    ForceAggregator<janus::SymbolicScalar> agg;
+    ForceAggregator<metis::SymbolicScalar> agg;
     // Just verify it compiles
     EXPECT_EQ(agg.Name(), "ForceAggregator");
 }

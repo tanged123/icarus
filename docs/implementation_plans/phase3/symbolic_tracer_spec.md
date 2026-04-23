@@ -8,7 +8,7 @@
 
 ## Purpose
 
-The SymbolicTracer extracts the computational graph from a `Simulator<SymbolicScalar>` as a `janus::Function`. This enables:
+The SymbolicTracer extracts the computational graph from a `Simulator<SymbolicScalar>` as a `metis::Function`. This enables:
 
 1. **Automatic Differentiation**: Jacobians, Hessians for sensitivity analysis
 2. **Optimization**: NLP formulation for trajectory optimization
@@ -22,10 +22,10 @@ The SymbolicTracer extracts the computational graph from a `Simulator<SymbolicSc
 ### Core Concept
 
 The tracer works by:
-1. Creating symbolic variables for state and time using `janus::sym()`
+1. Creating symbolic variables for state and time using `metis::sym()`
 2. "Playing" these through the simulation's `ComputeDerivatives()` path
 3. Capturing the resulting symbolic expressions for state derivatives
-4. Packaging as a `janus::Function`
+4. Packaging as a `metis::Function`
 
 ```
                     Simulator<SymbolicScalar>
@@ -45,7 +45,7 @@ The tracer works by:
                        │                 │
                        ▼                 ▼
               ┌─────────────────────────────────────┐
-              │ janus::Function("dynamics",         │
+              │ metis::Function("dynamics",         │
               │   {t, x, u}, {xdot})                │
               └─────────────────────────────────────┘
 ```
@@ -58,8 +58,8 @@ The tracer works by:
 #include <icarus/sim/Simulator.hpp>
 #include <icarus/core/Types.hpp>
 
-#include <janus/core/Function.hpp>
-#include <janus/core/JanusTypes.hpp>
+#include <metis/core/Function.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 #include <string>
 #include <vector>
@@ -79,7 +79,7 @@ struct TracerConfig {
 /**
  * @brief Extracts computational graph from symbolic simulator
  *
- * The tracer produces a janus::Function representing the system dynamics:
+ * The tracer produces a metis::Function representing the system dynamics:
  *   xdot = f(t, x, u)
  *
  * Where:
@@ -108,16 +108,16 @@ public:
     // =========================================================================
 
     /**
-     * @brief Trace dynamics to produce janus::Function
+     * @brief Trace dynamics to produce metis::Function
      * @return Function with signature (t, x, [u]) -> (xdot)
      *
      * The function is suitable for:
      * - Direct evaluation: dynamics(t_val, x_val) -> std::vector<NumericMatrix>
-     * - Jacobian via janus::jacobian()
-     * - Integration: Use in janus::integrate
-     * - NLP formulation: Add as constraint in janus::Opti
+     * - Jacobian via metis::jacobian()
+     * - Integration: Use in metis::integrate
+     * - NLP formulation: Add as constraint in metis::Opti
      */
-    janus::Function TraceDynamics();
+    metis::Function TraceDynamics();
 
     /**
      * @brief Trace outputs (all signals, not just states)
@@ -125,7 +125,7 @@ public:
      *
      * Useful for computing observables like altitude, velocity magnitude.
      */
-    janus::Function TraceOutputs(const std::vector<std::string>& output_signals);
+    metis::Function TraceOutputs(const std::vector<std::string>& output_signals);
 
     /**
      * @brief Trace single step including integrator
@@ -133,7 +133,7 @@ public:
      * @param dt Step size
      * @return Function with signature (t, x, [u], dt) -> (x_next)
      */
-    janus::Function TraceStep(const std::string& integrator_type,
+    metis::Function TraceStep(const std::string& integrator_type,
                               SymbolicScalar dt);
 
     // =========================================================================
@@ -169,15 +169,15 @@ private:
     Simulator<SymbolicScalar>& sim_;
     TracerConfig config_;
 
-    // Cached symbolic variables (using Janus types)
+    // Cached symbolic variables (using Metis types)
     SymbolicScalar t_sym_;
-    janus::SymbolicVector x_sym_;
-    janus::SymbolicVector u_sym_;
+    metis::SymbolicVector x_sym_;
+    metis::SymbolicVector u_sym_;
 
     // Internal helpers
     void CreateSymbolicVariables();
     void ScatterSymbolicState();
-    void GatherSymbolicDerivatives(janus::SymbolicVector& xdot);
+    void GatherSymbolicDerivatives(metis::SymbolicVector& xdot);
     std::vector<std::string> DetectControlSignals() const;
 };
 
@@ -188,7 +188,7 @@ private:
 /**
  * @brief Quick dynamics extraction (uses default config)
  */
-inline janus::Function ExtractDynamics(Simulator<SymbolicScalar>& sim) {
+inline metis::Function ExtractDynamics(Simulator<SymbolicScalar>& sim) {
     return SymbolicTracer(sim).TraceDynamics();
 }
 
@@ -204,18 +204,18 @@ inline janus::Function ExtractDynamics(Simulator<SymbolicScalar>& sim) {
 ```cpp
 void SymbolicTracer::CreateSymbolicVariables() {
     // Time (scalar symbolic variable)
-    t_sym_ = janus::sym("t");
+    t_sym_ = metis::sym("t");
 
     // State vector (from simulator's state registry)
     size_t n_states = sim_.GetTotalStateSize();
-    x_sym_ = janus::sym_vec("x", n_states);
+    x_sym_ = metis::sym_vec("x", n_states);
 
     // Control vector (detected or configured)
     auto control_names = config_.control_signals.empty()
         ? DetectControlSignals()
         : config_.control_signals;
     size_t n_controls = control_names.size();
-    u_sym_ = janus::sym_vec("u", n_controls);
+    u_sym_ = metis::sym_vec("u", n_controls);
 }
 ```
 
@@ -223,7 +223,7 @@ void SymbolicTracer::CreateSymbolicVariables() {
 
 ```cpp
 void SymbolicTracer::ScatterSymbolicState() {
-    // Get simulator's global state pointer (JanusVector<SymbolicScalar>)
+    // Get simulator's global state pointer (MetisVector<SymbolicScalar>)
     auto& X_global = sim_.GetStateVector();
 
     // Replace numeric values with symbolic
@@ -239,7 +239,7 @@ void SymbolicTracer::ScatterSymbolicState() {
 ### Step 3: Evaluate Derivatives
 
 ```cpp
-janus::Function SymbolicTracer::TraceDynamics() {
+metis::Function SymbolicTracer::TraceDynamics() {
     CreateSymbolicVariables();
     ScatterSymbolicState();
 
@@ -250,25 +250,25 @@ janus::Function SymbolicTracer::TraceDynamics() {
     sim_.ComputeDerivatives(t_sym_);
 
     // Gather derivatives
-    janus::SymbolicVector xdot;
+    metis::SymbolicVector xdot;
     GatherSymbolicDerivatives(xdot);
 
-    // Build function using janus::Function
-    // Convert to SymbolicArg for janus::Function constructor
-    std::vector<janus::SymbolicArg> inputs = {t_sym_, x_sym_};
+    // Build function using metis::Function
+    // Convert to SymbolicArg for metis::Function constructor
+    std::vector<metis::SymbolicArg> inputs = {t_sym_, x_sym_};
 
     if (config_.include_controls && u_sym_.size() > 0) {
         inputs.push_back(u_sym_);
     }
 
-    return janus::Function(config_.function_name, inputs, {xdot});
+    return metis::Function(config_.function_name, inputs, {xdot});
 }
 ```
 
 ### Step 4: Gather Derivatives
 
 ```cpp
-void SymbolicTracer::GatherSymbolicDerivatives(janus::SymbolicVector& xdot) {
+void SymbolicTracer::GatherSymbolicDerivatives(metis::SymbolicVector& xdot) {
     auto& X_dot_global = sim_.GetStateDerivativeVector();
 
     xdot.resize(X_dot_global.size());
@@ -322,13 +322,13 @@ Simulator<SymbolicScalar> sim;
 // Extract dynamics
 auto dynamics = icarus::symbolic::ExtractDynamics(sim);
 
-// Evaluate at specific point using janus::Function
+// Evaluate at specific point using metis::Function
 double t0 = 0.0;
-janus::NumericVector x0 = janus::NumericVector::Zero(6);  // 3 pos + 3 vel
+metis::NumericVector x0 = metis::NumericVector::Zero(6);  // 3 pos + 3 vel
 x0(0) = 6.778e6;  // Initial radius (Earth + 400km)
 x0(4) = 7660.0;   // Circular velocity
 
-auto result = dynamics(t0, x0);  // Returns std::vector<janus::NumericMatrix>
+auto result = dynamics(t0, x0);  // Returns std::vector<metis::NumericMatrix>
 auto xdot = result[0];
 std::cout << "State derivatives:\n" << xdot << "\n";
 ```
@@ -336,22 +336,22 @@ std::cout << "State derivatives:\n" << xdot << "\n";
 ### Jacobian for Linearization
 
 ```cpp
-#include <janus/math/AutoDiff.hpp>
+#include <metis/math/AutoDiff.hpp>
 
 auto dynamics = tracer.TraceDynamics();
 
 // Build Jacobian symbolically
-auto t_sym = janus::sym("t");
-auto x_sym = janus::sym_vec("x", 6);
+auto t_sym = metis::sym("t");
+auto x_sym = metis::sym_vec("x", 6);
 
 // Evaluate dynamics symbolically
 auto xdot_sym = dynamics.eval(t_sym, x_sym);
 
-// Compute Jacobian using janus::jacobian
-auto J_sym = janus::jacobian({janus::as_mx(xdot_sym)}, {janus::as_mx(x_sym)});
+// Compute Jacobian using metis::jacobian
+auto J_sym = metis::jacobian({metis::as_mx(xdot_sym)}, {metis::as_mx(x_sym)});
 
 // Wrap as function for numeric evaluation
-janus::Function jacobian_fn("A", {t_sym, janus::as_mx(x_sym)}, {J_sym[0]});
+metis::Function jacobian_fn("A", {t_sym, metis::as_mx(x_sym)}, {J_sym[0]});
 
 // Evaluate at equilibrium point
 auto A_numeric = jacobian_fn.eval(t0, x_eq);
@@ -364,13 +364,13 @@ std::cout << "Linearized A matrix:\n" << A_numeric << "\n";
 ### Trajectory Optimization with Opti
 
 ```cpp
-#include <janus/optimization/Opti.hpp>
+#include <metis/optimization/Opti.hpp>
 
 // Extract dynamics
 auto f = tracer.TraceDynamics();
 
-// Build NLP using janus::Opti
-janus::Opti opti;
+// Build NLP using metis::Opti
+metis::Opti opti;
 int N = 100;  // Horizon
 double dt = 1.0;
 
@@ -432,7 +432,7 @@ TEST(SymbolicTracer, DynamicsFunctionDimensions) {
 
     // Evaluate to check output dimensions
     // Point mass: 6 states (3 pos + 3 vel)
-    janus::NumericVector x0 = janus::NumericVector::Zero(6);
+    metis::NumericVector x0 = metis::NumericVector::Zero(6);
     auto result = dynamics(0.0, x0);
 
     EXPECT_EQ(result[0].rows(), 6);
@@ -444,15 +444,15 @@ TEST(SymbolicTracer, JacobianExtraction) {
     auto dynamics = SymbolicTracer(sim).TraceDynamics();
 
     // Build Jacobian symbolically
-    auto t_sym = janus::sym("t");
-    auto x_sym = janus::sym_vec("x", 6);
+    auto t_sym = metis::sym("t");
+    auto x_sym = metis::sym_vec("x", 6);
     auto xdot_sym = dynamics.eval(t_sym, x_sym);
-    auto J_sym = janus::jacobian({janus::as_mx(xdot_sym)}, {janus::as_mx(x_sym)});
+    auto J_sym = metis::jacobian({metis::as_mx(xdot_sym)}, {metis::as_mx(x_sym)});
 
-    janus::Function jacobian_fn("J", {t_sym, janus::as_mx(x_sym)}, {J_sym[0]});
+    metis::Function jacobian_fn("J", {t_sym, metis::as_mx(x_sym)}, {J_sym[0]});
 
     // Evaluate at a point
-    janus::NumericVector x0 = janus::NumericVector::Zero(6);
+    metis::NumericVector x0 = metis::NumericVector::Zero(6);
     auto J = jacobian_fn.eval(0.0, x0);
 
     // Jacobian should be 6x6
@@ -469,7 +469,7 @@ TEST(SymbolicTracer, NumericEvaluation) {
     auto num_sim = BuildNumericPointMassSim();
 
     // Initial state
-    janus::NumericVector x0 = GetInitialState();
+    metis::NumericVector x0 = GetInitialState();
     double t0 = 0.0;
 
     // Symbolic function evaluation (returns numeric)
@@ -500,13 +500,13 @@ public:
     // ... existing interface ...
 
     /**
-     * @brief Generate janus::Function from dynamics
+     * @brief Generate metis::Function from dynamics
      * @note Only available when Scalar = SymbolicScalar
      *
      * Requires simulator to be in Stage phase.
      */
     template <typename S = Scalar>
-    std::enable_if_t<std::is_same_v<S, SymbolicScalar>, janus::Function>
+    std::enable_if_t<std::is_same_v<S, SymbolicScalar>, metis::Function>
     GenerateGraph() const {
         return symbolic::SymbolicTracer(const_cast<Simulator&>(*this))
             .TraceDynamics();
@@ -517,8 +517,8 @@ public:
 
 protected:
     // Expose for tracing
-    JanusVector<Scalar>& GetStateVector() { return X_global_; }
-    JanusVector<Scalar>& GetStateDerivativeVector() { return X_dot_global_; }
+    MetisVector<Scalar>& GetStateVector() { return X_global_; }
+    MetisVector<Scalar>& GetStateDerivativeVector() { return X_dot_global_; }
 };
 ```
 
@@ -529,7 +529,7 @@ protected:
 1. **Tracing is One-Time**: Graph built once, evaluated many times
 2. **Graph Size**: Complex simulations may produce large symbolic graphs
 3. **JIT Compilation**: Use `dynamics.casadi_function().generate()` for hot paths
-4. **Sparsity**: Janus/CasADi automatically detects sparsity in Jacobians
+4. **Sparsity**: Metis/CasADi automatically detects sparsity in Jacobians
 
 ---
 

@@ -93,7 +93,7 @@ Icarus does **not** implement its own interpolator. Instead, it uses the existin
 └───────────────────────────┬─────────────────────────────────┘
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Janus: janus::Interpolator                                 │
+│  Metis: metis::Interpolator                                 │
 │  - Core math (linear, bspline, hermite)                     │
 │  - CasADi symbolic backend                                  │
 └─────────────────────────────────────────────────────────────┘
@@ -125,7 +125,7 @@ void Aerodynamics<Scalar>::Provision(Backplane<Scalar>& bp, const ComponentConfi
 template <typename Scalar>
 void Aerodynamics<Scalar>::Step(Scalar t, Scalar dt) {
     // Vulcan's operator() is templated on Scalar (works for double and MX)
-    janus::JanusVector<Scalar> query(3);
+    metis::MetisVector<Scalar> query(3);
     query << mach, alpha, beta;
     Scalar cd = cd_table_(query);
 }
@@ -148,14 +148,14 @@ public:
 class TableData {
 public:
     // Breakpoint access
-    std::vector<janus::NumericVector> breakpoints(
+    std::vector<metis::NumericVector> breakpoints(
         const std::vector<std::string>& dims) const;
 
     // Value access (flattened, Fortran order)
-    janus::NumericVector values(const std::string& name) const;
+    metis::NumericVector values(const std::string& name) const;
 
     // Metadata
-    janus::InterpolationMethod interpolation_method(const std::string& name) const;
+    metis::InterpolationMethod interpolation_method(const std::string& name) const;
     std::string units(const std::string& name) const;
 
     // Introspection
@@ -176,7 +176,7 @@ See [vulcan/include/vulcan/core/TableInterpolator.hpp](file:///home/tanged/sourc
 | `vulcan::Table1D` | Single-variable lookups (altitude → temperature) |
 | `vulcan::TableND` | Multi-dimensional lookups (Mach × α × β → Cd) |
 
-Both wrap `janus::Interpolator` and support:
+Both wrap `metis::Interpolator` and support:
 - Templated `operator()` for numeric and symbolic evaluation
 - Automatic clamping at grid boundaries
 - Batch queries
@@ -215,8 +215,8 @@ For non-rectangular domains (e.g., flight envelope boundaries, wind tunnel test 
 #include <vulcan/core/TableInterpolator.hpp>
 
 // 2D scattered data: (Mach, alpha) pairs from wind tunnel tests
-janus::NumericMatrix points(n_samples, 2);  // Each row: [mach, alpha]
-janus::NumericVector cd_values(n_samples);
+metis::NumericMatrix points(n_samples, 2);  // Each row: [mach, alpha]
+metis::NumericVector cd_values(n_samples);
 
 // ... load test points and values ...
 
@@ -226,7 +226,7 @@ vulcan::ScatteredTableND table(points, cd_values, num_rbf_centers);
 std::cout << "Reconstruction error: " << table.reconstruction_error() << "\n";
 
 // Query at any point within the convex hull
-janus::JanusVector<Scalar> query(2);
+metis::MetisVector<Scalar> query(2);
 query << mach, alpha;
 Scalar cd = table(query);
 ```
@@ -247,11 +247,11 @@ Scalar cd = table(query);
 
 ### 6.1 Interpolator Caching
 
-The `janus::Interpolator` constructor builds a CasADi function at Provision time. This is cached for the simulation lifetime:
+The `metis::Interpolator` constructor builds a CasADi function at Provision time. This is cached for the simulation lifetime:
 
 ```cpp
 // Provision: O(n) construction, builds CasADi graph
-cd_interp_ = janus::Interpolator(breakpoints, values, method);
+cd_interp_ = metis::Interpolator(breakpoints, values, method);
 
 // Step: O(1) lookup, uses cached function
 Scalar cd = cd_interp_(query)(0);  // Fast!
@@ -294,5 +294,5 @@ try {
 ## 8. See Also
 
 - [21_symbolic_constraints.md](21_symbolic_constraints.md) - Symbolic-compatible interpolation
-- [janus/docs/user_guides/interpolation.md](file:///home/tanged/sources/janus/docs/user_guides/interpolation.md) - Janus `interpn` API
+- [metis/docs/user_guides/interpolation.md](file:///home/tanged/sources/metis/docs/user_guides/interpolation.md) - Metis `interpn` API
 - [13_configuration.md](13_configuration.md) - Table path configuration

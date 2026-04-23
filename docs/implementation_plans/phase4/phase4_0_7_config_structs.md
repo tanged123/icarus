@@ -116,7 +116,7 @@ namespace icarus {
  * @brief Trim optimization configuration
  *
  * Defines how the simulator finds equilibrium/trim conditions during Stage().
- * Uses symbolic mode internally (janus::NewtonSolver or janus::Opti/IPOPT).
+ * Uses symbolic mode internally (metis::NewtonSolver or metis::Opti/IPOPT).
  */
 struct TrimConfig {
     bool enabled = false;                    // Whether to run trim optimization

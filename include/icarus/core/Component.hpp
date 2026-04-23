@@ -11,7 +11,7 @@
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/CoreTypes.hpp>
 #include <icarus/core/Error.hpp>
-#include <janus/math/Quaternion.hpp>
+#include <metis/math/Quaternion.hpp>
 #include <string>
 #include <vector>
 #include <vulcan/time/Epoch.hpp>
@@ -192,8 +192,8 @@ template <typename Scalar> class Component {
      *
      * @return Identity quaternion for components without attachment
      */
-    [[nodiscard]] virtual janus::Quaternion<Scalar> GetBodyOrientation() const {
-        return janus::Quaternion<Scalar>();
+    [[nodiscard]] virtual metis::Quaternion<Scalar> GetBodyOrientation() const {
+        return metis::Quaternion<Scalar>();
     }
 
     // =========================================================================

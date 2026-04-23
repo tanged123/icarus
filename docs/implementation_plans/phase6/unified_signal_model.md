@@ -38,8 +38,8 @@ void register_state_vec3(const std::string& name, Vec3<S>* value, Vec3<S>* deriv
                          const std::string& unit = "", const std::string& desc = "");
 
 template <typename S>
-void register_state_quat(const std::string& name, janus::Quaternion<S>* value,
-                         janus::Quaternion<S>* derivative,
+void register_state_quat(const std::string& name, metis::Quaternion<S>* value,
+                         metis::Quaternion<S>* derivative,
                          const std::string& unit = "", const std::string& desc = "");
 ```
 
@@ -68,9 +68,9 @@ public:
     void DiscoverStates(const Backplane<Scalar>& bp);
     
     // Get/set integration vectors (built from discovered state pointers)
-    JanusVector<Scalar> GetState() const;
-    JanusVector<Scalar> GetDerivatives() const;
-    void SetState(const JanusVector<Scalar>& X);
+    MetisVector<Scalar> GetState() const;
+    MetisVector<Scalar> GetDerivatives() const;
+    void SetState(const MetisVector<Scalar>& X);
     void ZeroDerivatives();
     
 private:

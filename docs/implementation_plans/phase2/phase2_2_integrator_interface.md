@@ -1,7 +1,7 @@
 # Phase 2.2: Integrator Interface Implementation Plan
 
 **Status:** Proposed
-**Target:** Modular, user-configurable integrator interface with multiple Janus methods
+**Target:** Modular, user-configurable integrator interface with multiple Metis methods
 
 ---
 
@@ -41,7 +41,7 @@ Phase 2.2 establishes a **modular integration framework** that advances simulati
 │ Euler            RK2        RK4        RK45               │
 │ (1st order)   (2nd order) (4th order) (adaptive)          │
 │                                                             │
-│   All wrap corresponding janus::*_step() functions          │
+│   All wrap corresponding metis::*_step() functions          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -55,7 +55,7 @@ Phase 2.2 establishes a **modular integration framework** that advances simulati
 │        │                                                    │
 │        ▼                                                    │
 │   ┌─────────────┐                                          │
-│   │ Integrator  │ ─── Uses janus::rk4_step() or rk45_step()│
+│   │ Integrator  │ ─── Uses metis::rk4_step() or rk45_step()│
 │   │   .Step()   │                                          │
 │   └──────┬──────┘                                          │
 │          │                                                  │
@@ -94,8 +94,8 @@ Per [09_memory_state_ownership.md](../../architecture/09_memory_state_ownership.
 ```
 For each Simulator.Step(dt):
   1. Integrator receives derivative function λ(t, X) → X_dot
-  2. Integrator calls Janus step function (rk4_step or rk45_step)
-  3. Janus step function evaluates λ at multiple points (k₁, k₂, k₃, k₄)
+  2. Integrator calls Metis step function (rk4_step or rk45_step)
+  3. Metis step function evaluates λ at multiple points (k₁, k₂, k₃, k₄)
   4. Each λ evaluation:
      a. Simulator.SetState(X)
      b. Simulator.ComputeDerivatives(t)
@@ -107,24 +107,24 @@ For each Simulator.Step(dt):
 
 ---
 
-## Janus Integration API
+## Metis Integration API
 
-Janus provides four step integrators in [`IntegratorStep.hpp`](file:///home/tanged/sources/references/janus/include/janus/math/IntegratorStep.hpp):
+Metis provides four step integrators in [`IntegratorStep.hpp`](file:///home/tanged/sources/references/metis/include/metis/math/IntegratorStep.hpp):
 
 ### Fixed-Step Methods
 
 ```cpp
 // Forward Euler (1st order, 1 evaluation)
 template <typename Scalar, typename Func>
-JanusVector<Scalar> euler_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, Scalar dt);
+MetisVector<Scalar> euler_step(Func&& f, const MetisVector<Scalar>& x, Scalar t, Scalar dt);
 
 // Heun's Method / RK2 (2nd order, 2 evaluations)
 template <typename Scalar, typename Func>
-JanusVector<Scalar> rk2_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, Scalar dt);
+MetisVector<Scalar> rk2_step(Func&& f, const MetisVector<Scalar>& x, Scalar t, Scalar dt);
 
 // Classic RK4 (4th order, 4 evaluations)
 template <typename Scalar, typename Func>
-JanusVector<Scalar> rk4_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, Scalar dt);
+MetisVector<Scalar> rk4_step(Func&& f, const MetisVector<Scalar>& x, Scalar t, Scalar dt);
 ```
 
 ### Adaptive Method
@@ -132,21 +132,21 @@ JanusVector<Scalar> rk4_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, S
 ```cpp
 // Dormand-Prince RK45 (4th/5th order, 7 evaluations + error estimate)
 template <typename Scalar, typename Func>
-RK45Result<Scalar> rk45_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, Scalar dt);
+RK45Result<Scalar> rk45_step(Func&& f, const MetisVector<Scalar>& x, Scalar t, Scalar dt);
 
 template <typename Scalar>
 struct RK45Result {
-    JanusVector<Scalar> y5;    // 5th-order solution (use this)
-    JanusVector<Scalar> y4;    // 4th-order solution (for error)
+    MetisVector<Scalar> y5;    // 5th-order solution (use this)
+    MetisVector<Scalar> y4;    // 4th-order solution (for error)
     Scalar error;              // ||y5 - y4|| local truncation error
 };
 ```
 
 ### Function Signature
 
-All Janus integrators expect:
+All Metis integrators expect:
 ```cpp
-f(Scalar t, const JanusVector<Scalar>& x) -> JanusVector<Scalar>
+f(Scalar t, const MetisVector<Scalar>& x) -> MetisVector<Scalar>
 ```
 
 ---
@@ -159,13 +159,13 @@ f(Scalar t, const JanusVector<Scalar>& x) -> JanusVector<Scalar>
 /**
  * @brief Available integrator methods
  *
- * Maps directly to Janus step functions.
+ * Maps directly to Metis step functions.
  */
 enum class IntegratorType {
-    Euler,   ///< Forward Euler (1st order, 1 eval) - janus::euler_step
-    RK2,     ///< Heun's method (2nd order, 2 evals) - janus::rk2_step
-    RK4,     ///< Classic RK4 (4th order, 4 evals) - janus::rk4_step
-    RK45     ///< Dormand-Prince adaptive (5th order, 7 evals) - janus::rk45_step
+    Euler,   ///< Forward Euler (1st order, 1 eval) - metis::euler_step
+    RK2,     ///< Heun's method (2nd order, 2 evals) - metis::rk2_step
+    RK4,     ///< Classic RK4 (4th order, 4 evals) - metis::rk4_step
+    RK45     ///< Dormand-Prince adaptive (5th order, 7 evals) - metis::rk45_step
 };
 
 /**
@@ -467,7 +467,7 @@ namespace icarus {
  */
 template <typename Scalar>
 struct AdaptiveStepResult {
-    JanusVector<Scalar> state;     ///< New state at t + dt_actual
+    MetisVector<Scalar> state;     ///< New state at t + dt_actual
     Scalar dt_actual;              ///< Actual step taken (may differ from requested)
     Scalar error_estimate;         ///< Local truncation error estimate
     bool accepted;                 ///< Whether step was accepted
@@ -492,7 +492,7 @@ public:
      * Maps (t, X) → dX/dt
      */
     using DerivativeFunc =
-        std::function<JanusVector<Scalar>(Scalar t, const JanusVector<Scalar>& x)>;
+        std::function<MetisVector<Scalar>(Scalar t, const MetisVector<Scalar>& x)>;
 
     /**
      * @brief Advance state by one step
@@ -503,9 +503,9 @@ public:
      * @param dt Requested time step
      * @return New state at t + dt
      */
-    virtual JanusVector<Scalar> Step(
+    virtual MetisVector<Scalar> Step(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) = 0;
@@ -549,7 +549,7 @@ public:
      */
     virtual AdaptiveStepResult<Scalar> AdaptiveStep(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) = 0;
@@ -597,7 +597,7 @@ public:
  */
 
 #include <icarus/sim/Integrator.hpp>
-#include <janus/math/IntegratorStep.hpp>
+#include <metis/math/IntegratorStep.hpp>
 
 namespace icarus {
 
@@ -605,7 +605,7 @@ namespace icarus {
  * @brief Classic 4th-order Runge-Kutta integrator
  *
  * Fixed-step method with 4 function evaluations per step.
- * Wraps janus::rk4_step() for dual-mode compatibility.
+ * Wraps metis::rk4_step() for dual-mode compatibility.
  *
  * **Butcher Tableau:**
  * ```
@@ -623,13 +623,13 @@ class RK4Integrator : public Integrator<Scalar> {
 public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(
+    MetisVector<Scalar> Step(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) override {
-        return janus::rk4_step(f, x, t, dt);
+        return metis::rk4_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "RK4"; }
@@ -646,13 +646,13 @@ class EulerIntegrator : public Integrator<Scalar> {
 public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(
+    MetisVector<Scalar> Step(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) override {
-        return janus::euler_step(f, x, t, dt);
+        return metis::euler_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "Euler"; }
@@ -669,13 +669,13 @@ class RK2Integrator : public Integrator<Scalar> {
 public:
     using typename Integrator<Scalar>::DerivativeFunc;
 
-    JanusVector<Scalar> Step(
+    MetisVector<Scalar> Step(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) override {
-        return janus::rk2_step(f, x, t, dt);
+        return metis::rk2_step(f, x, t, dt);
     }
 
     [[nodiscard]] std::string Name() const override { return "RK2"; }
@@ -702,7 +702,7 @@ public:
  */
 
 #include <icarus/sim/Integrator.hpp>
-#include <janus/math/IntegratorStep.hpp>
+#include <metis/math/IntegratorStep.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -743,13 +743,13 @@ public:
      * For compatibility with base Integrator interface.
      * No step adaptation; returns 5th-order solution.
      */
-    JanusVector<Scalar> Step(
+    MetisVector<Scalar> Step(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) override {
-        auto result = janus::rk45_step(f, x, t, dt);
+        auto result = metis::rk45_step(f, x, t, dt);
         return result.y5;
     }
 
@@ -760,12 +760,12 @@ public:
      */
     AdaptiveStepResult<Scalar> AdaptiveStep(
         const DerivativeFunc& f,
-        const JanusVector<Scalar>& x,
+        const MetisVector<Scalar>& x,
         Scalar t,
         Scalar dt
     ) override {
         // Compute RK45 step
-        auto result = janus::rk45_step(f, x, t, dt);
+        auto result = metis::rk45_step(f, x, t, dt);
 
         // Compute error tolerance
         Scalar tol = ComputeTolerance(x, result.y5);
@@ -862,14 +862,14 @@ private:
      * tolerance = abs_tol + rel_tol * max(|x|, |x_new|)
      */
     [[nodiscard]] Scalar ComputeTolerance(
-        const JanusVector<Scalar>& x,
-        const JanusVector<Scalar>& x_new
+        const MetisVector<Scalar>& x,
+        const MetisVector<Scalar>& x_new
     ) const {
         Scalar max_norm = Scalar{0};
         for (Eigen::Index i = 0; i < x.size(); ++i) {
-            Scalar xi_abs = janus::abs(x[i]);
-            Scalar xi_new_abs = janus::abs(x_new[i]);
-            max_norm = janus::max(max_norm, janus::max(xi_abs, xi_new_abs));
+            Scalar xi_abs = metis::abs(x[i]);
+            Scalar xi_new_abs = metis::abs(x_new[i]);
+            max_norm = metis::max(max_norm, metis::max(xi_abs, xi_new_abs));
         }
         return abs_tol_ + rel_tol_ * max_norm;
     }
@@ -937,17 +937,17 @@ public:
         phase_ = Phase::Running;
 
         // Create derivative function for integrator
-        auto deriv_func = [this](Scalar t, const JanusVector<Scalar>& x)
-            -> JanusVector<Scalar> {
+        auto deriv_func = [this](Scalar t, const MetisVector<Scalar>& x)
+            -> MetisVector<Scalar> {
             this->SetState(x);
             return this->ComputeDerivatives(t);
         };
 
         // Get current state
-        JanusVector<Scalar> X = GetState();
+        MetisVector<Scalar> X = GetState();
 
         // Integrate (integrator_ always valid, defaults to RK4)
-        JanusVector<Scalar> X_new = integrator_->Step(deriv_func, X, time_, dt);
+        MetisVector<Scalar> X_new = integrator_->Step(deriv_func, X, time_, dt);
 
         // Update state
         SetState(X_new);
@@ -971,13 +971,13 @@ public:
             throw IntegratorError("AdaptiveStep() requires an AdaptiveIntegrator");
         }
 
-        auto deriv_func = [this](Scalar t, const JanusVector<Scalar>& x)
-            -> JanusVector<Scalar> {
+        auto deriv_func = [this](Scalar t, const MetisVector<Scalar>& x)
+            -> MetisVector<Scalar> {
             this->SetState(x);
             return this->ComputeDerivatives(t);
         };
 
-        JanusVector<Scalar> X = GetState();
+        MetisVector<Scalar> X = GetState();
         auto result = adaptive->AdaptiveStep(deriv_func, X, time_, dt_request);
 
         if (result.accepted) {
@@ -1063,18 +1063,18 @@ public:
     | 1/6 1/3 1/3 1/6
 ```
 
-### Implementation (From Janus)
+### Implementation (From Metis)
 
 ```cpp
 template <typename Scalar, typename Func>
-JanusVector<Scalar> rk4_step(Func&& f, const JanusVector<Scalar>& x, Scalar t, Scalar dt) {
-    JanusVector<Scalar> k1 = f(t, x);
-    JanusVector<Scalar> x1 = (x + dt * 0.5 * k1).eval();
-    JanusVector<Scalar> k2 = f(t + dt * 0.5, x1);
-    JanusVector<Scalar> x2 = (x + dt * 0.5 * k2).eval();
-    JanusVector<Scalar> k3 = f(t + dt * 0.5, x2);
-    JanusVector<Scalar> x3 = (x + dt * k3).eval();
-    JanusVector<Scalar> k4 = f(t + dt, x3);
+MetisVector<Scalar> rk4_step(Func&& f, const MetisVector<Scalar>& x, Scalar t, Scalar dt) {
+    MetisVector<Scalar> k1 = f(t, x);
+    MetisVector<Scalar> x1 = (x + dt * 0.5 * k1).eval();
+    MetisVector<Scalar> k2 = f(t + dt * 0.5, x1);
+    MetisVector<Scalar> x2 = (x + dt * 0.5 * k2).eval();
+    MetisVector<Scalar> k3 = f(t + dt * 0.5, x2);
+    MetisVector<Scalar> x3 = (x + dt * k3).eval();
+    MetisVector<Scalar> k4 = f(t + dt, x3);
 
     return (x + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)).eval();
 }
@@ -1142,16 +1142,16 @@ using namespace icarus;
 
 // Exponential decay: dx/dt = -x, x(0) = 1 => x(t) = e^(-t)
 template <typename Scalar>
-JanusVector<Scalar> exponential_decay(Scalar t, const JanusVector<Scalar>& x) {
+MetisVector<Scalar> exponential_decay(Scalar t, const MetisVector<Scalar>& x) {
     return -x;
 }
 
 // Harmonic oscillator: x'' + ω²x = 0
 // State: [x, v], dx/dt = v, dv/dt = -ω²x
 template <typename Scalar>
-JanusVector<Scalar> harmonic_oscillator(Scalar t, const JanusVector<Scalar>& x) {
+MetisVector<Scalar> harmonic_oscillator(Scalar t, const MetisVector<Scalar>& x) {
     const Scalar omega_sq = Scalar{4.0};  // ω = 2
-    JanusVector<Scalar> dx(2);
+    MetisVector<Scalar> dx(2);
     dx[0] = x[1];
     dx[1] = -omega_sq * x[0];
     return dx;
@@ -1160,9 +1160,9 @@ JanusVector<Scalar> harmonic_oscillator(Scalar t, const JanusVector<Scalar>& x) 
 // Free fall: y'' = -g
 // State: [y, v], dy/dt = v, dv/dt = -g
 template <typename Scalar>
-JanusVector<Scalar> free_fall(Scalar t, const JanusVector<Scalar>& x) {
+MetisVector<Scalar> free_fall(Scalar t, const MetisVector<Scalar>& x) {
     const Scalar g = Scalar{9.81};
-    JanusVector<Scalar> dx(2);
+    MetisVector<Scalar> dx(2);
     dx[0] = x[1];      // dy/dt = v
     dx[1] = -g;        // dv/dt = -g
     return dx;
@@ -1174,7 +1174,7 @@ JanusVector<Scalar> free_fall(Scalar t, const JanusVector<Scalar>& x) {
 
 TEST(RK4Integrator, ExponentialDecay) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -1192,7 +1192,7 @@ TEST(RK4Integrator, ExponentialDecay) {
 
 TEST(RK4Integrator, HarmonicOscillator) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(2);
+    MetisVector<double> x(2);
     x[0] = 1.0;  // Initial position
     x[1] = 0.0;  // Initial velocity
 
@@ -1215,7 +1215,7 @@ TEST(RK4Integrator, HarmonicOscillator) {
 
 TEST(RK4Integrator, FreeFall) {
     RK4Integrator<double> rk4;
-    JanusVector<double> x(2);
+    MetisVector<double> x(2);
     double y0 = 100.0;  // Initial height
     double v0 = 0.0;    // Initial velocity
     x[0] = y0;
@@ -1252,7 +1252,7 @@ TEST(RK4Integrator, OrderVerification) {
 
 TEST(RK45Integrator, ExponentialDecay) {
     RK45Integrator<double> rk45(1e-8, 1e-8);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -1269,7 +1269,7 @@ TEST(RK45Integrator, ExponentialDecay) {
 
 TEST(RK45Integrator, AdaptiveStep) {
     RK45Integrator<double> rk45(1e-6, 1e-6);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     double t = 0.0;
@@ -1296,7 +1296,7 @@ TEST(RK45Integrator, StepSizeSuggestion) {
 
 TEST(RK45Integrator, Statistics) {
     RK45Integrator<double> rk45(1e-6, 1e-6);
-    JanusVector<double> x(1);
+    MetisVector<double> x(1);
     x[0] = 1.0;
 
     rk45.ResetStatistics();
@@ -1434,13 +1434,13 @@ TEST(IntegratorSymbolic, RK4Compiles) {
     using MX = casadi::MX;
 
     RK4Integrator<MX> rk4;
-    auto x = janus::sym_vec("x", 2);
-    auto t = janus::sym("t");
-    auto dt = janus::sym("dt");
+    auto x = metis::sym_vec("x", 2);
+    auto t = metis::sym("t");
+    auto dt = metis::sym("dt");
 
     auto x_next = rk4.Step(
-        [](MX t, const JanusVector<MX>& x) {
-            JanusVector<MX> dx(2);
+        [](MX t, const MetisVector<MX>& x) {
+            MetisVector<MX> dx(2);
             dx[0] = x[1];
             dx[1] = -MX{4.0} * x[0];
             return dx;
@@ -1450,8 +1450,8 @@ TEST(IntegratorSymbolic, RK4Compiles) {
 
     // Create CasADi function
     casadi::Function step_fn("step",
-        {janus::to_mx(x), t, dt},
-        {janus::to_mx(x_next)}
+        {metis::to_mx(x), t, dt},
+        {metis::to_mx(x_next)}
     );
 
     // Evaluate numerically
@@ -1653,7 +1653,7 @@ TEST(SimulatorIntegrator, AllMethodsProduceResults) {
 ### Task 2.2b: Abstract Integrator Interface
 
 - [ ] Update `include/icarus/sim/Integrator.hpp`
-- [ ] Fix `DerivativeFunc` to use `JanusVector<Scalar>`
+- [ ] Fix `DerivativeFunc` to use `MetisVector<Scalar>`
 - [ ] Add `Name()` and `Order()` virtual methods
 - [ ] Add `IsAdaptive()` virtual method
 - [ ] Add `GetType()` returning `IntegratorType`
@@ -1664,11 +1664,11 @@ TEST(SimulatorIntegrator, AllMethodsProduceResults) {
 ### Task 2.2c: Integrator Implementations
 
 - [ ] Create `include/icarus/sim/RK4Integrator.hpp`
-- [ ] Implement `EulerIntegrator<Scalar>` wrapping `janus::euler_step()`
-- [ ] Implement `RK2Integrator<Scalar>` wrapping `janus::rk2_step()`
-- [ ] Implement `RK4Integrator<Scalar>` wrapping `janus::rk4_step()`
+- [ ] Implement `EulerIntegrator<Scalar>` wrapping `metis::euler_step()`
+- [ ] Implement `RK2Integrator<Scalar>` wrapping `metis::rk2_step()`
+- [ ] Implement `RK4Integrator<Scalar>` wrapping `metis::rk4_step()`
 - [ ] Create `include/icarus/sim/RK45Integrator.hpp`
-- [ ] Implement `RK45Integrator<Scalar>` wrapping `janus::rk45_step()`
+- [ ] Implement `RK45Integrator<Scalar>` wrapping `metis::rk45_step()`
 - [ ] Implement tolerance-based step acceptance
 - [ ] Implement step size suggestion formula
 - [ ] Add statistics tracking (accepted/rejected steps)
@@ -1748,21 +1748,21 @@ sim.SetIntegrator("rk45");                   // String (config file)
 sim.SetIntegrator(config);                   // Full config struct
 ```
 
-### 2. Wrap Janus Step Functions
+### 2. Wrap Metis Step Functions
 
-**Decision:** Integrators wrap `janus::rk4_step()` and `janus::rk45_step()` directly.
+**Decision:** Integrators wrap `metis::rk4_step()` and `metis::rk45_step()` directly.
 
 **Rationale:**
-- Janus already provides tested, symbolic-compatible implementations
+- Metis already provides tested, symbolic-compatible implementations
 - No need to reimplement Butcher tableau logic
 - Guaranteed dual-mode (numeric/symbolic) support
 
 ### 3. Derivative Function Signature
 
-**Decision:** `f(Scalar t, const JanusVector<Scalar>& x) -> JanusVector<Scalar>`
+**Decision:** `f(Scalar t, const MetisVector<Scalar>& x) -> MetisVector<Scalar>`
 
 **Rationale:**
-- Matches Janus API exactly
+- Matches Metis API exactly
 - Captures time and state as inputs
 - Returns derivative vector
 
@@ -1803,11 +1803,11 @@ private:
 
 ---
 
-## Janus Compatibility Checklist
+## Metis Compatibility Checklist
 
 - [ ] All integrator code templated on `Scalar`
-- [ ] Use `JanusVector<Scalar>` (not `std::vector<double>`)
-- [ ] Wrap Janus step functions (not reimplementing)
+- [ ] Use `MetisVector<Scalar>` (not `std::vector<double>`)
+- [ ] Wrap Metis step functions (not reimplementing)
 - [ ] No `std::` math in traced code paths
 - [ ] `.eval()` used where needed for expression materialization
 - [ ] Verify `Simulator<casadi::MX>` compiles and runs
@@ -1817,7 +1817,7 @@ private:
 
 ## Exit Criteria
 
-- [ ] `IntegratorType` enum with all Janus methods (Euler, RK2, RK4, RK45)
+- [ ] `IntegratorType` enum with all Metis methods (Euler, RK2, RK4, RK45)
 - [ ] `IntegratorConfig<Scalar>` struct with all parameters
 - [ ] `IntegratorFactory<Scalar>` creates integrators from config/string/type
 - [ ] Abstract `Integrator<Scalar>` interface complete
@@ -1838,8 +1838,8 @@ private:
 | Dependency | Purpose | Status |
 |:-----------|:--------|:-------|
 | Phase 2.1 | State management, ComputeDerivatives | ✅ Complete |
-| Janus `rk4_step` | RK4 implementation | ✅ Available |
-| Janus `rk45_step` | RK45 implementation | ✅ Available |
+| Metis `rk4_step` | RK4 implementation | ✅ Available |
+| Metis `rk45_step` | RK45 implementation | ✅ Available |
 | GoogleTest | Testing framework | ✅ Available |
 
 ---
@@ -1848,8 +1848,8 @@ private:
 
 | Topic | Document |
 |:------|:---------|
-| Janus integrators | [`IntegratorStep.hpp`](file:///home/tanged/sources/references/janus/include/janus/math/IntegratorStep.hpp) |
-| Integration guide | [`integration.md`](file:///home/tanged/sources/references/janus/docs/user_guides/integration.md) |
+| Metis integrators | [`IntegratorStep.hpp`](file:///home/tanged/sources/references/metis/include/metis/math/IntegratorStep.hpp) |
+| Integration guide | [`integration.md`](file:///home/tanged/sources/references/metis/docs/user_guides/integration.md) |
 | State ownership | [09_memory_state_ownership.md](../../architecture/09_memory_state_ownership.md) |
-| Janus integration | [07_janus_integration.md](../../architecture/07_janus_integration.md) |
+| Metis integration | [07_metis_integration.md](../../architecture/07_metis_integration.md) |
 | Symbolic constraints | [21_symbolic_constraints.md](../../architecture/21_symbolic_constraints.md) |

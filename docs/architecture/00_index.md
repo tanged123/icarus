@@ -29,9 +29,9 @@ This architecture documentation is organized into focused modules for easy navig
 
 | Document | Description |
 |:---------|:------------|
-| [07_janus_integration.md](07_janus_integration.md) | Template-first paradigm, dual backend |
+| [07_metis_integration.md](07_metis_integration.md) | Template-first paradigm, dual backend |
 | [08_vulcan_integration.md](08_vulcan_integration.md) | Physics utilities, "bricks vs houses" |
-| [21_symbolic_constraints.md](21_symbolic_constraints.md) | Janus compatibility rules for components |
+| [21_symbolic_constraints.md](21_symbolic_constraints.md) | Metis compatibility rules for components |
 
 ### Memory & State
 
@@ -111,7 +111,7 @@ STEP (per Δt)        →  Read inputs, compute, write outputs
     ├── 06_entities_namespaces
     │       └── 10_entity_lifecycle
     │               └── 17_events_phases
-    ├── 07_janus_integration
+    ├── 07_metis_integration
     │       └── 21_symbolic_constraints
     └── 13_configuration
             └── 14_trim_optimization
@@ -121,6 +121,6 @@ STEP (per Δt)        →  Read inputs, compute, write outputs
 
 ## Related Documents
 
-- `janus/docs/janus_usage_guide.md` - Janus math library usage
+- `references/metis/docs/metis_usage_guide.md` - Metis math library usage
 - `vulcan/docs/` - Physics utility library documentation
 - `design/signal_system_analysis.md` - Signal system design rationale

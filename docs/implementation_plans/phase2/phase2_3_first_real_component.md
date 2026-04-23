@@ -1482,11 +1482,11 @@ Dynamics: accel = point_mass_acceleration(force, mass)  // = force/mass
 
 ---
 
-## Janus Compatibility Checklist
+## Metis Compatibility Checklist
 
 - [x] All component code templated on `Scalar`
 - [x] Use `vulcan::Vec3<Scalar>` (not `std::vector<double>`)
-- [x] Use Vulcan physics functions (already Janus-compatible)
+- [x] Use Vulcan physics functions (already Metis-compatible)
 - [x] No `std::` math in component code (Vulcan handles this internally)
 - [x] No `if/else` branching on `Scalar` values in traced code
 - [x] Mode switching uses structural branching (enum, not Scalar-dependent)
@@ -1572,5 +1572,5 @@ The `PointMass3DOF` component becomes the first **dual-mode validated** componen
 | State ownership | [09_memory_state_ownership.md](../../architecture/09_memory_state_ownership.md) |
 | Vulcan integration | [08_vulcan_integration.md](../../architecture/08_vulcan_integration.md) |
 | Lifecycle | [04_lifecycle.md](../../architecture/04_lifecycle.md) |
-| Janus integration | [07_janus_integration.md](../../architecture/07_janus_integration.md) |
+| Metis integration | [07_metis_integration.md](../../architecture/07_metis_integration.md) |
 | Symbolic constraints | [21_symbolic_constraints.md](../../architecture/21_symbolic_constraints.md) |

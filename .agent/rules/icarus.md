@@ -4,11 +4,11 @@ trigger: always_on
 
 # Agent Ruleset: Icarus Project
 
-You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Janus and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
+You are an advanced AI coding assistant working on **Icarus**, a 6DOF simulation engine built on the Metis and Vulcan frameworks. Your primary directive is to be **meticulous, detail-oriented, and extremely careful**.
 
 ## Project Overview
 
-Icarus is a 6DOF simulation engine for aerospace applications, built on Janus (math) and Vulcan (physics utilities). It uses a data-oriented architecture where all simulation components are structural peers.
+Icarus is a 6DOF simulation engine for aerospace applications, built on Metis (math) and Vulcan (physics utilities). It uses a data-oriented architecture where all simulation components are structural peers.
 
 ## On Start — Required Reading
 
@@ -81,7 +81,7 @@ bd sync               # Sync with git
    - When refactoring, ensure no functionality is lost.
    - Prefer clarity and correctness over brevity.
 
-4. **No Hallucinations**: Do not invent APIs. Search the Janus/Vulcan/Icarus codebase first.
+4. **No Hallucinations**: Do not invent APIs. Search the Metis/Vulcan/Icarus codebase first.
 
 5. **Context Preservation**:
    - **Documentation First**: Create and update documentation in `docs/`.
@@ -90,7 +90,7 @@ bd sync               # Sync with git
 
 ## Icarus-Specific Rules (CRITICAL)
 
-### 1. Janus Compatibility (The "Red Line")
+### 1. Metis Compatibility (The "Red Line")
 
 **These rules are INVIOLABLE. Breaking them causes symbolic mode to fail.**
 
@@ -101,16 +101,16 @@ bd sync               # Sync with git
 
 ```cpp
 // ✅ CORRECT
-Scalar y = janus::sin(x);
-Scalar result = janus::where(x > 0, a, b);
+Scalar y = metis::sin(x);
+Scalar result = metis::where(x > 0, a, b);
 
 // ❌ WRONG
 double y = std::sin(x);
 if (x > 0) { result = a; } else { result = b; }
 ```
 
-- **Math Dispatch**: ALWAYS use `janus::` namespace (e.g., `janus::sin`, `janus::pow`).
-- **Branching**: NEVER use `if/else` on `Scalar` types. Use `janus::where()`.
+- **Math Dispatch**: ALWAYS use `metis::` namespace (e.g., `metis::sin`, `metis::pow`).
+- **Branching**: NEVER use `if/else` on `Scalar` types. Use `metis::where()`.
 - **Loops**: Bounds must be structural (integers/constants), not `Scalar`.
 
 ### 3. Component Design
@@ -140,7 +140,7 @@ src/                # Implementation (co-located headers)
 components/         # Built-in component library
 interfaces/         # C API, Python, MATLAB bindings
 tests/              # Test suite (mirrors include structure)
-references/         # Reference materials (submoduled Janus and Vulcan references)
+references/         # Reference materials (submoduled Metis and Vulcan references)
 docs/
 ├── architecture/   # IDOA architecture documents (READ FIRST!)
 ├── implementation_plans/  # Phased implementation plans
@@ -163,17 +163,17 @@ All scripts auto-enter Nix if needed:
 
 ## Key Dependencies
 
-- **Janus**: Math, autodiff, optimization, linear algebra
+- **Metis**: Math, autodiff, optimization, linear algebra
 - **Vulcan**: Atmosphere, gravity, coordinates, rotations, time, table interpolation
 
 ## Quick Reference
 
-Always check the Janus and Vulcan references for the latest API and implemented functionality before making your own.
+Always check the Metis and Vulcan references for the latest API and implemented functionality before making your own.
 
 | Need | Use |
 |:-----|:----|
-| Branching on Scalar | `janus::where(cond, true_val, false_val)` |
-| Math functions | `janus::sin`, `janus::cos`, `janus::pow`, etc. |
+| Branching on Scalar | `metis::where(cond, true_val, false_val)` |
+| Math functions | `metis::sin`, `metis::cos`, `metis::pow`, etc. |
 | EOM utilities | `vulcan::eom::*` |
 | Atmosphere | `vulcan::atmosphere::*` |
 | Gravity | `vulcan::gravity::*` |

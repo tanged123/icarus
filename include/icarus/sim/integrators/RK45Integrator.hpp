@@ -12,9 +12,9 @@
 #include <cstddef>
 #include <icarus/core/Error.hpp>
 #include <icarus/sim/integrators/Integrator.hpp>
-#include <janus/math/Arithmetic.hpp>
-#include <janus/math/IntegratorStep.hpp>
-#include <janus/math/Logic.hpp>
+#include <metis/math/Arithmetic.hpp>
+#include <metis/math/IntegratorStep.hpp>
+#include <metis/math/Logic.hpp>
 #include <type_traits>
 
 namespace icarus {
@@ -52,9 +52,9 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
      * For compatibility with base Integrator interface.
      * No step adaptation; returns 5th-order solution.
      */
-    JanusVector<Scalar> Step(const DerivativeFunc &f, const JanusVector<Scalar> &x, Scalar t,
+    MetisVector<Scalar> Step(const DerivativeFunc &f, const MetisVector<Scalar> &x, Scalar t,
                              Scalar dt) override {
-        auto result = janus::rk45_step(f, x, t, dt);
+        auto result = metis::rk45_step(f, x, t, dt);
         return result.y5;
     }
 
@@ -72,7 +72,7 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
      * @return Result with final state, actual dt used, error, and acceptance flag
      * @throws StepSizeTooSmallError if dt reduces below min_dt without success
      */
-    AdaptiveStepResult<Scalar> AdaptiveStep(const DerivativeFunc &f, const JanusVector<Scalar> &x,
+    AdaptiveStepResult<Scalar> AdaptiveStep(const DerivativeFunc &f, const MetisVector<Scalar> &x,
                                             Scalar t, Scalar dt) override {
         Scalar current_dt = dt;
 
@@ -80,7 +80,7 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
         constexpr int max_attempts = 20; // Prevent infinite loops
         for (int attempt = 0; attempt < max_attempts; ++attempt) {
             // Compute RK45 step
-            auto result = janus::rk45_step(f, x, t, current_dt);
+            auto result = metis::rk45_step(f, x, t, current_dt);
 
             // Compute error tolerance
             Scalar tol = ComputeTolerance(x, result.y5);
@@ -110,7 +110,7 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
         }
 
         // Max attempts reached - return last result as rejected
-        auto result = janus::rk45_step(f, x, t, current_dt);
+        auto result = metis::rk45_step(f, x, t, current_dt);
         return AdaptiveStepResult<Scalar>{result.y5, current_dt, result.error, false};
     }
 
@@ -144,15 +144,15 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
         // Optimal step size formula: dt_new = dt * safety * (tol/error)^(1/5)
         // Use 5th root for RK45 (5th order method)
         Scalar ratio = tol / (error + Scalar{1e-15}); // Avoid division by zero
-        Scalar factor = safety_ * janus::pow(ratio, Scalar{0.2});
+        Scalar factor = safety_ * metis::pow(ratio, Scalar{0.2});
 
         // Limit growth/shrinkage
-        factor = janus::max(Scalar{0.1}, janus::min(Scalar{5.0}, factor));
+        factor = metis::max(Scalar{0.1}, metis::min(Scalar{5.0}, factor));
 
         Scalar dt_new = dt * factor;
 
         // Clamp to min/max
-        return janus::max(min_dt_, janus::min(max_dt_, dt_new));
+        return metis::max(min_dt_, metis::min(max_dt_, dt_new));
     }
 
     /**
@@ -190,13 +190,13 @@ template <typename Scalar> class RK45Integrator : public AdaptiveIntegrator<Scal
      *
      * tolerance = abs_tol + rel_tol * max(|x|, |x_new|)
      */
-    [[nodiscard]] Scalar ComputeTolerance(const JanusVector<Scalar> &x,
-                                          const JanusVector<Scalar> &x_new) const {
+    [[nodiscard]] Scalar ComputeTolerance(const MetisVector<Scalar> &x,
+                                          const MetisVector<Scalar> &x_new) const {
         Scalar max_norm = Scalar{0};
         for (Eigen::Index i = 0; i < x.size(); ++i) {
-            Scalar xi_abs = janus::abs(x[i]);
-            Scalar xi_new_abs = janus::abs(x_new[i]);
-            max_norm = janus::max(max_norm, janus::max(xi_abs, xi_new_abs));
+            Scalar xi_abs = metis::abs(x[i]);
+            Scalar xi_new_abs = metis::abs(x_new[i]);
+            max_norm = metis::max(max_norm, metis::max(xi_abs, xi_new_abs));
         }
         return abs_tol_ + rel_tol_ * max_norm;
     }

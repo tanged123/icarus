@@ -215,11 +215,11 @@ TEST(MassAggregator, ParallelAxisTheorem) {
 
 TEST(StaticMassSymbolic, BasicCompiles) {
     // Verify symbolic mode compiles
-    StaticMass<janus::SymbolicScalar> sm;
+    StaticMass<metis::SymbolicScalar> sm;
     EXPECT_EQ(sm.Name(), "StaticMass");
 }
 
 TEST(MassAggregatorSymbolic, BasicCompiles) {
-    MassAggregator<janus::SymbolicScalar> agg;
+    MassAggregator<metis::SymbolicScalar> agg;
     EXPECT_EQ(agg.Name(), "MassAggregator");
 }

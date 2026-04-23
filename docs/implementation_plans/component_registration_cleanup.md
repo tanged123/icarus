@@ -8,7 +8,7 @@ In [registration.cpp](file:///home/tanged/sources/icarus/components/registration
  // Current: 9 components × 2 backends × ~8 lines each ≈ 144 lines of registration
 -const bool registered_numeric = []() {
 -    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
--        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::NumericScalar>>(
+-        auto comp = std::make_unique<::icarus::components::PointMass3DOF<metis::NumericScalar>>(
 -            config.name, config.entity);
 -        comp->SetConfig(config);
 -        return comp;
@@ -18,7 +18,7 @@ In [registration.cpp](file:///home/tanged/sources/icarus/components/registration
 -
 -const bool registered_symbolic = []() {
 -    factory.Register("PointMass3DOF", [](const ::icarus::ComponentConfig &config) {
--        auto comp = std::make_unique<::icarus::components::PointMass3DOF<janus::SymbolicScalar>>(
+-        auto comp = std::make_unique<::icarus::components::PointMass3DOF<metis::SymbolicScalar>>(
 -            config.name, config.entity);
 -        comp->SetConfig(config);
 -        return comp;

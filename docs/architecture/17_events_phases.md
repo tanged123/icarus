@@ -1,6 +1,6 @@
 # Event Handling & Flight Phases
 
-**Related:** [04_lifecycle.md](04_lifecycle.md) | [05_execution_model.md](05_execution_model.md) | [07_janus_integration.md](07_janus_integration.md)
+**Related:** [04_lifecycle.md](04_lifecycle.md) | [05_execution_model.md](05_execution_model.md) | [07_metis_integration.md](07_metis_integration.md)
 
 ---
 
@@ -22,7 +22,7 @@ X15.phase: 0  # int32 signal
 
 ## 2. Phase-Dependent Components ("Ghosting")
 
-To respect Janus symbolic graph creation, we don't dynamically add/remove components. Instead, components are **always present** but their outputs are gated:
+To respect Metis symbolic graph creation, we don't dynamically add/remove components. Instead, components are **always present** but their outputs are gated:
 
 ```cpp
 template <typename Scalar>
@@ -31,13 +31,13 @@ void Booster::Step(Scalar t, Scalar dt) {
     Scalar thrust_raw = compute_thrust(...);
 
     // Gate output: only active during BOOST phase
-    Scalar is_boost = janus::where(*phase_ == 1, Scalar(1.0), Scalar(0.0));
+    Scalar is_boost = metis::where(*phase_ == 1, Scalar(1.0), Scalar(0.0));
     *output_thrust_ = thrust_raw * is_boost;
 }
 ```
 
 > [!IMPORTANT]
-> **No dynamic component creation/destruction.** All components exist for the full simulation. Use `janus::where()` to gate outputs based on phase. This preserves the symbolic graph structure.
+> **No dynamic component creation/destruction.** All components exist for the full simulation. Use `metis::where()` to gate outputs based on phase. This preserves the symbolic graph structure.
 
 ### 2.1 State Derivative Gating
 
@@ -46,17 +46,17 @@ Components with internal state (e.g., spool dynamics, tank mass) must **also gat
 ```cpp
 template <typename Scalar>
 void Booster::Step(Scalar t, Scalar dt) {
-    Scalar is_active = janus::where(*phase_ == BOOST, Scalar(1.0), Scalar(0.0));
+    Scalar is_active = metis::where(*phase_ == BOOST, Scalar(1.0), Scalar(0.0));
 
     // Gate outputs
     *output_thrust_ = thrust_raw * is_active;
 
     // Gate state derivatives (state freezes when ghosted)
-    *state_dot_spool_ = janus::where(is_active > 0.5,
+    *state_dot_spool_ = metis::where(is_active > 0.5,
         (target_spool - *state_spool_) / tau,
         Scalar(0.0));
 
-    *state_dot_fuel_mass_ = janus::where(is_active > 0.5,
+    *state_dot_fuel_mass_ = metis::where(is_active > 0.5,
         -fuel_flow_rate,
         Scalar(0.0));
 }
@@ -69,14 +69,14 @@ void Booster::Step(Scalar t, Scalar dt) {
 
 ## 3. Phase Execution Strategies
 
-The basic `janus::where()` gating has tradeoffs. Here are alternative strategies:
+The basic `metis::where()` gating has tradeoffs. Here are alternative strategies:
 
 ### Strategy 1: Output Gating (Default)
 
 **All components execute; outputs are multiplied by phase mask.**
 
 ```cpp
-*output_thrust_ = thrust_raw * janus::where(*phase_ == BOOST, 1.0, 0.0);
+*output_thrust_ = thrust_raw * metis::where(*phase_ == BOOST, 1.0, 0.0);
 ```
 
 | Pros | Cons |
@@ -156,7 +156,7 @@ for (int k = 0; k < N; ++k) {
 | :--- | :--- |
 | Minimal graph size per phase | Requires phase sequence known a priori |
 | Optimal for trajectory optimization | More complex optimization setup |
-| Avoids `janus::where()` overhead | Transitions must be explicit |
+| Avoids `metis::where()` overhead | Transitions must be explicit |
 
 **Best for:** Trajectory optimization, known mission profiles.
 
@@ -174,7 +174,7 @@ void Booster::Step(Scalar t, Scalar dt) {
     } else {
         // Symbolic mode: full gating for graph correctness
         Scalar thrust_raw = compute_thrust(...);
-        Scalar is_active = janus::where(*phase_ == BOOST, Scalar(1.0), Scalar(0.0));
+        Scalar is_active = metis::where(*phase_ == BOOST, Scalar(1.0), Scalar(0.0));
         *output_thrust_ = thrust_raw * is_active;
     }
 }

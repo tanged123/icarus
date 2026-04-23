@@ -466,7 +466,7 @@ TEST(SignalRegistrySymbolic, SymbolicExpressionPropagation) {
     // Build a symbolic computation graph
     SymbolicScalar x = sym("x");
     SymbolicScalar y = sym("y");
-    SymbolicScalar result = janus::sin(x) + janus::cos(y);
+    SymbolicScalar result = metis::sin(x) + metis::cos(y);
 
     registry.Set(index, result);
 
@@ -479,7 +479,7 @@ TEST(SignalRegistrySymbolic, FunctionEvaluation) {
     // This test demonstrates the full symbolic workflow:
     // 1. Create symbolic signals in registry
     // 2. Build expressions using registry values
-    // 3. Create a janus::Function and evaluate numerically
+    // 3. Create a metis::Function and evaluate numerically
 
     SignalRegistry<SymbolicScalar> registry;
 
@@ -503,8 +503,8 @@ TEST(SignalRegistrySymbolic, FunctionEvaluation) {
     SymbolicScalar out_expr = x_val * y_val + x_val;
     registry.Set(idx_out, out_expr);
 
-    // Create a janus::Function to evaluate the expression
-    janus::Function f("registry_func", {sym_x, sym_y}, {registry.Get(idx_out)});
+    // Create a metis::Function to evaluate the expression
+    metis::Function f("registry_func", {sym_x, sym_y}, {registry.Get(idx_out)});
 
     // Evaluate: f(2, 3) = 2*3 + 2 = 8
     auto res = f(2.0, 3.0);
@@ -533,10 +533,10 @@ TEST(SignalRegistrySymbolic, GradientComputation) {
     SymbolicScalar f_expr = val * val;
 
     // Compute gradient: df/dparam = 2*param
-    auto grad = janus::jacobian(f_expr, param);
+    auto grad = metis::jacobian(f_expr, param);
 
     // Create function to evaluate the gradient
-    janus::Function grad_func("grad", {param}, {grad});
+    metis::Function grad_func("grad", {param}, {grad});
 
     // At param=3: gradient = 2*3 = 6
     auto res = grad_func(3.0);

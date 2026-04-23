@@ -5,11 +5,11 @@
  * @brief Umbrella header for Icarus 6DOF Simulation Engine
  *
  * Include this header to get access to all Icarus public APIs,
- * including Janus (math/optimization) and Vulcan (physics) dependencies.
+ * including Metis (math/optimization) and Vulcan (physics) dependencies.
  */
 
-// Dependencies - include Janus and Vulcan umbrella headers
-#include <janus/janus.hpp>
+// Dependencies - include Metis and Vulcan umbrella headers
+#include <metis/metis.hpp>
 #include <vulcan/vulcan.hpp>
 
 // Core

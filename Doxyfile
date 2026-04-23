@@ -1,5 +1,5 @@
 PROJECT_NAME           = "Icarus"
-PROJECT_BRIEF          = "Vehicle Simulation as a Transformable Computational Graph, built on Vulcan and Janus"
+PROJECT_BRIEF          = "Vehicle Simulation as a Transformable Computational Graph, built on Vulcan and Metis"
 OUTPUT_DIRECTORY       = build/docs
 INPUT                  = README.md include docs/architecture docs/user_guides docs/api docs/theory
 RECURSIVE              = YES

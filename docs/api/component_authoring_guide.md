@@ -9,7 +9,7 @@ This guide documents patterns for implementing Icarus components. Components are
 ## Quick Checklist
 
 - [ ] Template on `Scalar` for dual-mode (numeric/symbolic) support
-- [ ] Use `vulcan::` for physics, `janus::` for math dispatch
+- [ ] Use `vulcan::` for physics, `metis::` for math dispatch
 - [ ] Register states/outputs/inputs in `Provision()` with backplane APIs
 - [ ] Load config and apply ICs in `Stage()` using `GetConfig()`
 - [ ] Compute derivatives in `Step()` - this is the hot path, no allocations!

@@ -257,10 +257,10 @@ StateManager already collects derivatives by component. Extend to zero inactive:
 
 ```cpp
 // In StateManager.hpp
-JanusVector<Scalar> GetDerivatives(
+MetisVector<Scalar> GetDerivatives(
     const std::set<std::string>& active_components) const 
 {
-    JanusVector<Scalar> xdot(total_states_);
+    MetisVector<Scalar> xdot(total_states_);
     
     for (const auto& binding : bindings_) {
         bool is_active = active_components.empty() ||

@@ -83,10 +83,10 @@ TEST(IntegrationManagerTest, ConfigureFromConfig) {
 
 TEST(IntegrationManagerTest, StepWithoutConfigureThrows) {
     IntegrationManager<double> im;
-    JanusVector<double> X(3);
+    MetisVector<double> X(3);
     X.setZero();
 
-    auto deriv_func = [](double /*t*/, const JanusVector<double> &x) { return x; };
+    auto deriv_func = [](double /*t*/, const MetisVector<double> &x) { return x; };
 
     EXPECT_THROW((void)im.Step(deriv_func, X, 0.0, 0.01), std::runtime_error);
 }
@@ -95,12 +95,12 @@ TEST(IntegrationManagerTest, FixedStep) {
     IntegrationManager<double> im;
     im.Configure(IntegratorType::Euler);
 
-    JanusVector<double> X(1);
+    MetisVector<double> X(1);
     X(0) = 1.0;
 
     // dx/dt = x  =>  x(t) = e^t
     // Euler: x_new = x + dt * x = x * (1 + dt)
-    auto deriv_func = [](double /*t*/, const JanusVector<double> &x) { return x; };
+    auto deriv_func = [](double /*t*/, const MetisVector<double> &x) { return x; };
 
     auto X_new = im.Step(deriv_func, X, 0.0, 0.1);
     EXPECT_NEAR(X_new(0), 1.1, 1e-10);
@@ -110,10 +110,10 @@ TEST(IntegrationManagerTest, AdaptiveStepOnNonAdaptiveThrows) {
     IntegrationManager<double> im;
     im.Configure(IntegratorType::RK4); // Not adaptive
 
-    JanusVector<double> X(1);
+    MetisVector<double> X(1);
     X(0) = 1.0;
 
-    auto deriv_func = [](double /*t*/, const JanusVector<double> &x) { return x; };
+    auto deriv_func = [](double /*t*/, const MetisVector<double> &x) { return x; };
 
     EXPECT_THROW((void)im.AdaptiveStep(deriv_func, X, 0.0, 0.1), std::runtime_error);
 }
@@ -122,10 +122,10 @@ TEST(IntegrationManagerTest, AdaptiveStepOnRK45Works) {
     IntegrationManager<double> im;
     im.Configure(IntegratorType::RK45);
 
-    JanusVector<double> X(1);
+    MetisVector<double> X(1);
     X(0) = 1.0;
 
-    auto deriv_func = [](double /*t*/, const JanusVector<double> &x) { return x; };
+    auto deriv_func = [](double /*t*/, const MetisVector<double> &x) { return x; };
 
     auto result = im.AdaptiveStep(deriv_func, X, 0.0, 0.1);
     EXPECT_TRUE(result.accepted);

@@ -6,7 +6,7 @@
  *
  * Supports multiple modes for state initialization:
  *   - Equilibrium (FiniteDifferenceTrim): Numeric Newton with central differences
- *   - Equilibrium (SymbolicTrim): Exact Jacobians via janus::NewtonSolver
+ *   - Equilibrium (SymbolicTrim): Exact Jacobians via metis::NewtonSolver
  *   - Warmstart (WarmstartSolver): Restore state from HDF5 recording
  */
 
@@ -19,8 +19,8 @@
 // to avoid namespace resolution issues
 #include <icarus/staging/SymbolicSimulatorCore.hpp>
 
-#include <janus/core/Function.hpp>
-#include <janus/math/RootFinding.hpp>
+#include <metis/core/Function.hpp>
+#include <metis/math/RootFinding.hpp>
 #include <vulcan/io/HDF5Reader.hpp>
 
 #include <Eigen/Dense>
@@ -122,7 +122,7 @@ class FiniteDifferenceTrim : public TrimSolver {
 // =============================================================================
 
 /**
- * @brief Symbolic trim using janus::NewtonSolver
+ * @brief Symbolic trim using metis::NewtonSolver
  *
  * Requires symbolic components (SymbolicSimulatorCore).
  * Provides exact Jacobians via automatic differentiation.
@@ -136,7 +136,7 @@ class SymbolicTrim : public TrimSolver {
 
   private:
     /// Build symbolic residual function F(u) -> derivatives
-    janus::Function BuildResidualFunction(SymbolicSimulatorCore &sym_sim, const TrimConfig &config);
+    metis::Function BuildResidualFunction(SymbolicSimulatorCore &sym_sim, const TrimConfig &config);
 };
 
 // =============================================================================
@@ -426,16 +426,16 @@ inline ::icarus::staging::TrimResult SymbolicTrim::Solve(::icarus::Simulator &si
         SymbolicSimulatorCore sym_sim(sim.GetConfig());
 
         // Build symbolic residual function
-        janus::Function F = BuildResidualFunction(sym_sim, config);
+        metis::Function F = BuildResidualFunction(sym_sim, config);
 
         // Configure Newton solver
-        janus::RootFinderOptions opts;
+        metis::RootFinderOptions opts;
         opts.abstol = config.tolerance;
         opts.max_iter = config.max_iterations;
         opts.line_search = true;
         opts.verbose = false;
 
-        janus::NewtonSolver solver(F, opts);
+        metis::NewtonSolver solver(F, opts);
 
         // Get initial guess from config or current simulator values
         Eigen::VectorXd u0(n_controls);
@@ -496,20 +496,20 @@ inline ::icarus::staging::TrimResult SymbolicTrim::Solve(::icarus::Simulator &si
     return result;
 }
 
-inline janus::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore &sym_sim,
+inline metis::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore &sym_sim,
                                                            const TrimConfig &config) {
-    using Scalar = janus::SymbolicScalar;
+    using Scalar = metis::SymbolicScalar;
 
     const int n_controls = static_cast<int>(config.control_signals.size());
     const int n_residuals = static_cast<int>(config.zero_derivatives.size());
     const std::size_t n_states = sym_sim.GetStateSize();
 
     // Create symbolic control variables
-    auto [u_vec, u_mx] = janus::sym_vec_pair("u", n_controls);
+    auto [u_vec, u_mx] = metis::sym_vec_pair("u", n_controls);
 
     // Create symbolic state and time (use current numeric values as base)
-    auto [x_vec, x_mx] = janus::sym_vec_pair("x", static_cast<int>(n_states));
-    Scalar t_sym = janus::sym("t");
+    auto [x_vec, x_mx] = metis::sym_vec_pair("x", static_cast<int>(n_states));
+    Scalar t_sym = metis::sym("t");
 
     // Set symbolic state and time
     sym_sim.SetState(x_vec);
@@ -538,7 +538,7 @@ inline janus::Function SymbolicTrim::BuildResidualFunction(SymbolicSimulatorCore
 
     // Build function: F(u) -> residuals
     // Note: x and t are fixed parameters (not optimized), u is the decision variable
-    return janus::Function("trim_residual", {u_mx}, {residuals});
+    return metis::Function("trim_residual", {u_mx}, {residuals});
 }
 
 // =============================================================================

@@ -8,7 +8,7 @@
 
 ## Overview
 
-Extend the existing trim solver infrastructure to support full **NLP-based optimization** using `janus::Opti` and IPOPT. The current implementation provides Newton-based root-finding; Phase 7.1 adds constrained optimization for complex trim problems with inequality constraints, weighted residuals, and optimal trim (e.g., minimum fuel trim).
+Extend the existing trim solver infrastructure to support full **NLP-based optimization** using `metis::Opti` and IPOPT. The current implementation provides Newton-based root-finding; Phase 7.1 adds constrained optimization for complex trim problems with inequality constraints, weighted residuals, and optimal trim (e.g., minimum fuel trim).
 
 ### Current State
 
@@ -17,7 +17,7 @@ The existing `TrimSolver` infrastructure (`include/icarus/staging/TrimSolver.hpp
 | Solver | Method | Use Case |
 |:-------|:-------|:---------|
 | `FiniteDifferenceTrim` | Newton with central differences | Simple equilibrium, no symbolics |
-| `SymbolicTrim` | `janus::NewtonSolver` with exact Jacobians | Equilibrium with symbolic graph |
+| `SymbolicTrim` | `metis::NewtonSolver` with exact Jacobians | Equilibrium with symbolic graph |
 | `WarmstartSolver` | HDF5 state restoration | Mid-flight restart |
 
 **Gap:** No support for:
@@ -27,7 +27,7 @@ The existing `TrimSolver` infrastructure (`include/icarus/staging/TrimSolver.hpp
 
 ### Target State
 
-Add `OptiTrim` solver using `janus::Opti` for full NLP formulation:
+Add `OptiTrim` solver using `metis::Opti` for full NLP formulation:
 
 ```
 minimize  ||W * (F(u) - targets)||²  +  cost(u)
@@ -51,7 +51,7 @@ Where:
 
 ### 7.1.1 OptiTrim Solver
 
-**Goal:** NLP-based trim using `janus::Opti`.
+**Goal:** NLP-based trim using `metis::Opti`.
 
 #### New Files
 
@@ -62,7 +62,7 @@ Where:
 
 #include <icarus/staging/TrimSolver.hpp>
 #include <icarus/staging/SymbolicSimulatorCore.hpp>
-#include <janus/optimization/Opti.hpp>
+#include <metis/optimization/Opti.hpp>
 
 namespace icarus::staging {
 
@@ -94,11 +94,11 @@ struct OptiTrimConfig {
     std::unordered_map<std::string, double> constraint_targets;
 
     // Solver options
-    janus::OptiOptions solver_options;
+    metis::OptiOptions solver_options;
 };
 
 /**
- * @brief NLP-based trim solver using janus::Opti and IPOPT
+ * @brief NLP-based trim solver using metis::Opti and IPOPT
  *
  * Solves constrained optimization problems for trim:
  *   - Supports bounds, equality, and inequality constraints
@@ -115,19 +115,19 @@ public:
 private:
     OptiTrimConfig config_;
 
-    /// Build NLP problem using janus::Opti
-    janus::OptiSol BuildAndSolve(SymbolicSimulatorCore& sym_sim);
+    /// Build NLP problem using metis::Opti
+    metis::OptiSol BuildAndSolve(SymbolicSimulatorCore& sym_sim);
 
     /// Build weighted residual objective
-    janus::SymbolicScalar BuildObjective(
-        janus::Opti& opti,
-        const janus::SymbolicVector& controls,
+    metis::SymbolicScalar BuildObjective(
+        metis::Opti& opti,
+        const metis::SymbolicVector& controls,
         SymbolicSimulatorCore& sym_sim);
 
     /// Add constraints to NLP
     void AddConstraints(
-        janus::Opti& opti,
-        const janus::SymbolicVector& controls,
+        metis::Opti& opti,
+        const metis::SymbolicVector& controls,
         SymbolicSimulatorCore& sym_sim);
 };
 
@@ -162,7 +162,7 @@ private:
    ```
 
 3. **Constraint Types:**
-   - **Bounds:** Applied via `janus::Opti::subject_to_bounds()`
+   - **Bounds:** Applied via `metis::Opti::subject_to_bounds()`
    - **Equality:** `opti.subject_to(signal == target)`
    - **Inequality:** `opti.subject_to(signal <= target)`
 
@@ -303,7 +303,7 @@ staging:
   trim:
     enabled: true
     mode: optimization    # NLP-based (not just root-finding)
-    method: ipopt         # Use janus::Opti with IPOPT
+    method: ipopt         # Use metis::Opti with IPOPT
 
     # What to solve for
     control_signals:
@@ -426,13 +426,13 @@ Add `examples/trim/optimal_trim_demo.cpp`:
 
 ### Required
 
-- `janus::Opti` (already available via `janus/optimization/Opti.hpp`)
+- `metis::Opti` (already available via `metis/optimization/Opti.hpp`)
 - `SymbolicSimulatorCore` (existing from Phase 6)
 - IPOPT solver (linked via CasADi in Nix flake)
 
 ### No New External Dependencies
 
-The Nix flake already includes CasADi with IPOPT support via Janus.
+The Nix flake already includes CasADi with IPOPT support via Metis.
 
 ---
 

@@ -15,7 +15,7 @@
 #include <icarus/core/ComponentConfig.hpp>
 #include <icarus/core/Error.hpp>
 
-#include <janus/core/JanusTypes.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 #include <functional>
 #include <memory>
@@ -145,7 +145,7 @@ template <typename Scalar> class ComponentFactory {
  * The factory will call SetConfig() after construction. Components read
  * their configuration in Stage() via GetConfig().
  *
- * Registers with both janus::NumericScalar (double) and janus::SymbolicScalar
+ * Registers with both metis::NumericScalar (double) and metis::SymbolicScalar
  * (casadi::MX) backends for full dual-backend support.
  *
  * Usage in component header or cpp file (namespace scope):
@@ -156,9 +156,9 @@ template <typename Scalar> class ComponentFactory {
 #define ICARUS_REGISTER_COMPONENT(ComponentType)                                                   \
     namespace {                                                                                    \
     static bool _reg_numeric_##ComponentType = []() {                                              \
-        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(                     \
+        ::icarus::ComponentFactory<metis::NumericScalar>::Instance().Register(                     \
             #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
-                auto comp = std::make_unique<ComponentType<janus::NumericScalar>>(config.name,     \
+                auto comp = std::make_unique<ComponentType<metis::NumericScalar>>(config.name,     \
                                                                                   config.entity);  \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
@@ -166,9 +166,9 @@ template <typename Scalar> class ComponentFactory {
         return true;                                                                               \
     }();                                                                                           \
     static bool _reg_symbolic_##ComponentType = []() {                                             \
-        ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance().Register(                    \
+        ::icarus::ComponentFactory<metis::SymbolicScalar>::Instance().Register(                    \
             #ComponentType, [](const ::icarus::ComponentConfig &config) {                          \
-                auto comp = std::make_unique<ComponentType<janus::SymbolicScalar>>(config.name,    \
+                auto comp = std::make_unique<ComponentType<metis::SymbolicScalar>>(config.name,    \
                                                                                    config.entity); \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
@@ -180,7 +180,7 @@ template <typename Scalar> class ComponentFactory {
 /**
  * @brief Register component with custom type name (both backends)
  *
- * Registers with both janus::NumericScalar and janus::SymbolicScalar backends.
+ * Registers with both metis::NumericScalar and metis::SymbolicScalar backends.
  *
  * Usage (at namespace scope, inside the component's namespace):
  * @code
@@ -190,9 +190,9 @@ template <typename Scalar> class ComponentFactory {
 #define ICARUS_REGISTER_COMPONENT_IMPL2(ComponentType, TypeName, Counter)                          \
     namespace {                                                                                    \
     static const bool _icarus_reg_numeric_##Counter = []() {                                       \
-        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(                     \
+        ::icarus::ComponentFactory<metis::NumericScalar>::Instance().Register(                     \
             TypeName, [](const ::icarus::ComponentConfig &config) {                                \
-                auto comp = std::make_unique<ComponentType<janus::NumericScalar>>(config.name,     \
+                auto comp = std::make_unique<ComponentType<metis::NumericScalar>>(config.name,     \
                                                                                   config.entity);  \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
@@ -200,9 +200,9 @@ template <typename Scalar> class ComponentFactory {
         return true;                                                                               \
     }();                                                                                           \
     static const bool _icarus_reg_symbolic_##Counter = []() {                                      \
-        ::icarus::ComponentFactory<janus::SymbolicScalar>::Instance().Register(                    \
+        ::icarus::ComponentFactory<metis::SymbolicScalar>::Instance().Register(                    \
             TypeName, [](const ::icarus::ComponentConfig &config) {                                \
-                auto comp = std::make_unique<ComponentType<janus::SymbolicScalar>>(config.name,    \
+                auto comp = std::make_unique<ComponentType<metis::SymbolicScalar>>(config.name,    \
                                                                                    config.entity); \
                 comp->SetConfig(config);                                                           \
                 return comp;                                                                       \
@@ -223,14 +223,14 @@ template <typename Scalar> class ComponentFactory {
  * Use when component needs special construction logic.
  * The creator lambda is responsible for calling SetConfig() on the component.
  *
- * Note: This macro only registers with janus::NumericScalar. For dual-backend
+ * Note: This macro only registers with metis::NumericScalar. For dual-backend
  * support with custom creators, use the factory directly.
  *
  * Usage:
  * @code
  * ICARUS_REGISTER_COMPONENT_WITH_CREATOR("CustomType",
  *     [](const ComponentConfig& cfg) {
- *         auto comp = std::make_unique<CustomComponent<janus::NumericScalar>>(
+ *         auto comp = std::make_unique<CustomComponent<metis::NumericScalar>>(
  *             cfg.name, cfg.entity);
  *         comp->SetConfig(cfg);
  *         return comp;
@@ -240,7 +240,7 @@ template <typename Scalar> class ComponentFactory {
 #define ICARUS_REGISTER_COMPONENT_WITH_CREATOR_IMPL2(TypeName, CreatorLambda, Counter)             \
     namespace {                                                                                    \
     static bool _icarus_reg_creator_##Counter = []() {                                             \
-        ::icarus::ComponentFactory<janus::NumericScalar>::Instance().Register(TypeName,            \
+        ::icarus::ComponentFactory<metis::NumericScalar>::Instance().Register(TypeName,            \
                                                                               CreatorLambda);      \
         return true;                                                                               \
     }();                                                                                           \

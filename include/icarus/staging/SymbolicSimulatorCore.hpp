@@ -21,7 +21,7 @@
 #include <icarus/sim/SimulatorConfig.hpp>
 #include <icarus/sim/StateManager.hpp>
 
-#include <janus/core/JanusTypes.hpp>
+#include <metis/core/MetisTypes.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -38,7 +38,7 @@ namespace icarus::staging {
  * Used internally during Stage() for:
  *   - Symbolic trim (exact Jacobians)
  *   - Symbolic linearization (exact A, B, C, D matrices)
- *   - Dynamics graph export (janus::Function)
+ *   - Dynamics graph export (metis::Function)
  *
  * Unlike the main Simulator, this class:
  *   - Only supports SymbolicScalar (casadi::MX)
@@ -47,7 +47,7 @@ namespace icarus::staging {
  */
 class SymbolicSimulatorCore {
   public:
-    using Scalar = janus::SymbolicScalar;
+    using Scalar = metis::SymbolicScalar;
 
     /**
      * @brief Create from simulator config
@@ -77,7 +77,7 @@ class SymbolicSimulatorCore {
      * Copies the symbolic state into the internal state vector and
      * updates all component state bindings.
      */
-    void SetState(const JanusVector<Scalar> &x) {
+    void SetState(const MetisVector<Scalar> &x) {
         if (x.size() != state_manager_.GetState().size()) {
             throw std::invalid_argument("SymbolicSimulatorCore::SetState: size mismatch");
         }
@@ -98,7 +98,7 @@ class SymbolicSimulatorCore {
      *
      * @return Symbolic derivative vector xdot
      */
-    JanusVector<Scalar> ComputeDerivatives() {
+    MetisVector<Scalar> ComputeDerivatives() {
         state_manager_.ZeroDerivatives();
 
         Scalar dt = Scalar(config_.dt);
@@ -151,12 +151,12 @@ class SymbolicSimulatorCore {
     /**
      * @brief Get current state vector (copy)
      */
-    [[nodiscard]] JanusVector<Scalar> GetState() const { return state_manager_.GetState(); }
+    [[nodiscard]] MetisVector<Scalar> GetState() const { return state_manager_.GetState(); }
 
     /**
      * @brief Get derivative vector (after ComputeDerivatives)
      */
-    [[nodiscard]] JanusVector<Scalar> GetDerivatives() const {
+    [[nodiscard]] MetisVector<Scalar> GetDerivatives() const {
         return state_manager_.GetDerivatives();
     }
 

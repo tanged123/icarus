@@ -124,7 +124,7 @@ template <typename Scalar> class FuelTank : public Component<Scalar> {
 
         // Fuel depletes: d(fuel_mass)/dt = -mdot
         // But only if there's fuel remaining
-        fuel_mass_dot_ = janus::where(fuel_mass_ > Scalar(0), -mdot, Scalar(0));
+        fuel_mass_dot_ = metis::where(fuel_mass_ > Scalar(0), -mdot, Scalar(0));
 
         // Update total mass and inertia
         UpdateMassProperties();

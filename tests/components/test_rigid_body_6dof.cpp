@@ -19,7 +19,7 @@
 #include <icarus/signal/Registry.hpp>
 #include <icarus/signal/SignalRouter.hpp>
 
-#include <janus/math/Quaternion.hpp>
+#include <metis/math/Quaternion.hpp>
 
 #include <cmath>
 
@@ -505,18 +505,18 @@ TEST(RigidBody6DOF, OutputsUpdated) {
 // =============================================================================
 
 TEST(RigidBody6DOFSymbolic, BasicCompiles) {
-    RigidBody6DOF<janus::SymbolicScalar> rb;
+    RigidBody6DOF<metis::SymbolicScalar> rb;
     // Just verify it compiles - no runtime checks for symbolic mode
     EXPECT_EQ(rb.Name(), "RigidBody6DOF");
 }
 
 TEST(RigidBody6DOFSymbolic, SetInitialConditions) {
-    RigidBody6DOF<janus::SymbolicScalar> rb("RB", "");
+    RigidBody6DOF<metis::SymbolicScalar> rb("RB", "");
 
     // Should compile with symbolic scalars
-    janus::SymbolicScalar x = janus::SymbolicScalar(1.0);
-    janus::SymbolicScalar y = janus::SymbolicScalar(2.0);
-    janus::SymbolicScalar z = janus::SymbolicScalar(3.0);
+    metis::SymbolicScalar x = metis::SymbolicScalar(1.0);
+    metis::SymbolicScalar y = metis::SymbolicScalar(2.0);
+    metis::SymbolicScalar z = metis::SymbolicScalar(3.0);
 
     rb.SetInitialPosition(x, y, z);
     rb.SetInitialVelocityBody(x, y, z);

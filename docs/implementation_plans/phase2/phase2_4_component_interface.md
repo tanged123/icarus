@@ -733,7 +733,7 @@ Two distinct categories for configurable values:
 | **Optimizable** | Yes (trim, trajectory) | No |
 | **Runtime change** | Safe anytime | Requires re-Provision |
 
-Config values are resolved at Provision, before symbolic tracing. If used in Step branching, convert to Scalar flag and use `janus::where()`.
+Config values are resolved at Provision, before symbolic tracing. If used in Step branching, convert to Scalar flag and use `metis::where()`.
 
 ### 3. InputHandle vs Raw Pointer
 

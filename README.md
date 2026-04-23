@@ -4,7 +4,7 @@
 
 **6DOF Simulation Engine for Aerospace Applications**
 
-Icarus is a data-oriented simulation framework that utilizes both **Janus** (math library) and **Vulcan** (engineering utilities) as dependencies. It provides a component-based architecture for building complex flight simulations with support for both real-time numeric execution and symbolic optimization.
+Icarus is a data-oriented simulation framework that utilizes both **Metis** (math library) and **Vulcan** (engineering utilities) as dependencies. It provides a component-based architecture for building complex flight simulations with support for both real-time numeric execution and symbolic optimization.
 
 ## Features
 
@@ -13,7 +13,7 @@ Icarus is a data-oriented simulation framework that utilizes both **Janus** (mat
 - **Signal Backplane**: Centralized registry for all observable/configurable numeric data
 - **Dual-Mode Execution**: Numeric (`double`) for real-time and Symbolic (`casadi::MX`) for optimization
 - **Multi-Language Bindings**: C API for FFI, Python bindings via pybind11
-- **Integration with Janus/Vulcan**: Uses Janus for math and Vulcan for physics utilities
+- **Integration with Metis/Vulcan**: Uses Metis for math and Vulcan for physics utilities
 
 ## Quick Start
 
@@ -157,7 +157,7 @@ icarus/
 
 ## Dependencies
 
-- **Janus**: Math library with autodiff, optimization, linear algebra
+- **Metis**: Math library with autodiff, optimization, linear algebra
 - **Vulcan**: Physics utilities for atmosphere, gravity, coordinates
 - **CasADi**: Symbolic math and optimization
 - **Eigen**: Linear algebra

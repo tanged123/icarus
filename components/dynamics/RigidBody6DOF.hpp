@@ -23,10 +23,10 @@
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/InputHandle.hpp>
 
-#include <janus/math/Quaternion.hpp>
-#include <vulcan/coordinates/BodyFrames.hpp>
+#include <metis/math/Quaternion.hpp>
+#include <vulcan/coordinates/FrameLocal.hpp>
+#include <vulcan/coordinates/FrameVehicle.hpp>
 #include <vulcan/coordinates/Geodetic.hpp>
-#include <vulcan/coordinates/LocalFrames.hpp>
 #include <vulcan/core/Constants.hpp>
 #include <vulcan/dynamics/RigidBody.hpp>
 #include <vulcan/dynamics/RigidBodyTypes.hpp>
@@ -211,7 +211,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
             dcm.col(0) = body.x_axis;
             dcm.col(1) = body.y_axis;
             dcm.col(2) = body.z_axis;
-            auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(dcm);
+            auto q_body_to_ecef = metis::Quaternion<double>::from_rotation_matrix(dcm);
 
             attitude_ = Vec4<Scalar>{
                 static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
@@ -221,7 +221,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         }
 
         // Compute derived outputs
-        janus::Quaternion<Scalar> q{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+        metis::Quaternion<Scalar> q{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
         velocity_ref_ = q.rotate(velocity_body_);
         ComputeCoordinateFrameOutputs();
 
@@ -246,7 +246,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         (void)dt;
 
         // Build quaternion from state
-        janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+        metis::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
         // Update derived outputs
         velocity_ref_ = quat.rotate(velocity_body_);
@@ -329,7 +329,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         velocity_body_ = Vec3<Scalar>{vx, vy, vz};
     }
 
-    void SetInitialAttitude(const janus::Quaternion<Scalar> &q) {
+    void SetInitialAttitude(const metis::Quaternion<Scalar> &q) {
         attitude_ = Vec4<Scalar>{q.w, q.x, q.y, q.z};
     }
     void SetInitialAttitude(Scalar w, Scalar x, Scalar y, Scalar z) {
@@ -384,7 +384,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
         dcm.col(0) = body.x_axis;
         dcm.col(1) = body.y_axis;
         dcm.col(2) = body.z_axis;
-        auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(dcm);
+        auto q_body_to_ecef = metis::Quaternion<double>::from_rotation_matrix(dcm);
 
         attitude_ = Vec4<Scalar>{
             static_cast<Scalar>(q_body_to_ecef.w), static_cast<Scalar>(q_body_to_ecef.x),
@@ -398,8 +398,8 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
     [[nodiscard]] Vec3<Scalar> GetPosition() const { return position_; }
     [[nodiscard]] Vec3<Scalar> GetVelocityBody() const { return velocity_body_; }
     [[nodiscard]] Vec3<Scalar> GetVelocityRef() const { return velocity_ref_; }
-    [[nodiscard]] janus::Quaternion<Scalar> GetAttitude() const {
-        return janus::Quaternion<Scalar>{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+    [[nodiscard]] metis::Quaternion<Scalar> GetAttitude() const {
+        return metis::Quaternion<Scalar>{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
     }
     [[nodiscard]] Vec3<Scalar> GetOmegaBody() const { return omega_body_; }
 
@@ -433,7 +433,7 @@ template <typename Scalar> class RigidBody6DOF : public Component<Scalar> {
 
         // Compute Euler angles from attitude quaternion
         // Build body frame from quaternion (body-to-ECEF)
-        janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+        metis::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
         // Body axes in ECEF (quaternion rotates body coords to ECEF)
         Vec3<Scalar> x_body_ecef = quat.rotate(Vec3<Scalar>::UnitX());

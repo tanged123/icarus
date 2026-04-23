@@ -457,18 +457,18 @@ public:
     /**
      * @brief Get full state vector (for checkpointing, warmstart)
      */
-    JanusVector<Scalar> GetState() const;
+    MetisVector<Scalar> GetState() const;
 
     /**
      * @brief Set full state vector
      * @param state New state vector (must match GetTotalStateSize())
      */
-    void SetState(const JanusVector<Scalar>& state);
+    void SetState(const MetisVector<Scalar>& state);
 
     /**
      * @brief Get state derivative vector (read-only, for analysis)
      */
-    const JanusVector<Scalar>& GetStateDerivatives() const;
+    const MetisVector<Scalar>& GetStateDerivatives() const;
 
     /**
      * @brief Get total state size

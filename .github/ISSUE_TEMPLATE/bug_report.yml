@@ -38,7 +38,7 @@ body:
       description: |
         - OS: [e.g. Ubuntu 22.04]
         - Compiler: [e.g. GCC 12]
-        - Janus Version: [e.g. 0.1.0]
+        - Metis Version: [e.g. 0.1.0]
         - Vulcan Version: [e.g. 0.1.0]
     validations:
       required: true

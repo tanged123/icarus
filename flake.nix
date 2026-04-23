@@ -14,10 +14,10 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
     # Dependencies as flake inputs
-    janus = {
-      url = "github:tanged123/janus";
+    metis = {
+      url = "github:tanged123/metis";
       # For local development:
-      #url = "path:/home/tanged/sources/janus";
+      #url = "path:/home/tanged/sources/metis";
     };
     vulcan = {
       url = "github:tanged123/vulcan";
@@ -32,7 +32,7 @@
       nixpkgs,
       flake-utils,
       treefmt-nix,
-      janus,
+      metis,
       vulcan,
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -43,7 +43,7 @@
         python = pkgs.python3;
 
         # Get packages from inputs
-        janusPackage = janus.packages.${system}.default;
+        metisPackage = metis.packages.${system}.default;
         vulcanPackage = vulcan.packages.${system}.default;
 
         # Python environment for development
@@ -70,7 +70,7 @@
           pkgs.nlohmann_json
           pkgs.yaml-cpp
           pkgs.spdlog
-          janusPackage
+          metisPackage
           vulcanPackage
         ];
 
@@ -220,14 +220,14 @@
               pythonEnv
             ]
             ++ [
-              janusPackage
+              metisPackage
               vulcanPackage
               treefmtEval.config.build.wrapper
               cachix
             ];
 
           shellHook = ''
-            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${pythonEnv}/${python.sitePackages}/pybind11:${janusPackage}:${vulcanPackage}
+            export CMAKE_PREFIX_PATH=${pkgs.eigen}:${pkgs.casadi}:${pkgs.gtest}:${pkgs.hdf5}:${pkgs.highfive}:${pkgs.nlohmann_json}:${pkgs.yaml-cpp}:${pkgs.spdlog}:${pythonEnv}/${python.sitePackages}/pybind11:${metisPackage}:${vulcanPackage}
           '';
         };
 

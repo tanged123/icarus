@@ -139,7 +139,7 @@ TEST(Simulator, DefaultConstruction) {
 // ============================================
 
 TEST(SignalRegistrySymbolic, RegisterAndResolve) {
-    icarus::SignalRegistry<janus::SymbolicScalar> registry;
+    icarus::SignalRegistry<metis::SymbolicScalar> registry;
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.signal";
@@ -153,7 +153,7 @@ TEST(SignalRegistrySymbolic, RegisterAndResolve) {
 }
 
 TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
-    icarus::SignalRegistry<janus::SymbolicScalar> registry;
+    icarus::SignalRegistry<metis::SymbolicScalar> registry;
 
     icarus::SignalDescriptor desc;
     desc.name = "symbolic.value";
@@ -162,7 +162,7 @@ TEST(SignalRegistrySymbolic, SetAndGetSymbolic) {
     auto index = registry.RegisterSignal(desc);
 
     // Set a symbolic value
-    janus::SymbolicScalar sym_val = janus::sym("x");
+    metis::SymbolicScalar sym_val = metis::sym("x");
     registry.Set(index, sym_val);
 
     // Verify it's a valid symbolic expression

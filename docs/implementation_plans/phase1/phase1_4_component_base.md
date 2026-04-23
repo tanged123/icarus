@@ -826,7 +826,7 @@ cd build && ctest -R component --output-on-failure
 | Dependency | Purpose | Status |
 |:-----------|:--------|:-------|
 | Phase 1.3 Signal Backplane | SignalRegistry, Handle, VecHandle | ✅ Complete |
-| Janus types | Vec3, Vec4, JanusScalar | ✅ Available |
+| Metis types | Vec3, Vec4, MetisScalar | ✅ Available |
 | GoogleTest | Test framework | ✅ Available |
 
 ---

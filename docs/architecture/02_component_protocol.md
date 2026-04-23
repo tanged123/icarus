@@ -140,9 +140,9 @@ void Step(Scalar t, Scalar dt) {
         accel += j2_perturbation();
     }
 
-    // GOOD: Convert to Scalar flag, use janus::where()
+    // GOOD: Convert to Scalar flag, use metis::where()
     // (j2_flag_ set at Provision: enable_j2_ ? Scalar{1} : Scalar{0})
-    accel += janus::where(j2_flag_ > Scalar{0.5},
+    accel += metis::where(j2_flag_ > Scalar{0.5},
                           j2_perturbation(),
                           Vec3<Scalar>::Zero());
 }
@@ -229,8 +229,8 @@ public:
         // Physics calculations using parameters...
         Scalar base_thrust = max_thrust_ * thr;
 
-        // Use janus::where() for symbolic-safe conditional
-        Scalar afterburner_bonus = janus::where(
+        // Use metis::where() for symbolic-safe conditional
+        Scalar afterburner_bonus = metis::where(
             afterburner_flag_ > Scalar{0.5},
             base_thrust * Scalar{0.3},  // 30% bonus with afterburner
             Scalar{0.0}

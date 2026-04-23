@@ -125,7 +125,7 @@ template <typename Scalar> class RocketEngine : public Component<Scalar> {
 
         // Get throttle command, clamp to [0, 1]
         Scalar throttle = throttle_cmd_.get();
-        throttle = janus::clamp(throttle, Scalar(0), Scalar(1));
+        throttle = metis::clamp(throttle, Scalar(0), Scalar(1));
 
         // Compute thrust magnitude
         thrust_ = throttle * Scalar(max_thrust_);

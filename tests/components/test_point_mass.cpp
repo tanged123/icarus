@@ -227,7 +227,7 @@ TEST(PointMassIntegration, OrbitalEnergyConservation) {
     sim.Stage();
 
     // Compute initial mechanical energy
-    auto compute_energy = [&](const JanusVector<double> &state) {
+    auto compute_energy = [&](const MetisVector<double> &state) {
         double rx = state[0], ry = state[1], rz = state[2];
         double vx = state[3], vy = state[4], vz = state[5];
         double r = std::sqrt(rx * rx + ry * ry + rz * rz);

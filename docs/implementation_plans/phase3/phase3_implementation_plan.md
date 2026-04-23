@@ -8,7 +8,7 @@
 
 ## Overview
 
-Phase 3 validates that the entire Icarus stack compiles and runs correctly with `SymbolicScalar` (Janus's wrapper around `casadi::MX`) as the scalar backend. This enables automatic differentiation, optimization, and trajectory analysis.
+Phase 3 validates that the entire Icarus stack compiles and runs correctly with `SymbolicScalar` (Metis's wrapper around `casadi::MX`) as the scalar backend. This enables automatic differentiation, optimization, and trajectory analysis.
 
 ### Key Concerns Addressed
 
@@ -16,7 +16,7 @@ Phase 3 validates that the entire Icarus stack compiles and runs correctly with 
 
 2. **Signal System Validation**: Analysis confirms the signal system is correctly templated. `SignalRegistry<Scalar>` stores values in `std::deque<Scalar>`, and `TypeTraits<SymbolicScalar>` already exists. No architectural changes needed—only validation.
 
-3. **Janus Compliance Audit**: Systematic scan for `std::` math and if/else branching on scalars.
+3. **Metis Compliance Audit**: Systematic scan for `std::` math and if/else branching on scalars.
 
 ---
 
@@ -24,14 +24,14 @@ Phase 3 validates that the entire Icarus stack compiles and runs correctly with 
 
 ### Current Status: GREEN (Ready for Symbolic Mode)
 
-| System | Template Status | Janus Compliance | Notes |
+| System | Template Status | Metis Compliance | Notes |
 |:-------|:----------------|:-----------------|:------|
 | SignalRegistry | `<Scalar>` | N/A | `std::deque<Scalar>` storage |
-| Simulator | `<Scalar>` | ✓ Uses Janus types | Clean template chain |
+| Simulator | `<Scalar>` | ✓ Uses Metis types | Clean template chain |
 | Component | `<Scalar>` | ✓ | Base class correct |
 | PointMass3DOF | `<Scalar>` | ✓ | No std:: math |
 | PointMassGravity | `<Scalar>` | ✓ | Switch on config, not Scalar |
-| Integrator (RK4) | `<Scalar>` | ✓ | JanusVector throughout |
+| Integrator (RK4) | `<Scalar>` | ✓ | MetisVector throughout |
 | InputHandle | `<T>` | N/A | Pointer dereferencing only |
 | Vec3Handle | `<Scalar>` | ✓ | Templated correctly |
 
@@ -108,8 +108,8 @@ public:
     void PokeBatch(const std::map<std::string, Scalar>& values);
 
     // State Vector Access
-    JanusVector<Scalar> GetState() const;
-    void SetState(const JanusVector<Scalar>& state);
+    MetisVector<Scalar> GetState() const;
+    void SetState(const MetisVector<Scalar>& state);
 
     // Lifecycle
     void Initialize();  // Provision + Stage
@@ -210,15 +210,15 @@ TEST(SymbolicMode, SimulatorInstantiation) {
 - [ ] CI job that builds symbolic mode tests
 - [ ] Document any compilation errors and fixes
 
-#### 3.2.2 Janus Compliance Audit
+#### 3.2.2 Metis Compliance Audit
 
-Create automated audit script `scripts/janus_audit.sh`:
+Create automated audit script `scripts/metis_audit.sh`:
 
 ```bash
 #!/bin/bash
-# Scan for Janus violations in Icarus codebase
+# Scan for Metis violations in Icarus codebase
 
-echo "=== Janus Compliance Audit ==="
+echo "=== Metis Compliance Audit ==="
 
 # 1. Check for std:: math functions
 echo -e "\n[1] Checking for std:: math usage..."
@@ -242,7 +242,7 @@ echo -e "\n=== Audit Complete ==="
 ```
 
 **Deliverables:**
-- [ ] `scripts/janus_audit.sh`
+- [ ] `scripts/metis_audit.sh`
 - [ ] Fix any violations found
 - [ ] Add audit to CI pipeline
 
@@ -251,8 +251,8 @@ echo -e "\n=== Audit Complete ==="
 For each component, verify:
 
 1. **Constructor takes `Scalar` parameters** (not `double`)
-2. **No `std::` math calls** (use `janus::sin`, `janus::cos`, etc.)
-3. **No `if/else` on `Scalar` values** (use `janus::where()`)
+2. **No `std::` math calls** (use `metis::sin`, `metis::cos`, etc.)
+3. **No `if/else` on `Scalar` values** (use `metis::where()`)
 4. **Outputs declared with `Scalar` type**
 
 | Component | Constructor | Math | Branching | Status |
@@ -268,27 +268,27 @@ For each component, verify:
 
 ### 3.3 Graph Export
 
-**Goal:** Extract simulation dynamics as `janus::Function` for optimization.
+**Goal:** Extract simulation dynamics as `metis::Function` for optimization.
 
 #### 3.3.1 SymbolicTracer Utility
 
 Create `include/icarus/symbolic/SymbolicTracer.hpp`:
 
 ```cpp
-#include <janus/core/Function.hpp>
+#include <metis/core/Function.hpp>
 
 namespace icarus::symbolic {
 
 /**
- * @brief Traces simulation dynamics to produce Janus Function
+ * @brief Traces simulation dynamics to produce Metis Function
  *
  * Usage:
  *   auto sim = BuildSymbolicSimulator();
  *   SymbolicTracer tracer(sim);
- *   janus::Function dynamics = tracer.TraceDynamics();
+ *   metis::Function dynamics = tracer.TraceDynamics();
  *
  *   // Evaluate numerically
- *   auto result = dynamics(t0, x0);  // Returns std::vector<janus::NumericMatrix>
+ *   auto result = dynamics(t0, x0);  // Returns std::vector<metis::NumericMatrix>
  */
 class SymbolicTracer {
 public:
@@ -296,9 +296,9 @@ public:
 
     /**
      * @brief Trace one Step() call to produce dynamics function
-     * @return janus::Function with signature (t, x, u) -> (xdot)
+     * @return metis::Function with signature (t, x, u) -> (xdot)
      */
-    janus::Function TraceDynamics();
+    metis::Function TraceDynamics();
 
     /**
      * @brief Get state variable names
@@ -318,11 +318,11 @@ private:
 ```
 
 **Algorithm:**
-1. Create symbolic state vector `x = janus::sym_vec("x", n_states)`
+1. Create symbolic state vector `x = metis::sym_vec("x", n_states)`
 2. Scatter symbolic state to components via existing binding
 3. Call `ComputeDerivatives(t_sym)` to populate `X_dot_global_`
 4. Gather symbolic derivatives
-5. Build `janus::Function("dynamics", {t, x}, {xdot})`
+5. Build `metis::Function("dynamics", {t, x}, {xdot})`
 
 **Deliverables:**
 - [ ] `include/icarus/symbolic/SymbolicTracer.hpp`
@@ -340,11 +340,11 @@ public:
     // ... existing methods ...
 
     /**
-     * @brief Generate Janus function representing system dynamics
+     * @brief Generate Metis function representing system dynamics
      * @note Only available when Scalar = SymbolicScalar
      */
     template <typename S = Scalar>
-    std::enable_if_t<std::is_same_v<S, SymbolicScalar>, janus::Function>
+    std::enable_if_t<std::is_same_v<S, SymbolicScalar>, metis::Function>
     GenerateGraph() const;
 };
 ```
@@ -375,11 +375,11 @@ TEST(SymbolicMode, PointMass3DOF_NumericSymbolicMatch) {
     // 2. Build symbolic function
     Simulator<SymbolicScalar> symbolic_sim;
     // ... identical setup ...
-    janus::Function dynamics = symbolic_sim.GenerateGraph();
+    metis::Function dynamics = symbolic_sim.GenerateGraph();
 
     // 3. Evaluate symbolic function at same inputs
-    janus::NumericVector x0 = /* initial state */;
-    auto result = dynamics.eval(t, x0);  // Returns janus::NumericMatrix
+    metis::NumericVector x0 = /* initial state */;
+    auto result = dynamics.eval(t, x0);  // Returns metis::NumericMatrix
 
     // 4. Compare
     EXPECT_NEAR(numeric_x, result(0), 1e-10);
@@ -403,20 +403,20 @@ TEST(SymbolicMode, DerivativeExtraction) {
     Simulator<SymbolicScalar> sim;
     // ... setup ...
 
-    janus::Function dynamics = sim.GenerateGraph();
+    metis::Function dynamics = sim.GenerateGraph();
 
-    // Extract Jacobian via janus::jacobian (from AutoDiff.hpp)
+    // Extract Jacobian via metis::jacobian (from AutoDiff.hpp)
     // Build symbolic inputs and compute jacobian symbolically
-    auto t_sym = janus::sym("t");
-    auto x_sym = janus::sym_vec("x", n_states);
+    auto t_sym = metis::sym("t");
+    auto x_sym = metis::sym_vec("x", n_states);
     auto xdot_sym = dynamics.eval(t_sym, x_sym);  // Symbolic evaluation
-    auto J_sym = janus::jacobian({janus::as_mx(xdot_sym)}, {janus::as_mx(x_sym)});
+    auto J_sym = metis::jacobian({metis::as_mx(xdot_sym)}, {metis::as_mx(x_sym)});
 
     // Wrap as function for numeric evaluation
-    janus::Function jacobian_fn("jacobian", {t_sym, janus::as_mx(x_sym)}, {J_sym[0]});
+    metis::Function jacobian_fn("jacobian", {t_sym, metis::as_mx(x_sym)}, {J_sym[0]});
 
     // Evaluate at specific point
-    auto J = jacobian_fn.eval(t0, x0);  // Returns janus::NumericMatrix
+    auto J = jacobian_fn.eval(t0, x0);  // Returns metis::NumericMatrix
 
     // Verify dimensions
     EXPECT_EQ(J.rows(), n_states);
@@ -541,7 +541,7 @@ examples/symbolic/
 └── symbolic_orbital_demo.cpp    [NEW]
 
 scripts/
-└── janus_audit.sh               [NEW]
+└── metis_audit.sh               [NEW]
 ```
 
 ---
@@ -549,10 +549,10 @@ scripts/
 ## Exit Criteria
 
 - [ ] `Simulator<SymbolicScalar>` compiles with all existing components
-- [ ] `GenerateGraph()` returns valid `janus::Function`
+- [ ] `GenerateGraph()` returns valid `metis::Function`
 - [ ] Numeric/symbolic outputs match within tolerance (< 1e-10)
 - [ ] Jacobian extraction works for point mass dynamics
-- [ ] Zero Janus violations in codebase (audit passes)
+- [ ] Zero Metis violations in codebase (audit passes)
 - [ ] Examples migrated to SimulationBuilder pattern
 - [ ] CI includes symbolic mode build and test
 
@@ -571,9 +571,9 @@ scripts/
 
 ## Dependencies
 
-- **Janus**: Must support all math operations used by Icarus (provides `janus::Function`, `janus::sym()`, `janus::Opti`)
+- **Metis**: Must support all math operations used by Icarus (provides `metis::Function`, `metis::sym()`, `metis::Opti`)
 - **Vulcan**: Physics functions must be templated on Scalar
-- **CasADi**: Available via Janus (wrapped by `janus::SymbolicScalar`, `janus::Function`)
+- **CasADi**: Available via Metis (wrapped by `metis::SymbolicScalar`, `metis::Function`)
 
 ---
 
@@ -594,7 +594,7 @@ scripts/
 ## Next Steps
 
 1. **Start with 3.2.1**: Attempt `Simulator<SymbolicScalar>` compilation
-2. **Run 3.2.2**: Execute Janus audit to identify violations
+2. **Run 3.2.2**: Execute Metis audit to identify violations
 3. **Fix any issues** found in steps 1-2
 4. **Implement 3.1**: SimulationBuilder pattern (parallelizable with above)
 5. **Implement 3.3**: Graph export once compilation passes

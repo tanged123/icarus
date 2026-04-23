@@ -22,13 +22,13 @@ namespace icarus {
 /**
  * @brief Available integrator methods
  *
- * Maps directly to Janus step functions.
+ * Maps directly to Metis step functions.
  */
 enum class IntegratorType {
-    Euler, ///< Forward Euler (1st order, 1 eval) - janus::euler_step
-    RK2,   ///< Heun's method (2nd order, 2 evals) - janus::rk2_step
-    RK4,   ///< Classic RK4 (4th order, 4 evals) - janus::rk4_step
-    RK45   ///< Dormand-Prince adaptive (5th order, 7 evals) - janus::rk45_step
+    Euler, ///< Forward Euler (1st order, 1 eval) - metis::euler_step
+    RK2,   ///< Heun's method (2nd order, 2 evals) - metis::rk2_step
+    RK4,   ///< Classic RK4 (4th order, 4 evals) - metis::rk4_step
+    RK45   ///< Dormand-Prince adaptive (5th order, 7 evals) - metis::rk45_step
 };
 
 /**

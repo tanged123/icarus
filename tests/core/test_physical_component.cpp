@@ -353,7 +353,7 @@ TEST_F(PhysicalComponentTest, ProgrammaticAttachment) {
     EXPECT_FALSE(comp.HasBodyAttachment());
 
     Vec3<double> pos{5.0, 0.0, 0.0};
-    auto q = janus::Quaternion<double>::from_axis_angle({0, 1, 0}, M_PI / 4);
+    auto q = metis::Quaternion<double>::from_axis_angle({0, 1, 0}, M_PI / 4);
 
     comp.SetBodyAttachment(pos, q);
 
@@ -459,7 +459,7 @@ template <typename Scalar> class GimballedForceComponent : public PhysicalCompon
 
         // Compute gimbal rotation (pitch then yaw at the gimbal)
         // Gimbal rotates the nozzle: pitch about Y, yaw about Z
-        auto gimbal_rotation = janus::Quaternion<Scalar>::from_euler(Scalar{0}, pitch_rad, yaw_rad);
+        auto gimbal_rotation = metis::Quaternion<Scalar>::from_euler(Scalar{0}, pitch_rad, yaw_rad);
 
         // Total orientation = gimbal * base_mount (quaternion convention: right-to-left)
         // This composes: first base_mount (body->gimbal), then gimbal (gimbal->nozzle)
@@ -487,7 +487,7 @@ template <typename Scalar> class GimballedForceComponent : public PhysicalCompon
     std::string entity_;
 
     // Base mount orientation (from config, doesn't change)
-    janus::Quaternion<Scalar> base_mount_orientation_;
+    metis::Quaternion<Scalar> base_mount_orientation_;
 
     // Thrust magnitude
     Scalar thrust_magnitude_{1000.0};

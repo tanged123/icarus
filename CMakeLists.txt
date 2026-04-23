@@ -67,12 +67,12 @@ option(BUILD_COMPONENTS "Build standard component models" ON)
 # --- Dependencies ---
 find_package(Eigen3 3.4 REQUIRED)
 find_package(casadi REQUIRED)
-find_package(janus REQUIRED)
-find_package(vulcan REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C CXX)
 find_package(HighFive REQUIRED)
-find_package(nlohmann_json REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(metis REQUIRED)
+find_package(vulcan REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(spdlog REQUIRED)
 
 # --- Core Library (header-only) ---
@@ -88,7 +88,7 @@ target_link_libraries(
   icarus
   INTERFACE Eigen3::Eigen
             casadi
-            janus::janus
+            metis::metis
             vulcan::vulcan
             HighFive
             HDF5::HDF5

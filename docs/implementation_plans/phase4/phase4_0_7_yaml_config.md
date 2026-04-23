@@ -18,7 +18,7 @@ Icarus builds on Vulcan's YAML system. See [vulcan/docs/user_guides/yaml_configu
 | Existence check | `node.Has(key)` | Boolean check |
 | Navigation | `node["nested"]["path"]` | Bracket access |
 | Iteration | `node.ForEach()`, `node.ForEachEntry()` | Sequences and maps |
-| Janus types | `Vec3<double>`, `Quaternion<double>`, `Mat3<double>` | Native support |
+| Metis types | `metis::Vec3<double>`, `metis::Quaternion<double>`, `metis::Mat3<double>` | Native support |
 | Env vars | `${VAR}`, `${VAR:default}` | Via `YamlEnv` |
 | Includes | `!include path.yaml` | Via `YamlFile` |
 | Merging | `YamlFile::MergeFiles({...})` | Later overrides earlier |
@@ -483,9 +483,9 @@ SimulatorConfig SimulationLoader::Load(const std::string& path) {
 | `integers:` | `int64_t` | `cfg.Get<int>(key, default)` |
 | `booleans:` | `bool` | `cfg.Get<bool>(key, default)` |
 
-### Janus Type Support
+### Metis Type Support
 
-Vulcan's YAML system natively supports Janus types:
+Vulcan's YAML system natively supports Metis types:
 
 ```yaml
 components:
@@ -504,9 +504,10 @@ components:
 ```cpp
 void Provision(Backplane& bp, const ComponentConfig& cfg) {
     // Vulcan handles conversion automatically
-    auto pos = cfg.Get<janus::Vec3<double>>("initial_position", Vec3d::Zero());
-    auto quat = cfg.Get<janus::Quaternion<double>>("initial_attitude", Quatd::Identity());
-    auto inertia = cfg.Get<janus::Mat3<double>>("inertia", Mat3d::Identity());
+    auto pos = cfg.Get<metis::Vec3<double>>("initial_position", metis::Vec3<double>::Zero());
+    auto quat = cfg.Get<metis::Quaternion<double>>("initial_attitude",
+                                                   metis::Quaternion<double>::Identity());
+    auto inertia = cfg.Get<metis::Mat3<double>>("inertia", metis::Mat3<double>::Identity());
 }
 ```
 
@@ -835,6 +836,6 @@ output:
 - [ ] Override merging (replace semantics)
 - [ ] Route parsing with gain/offset/delay
 - [ ] Scheduler group parsing
-- [ ] Janus type support (Vec3, Quaternion, Mat3) via Vulcan
+- [ ] Metis type support (Vec3, Quaternion, Mat3) via Vulcan
 - [ ] Unit tests for all parsing paths
 - [ ] Integration test: load complete sim from YAML

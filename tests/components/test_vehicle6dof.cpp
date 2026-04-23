@@ -18,7 +18,7 @@
 #include <icarus/signal/Backplane.hpp>
 #include <icarus/signal/Registry.hpp>
 
-#include <janus/math/Quaternion.hpp>
+#include <metis/math/Quaternion.hpp>
 
 #include <cmath>
 
@@ -325,7 +325,7 @@ TEST(Vehicle6DOF, ForceAggregationEcefToBody) {
     double angle = M_PI / 2.0;
     double c = std::cos(angle / 2.0);
     double s = std::sin(angle / 2.0);
-    vehicle.SetInitialAttitude(janus::Quaternion<double>{c, 0, 0, s}); // yaw 90 deg
+    vehicle.SetInitialAttitude(metis::Quaternion<double>{c, 0, 0, s}); // yaw 90 deg
 
     // Provision all
     bp.set_context("", "Mass");
@@ -527,20 +527,20 @@ TEST(Vehicle6DOF, IntegratedRocketSimulation) {
 // =============================================================================
 
 TEST(Vehicle6DOFSymbolic, Compiles) {
-    Vehicle6DOF<janus::SymbolicScalar> vehicle("Vehicle", "");
+    Vehicle6DOF<metis::SymbolicScalar> vehicle("Vehicle", "");
     EXPECT_EQ(vehicle.TypeName(), "Vehicle6DOF");
 }
 
 TEST(Vehicle6DOFSymbolic, SetInitialConditions) {
-    Vehicle6DOF<janus::SymbolicScalar> vehicle("Vehicle", "");
+    Vehicle6DOF<metis::SymbolicScalar> vehicle("Vehicle", "");
 
-    janus::SymbolicScalar x(1.0);
-    janus::SymbolicScalar y(2.0);
-    janus::SymbolicScalar z(3.0);
+    metis::SymbolicScalar x(1.0);
+    metis::SymbolicScalar y(2.0);
+    metis::SymbolicScalar z(3.0);
 
-    vehicle.SetInitialPosition(Vec3<janus::SymbolicScalar>{x, y, z});
-    vehicle.SetInitialVelocityBody(Vec3<janus::SymbolicScalar>{x, y, z});
-    vehicle.SetInitialOmegaBody(Vec3<janus::SymbolicScalar>{x, y, z});
+    vehicle.SetInitialPosition(Vec3<metis::SymbolicScalar>{x, y, z});
+    vehicle.SetInitialVelocityBody(Vec3<metis::SymbolicScalar>{x, y, z});
+    vehicle.SetInitialOmegaBody(Vec3<metis::SymbolicScalar>{x, y, z});
 
     EXPECT_EQ(vehicle.TypeName(), "Vehicle6DOF");
 }

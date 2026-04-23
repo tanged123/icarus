@@ -70,7 +70,7 @@ include/icarus/staging/
 #pragma once
 
 #include <icarus/core/Types.hpp>
-#include <janus/core/Function.hpp>
+#include <metis/core/Function.hpp>
 #include <string>
 #include <vector>
 #include <optional>
@@ -130,9 +130,9 @@ struct LinearModel {
  * @brief Symbolic dynamics representation
  */
 struct SymbolicDynamics {
-    std::optional<janus::Function> dynamics;   ///< f(t, x) -> xdot
-    std::optional<janus::Function> jacobian_x; ///< df/dx
-    std::optional<janus::Function> jacobian_u; ///< df/du (if controls specified)
+    std::optional<metis::Function> dynamics;   ///< f(t, x) -> xdot
+    std::optional<metis::Function> jacobian_x; ///< df/dx
+    std::optional<metis::Function> jacobian_u; ///< df/du (if controls specified)
 
     std::vector<std::string> state_names;
     std::vector<std::string> control_names;
@@ -228,7 +228,7 @@ private:
 };
 
 /**
- * @brief Symbolic trim using janus::NewtonSolver
+ * @brief Symbolic trim using metis::NewtonSolver
  *
  * Requires symbolic components. Provides exact Jacobians.
  * Falls back to IPOPT for inequality constraints.
@@ -239,7 +239,7 @@ public:
 
 private:
     /// Build symbolic residual function
-    janus::Function BuildResidualFunction(
+    metis::Function BuildResidualFunction(
         SymbolicSimulatorCore& sym_sim,
         const TrimConfig& config);
 };
@@ -415,13 +415,13 @@ public:
     explicit SymbolicSimulatorCore(const SimulatorConfig& config);
 
     /// Set state vector (symbolic)
-    void SetState(const JanusVector<SymbolicScalar>& x);
+    void SetState(const MetisVector<SymbolicScalar>& x);
 
     /// Set time (symbolic)
     void SetTime(SymbolicScalar t);
 
     /// Compute derivatives symbolically
-    JanusVector<SymbolicScalar> ComputeDerivatives();
+    MetisVector<SymbolicScalar> ComputeDerivatives();
 
     /// Get total state size
     [[nodiscard]] std::size_t GetStateSize() const;
@@ -440,8 +440,8 @@ private:
     SignalRegistry<SymbolicScalar> registry_;
     Backplane<SymbolicScalar> backplane_;
 
-    JanusVector<SymbolicScalar> state_;
-    JanusVector<SymbolicScalar> derivatives_;
+    MetisVector<SymbolicScalar> state_;
+    MetisVector<SymbolicScalar> derivatives_;
     SymbolicScalar time_;
 };
 
@@ -489,15 +489,15 @@ TrimResult SymbolicTrim::Solve(Simulator& sim, const TrimConfig& config) {
     SymbolicSimulatorCore sym_sim(sim.GetConfig());
 
     // Build symbolic residual function: F(u) -> derivatives
-    janus::Function F = BuildResidualFunction(sym_sim, config);
+    metis::Function F = BuildResidualFunction(sym_sim, config);
 
     // Configure Newton solver
-    janus::RootFinderOptions opts;
+    metis::RootFinderOptions opts;
     opts.abstol = config.tolerance;
     opts.max_iter = config.max_iterations;
     opts.line_search = true;
 
-    janus::NewtonSolver solver(F, opts);
+    metis::NewtonSolver solver(F, opts);
 
     // Get initial guess
     const int n_controls = static_cast<int>(config.control_signals.size());
@@ -528,7 +528,7 @@ TrimResult SymbolicTrim::Solve(Simulator& sim, const TrimConfig& config) {
     return result;
 }
 
-janus::Function SymbolicTrim::BuildResidualFunction(
+metis::Function SymbolicTrim::BuildResidualFunction(
     SymbolicSimulatorCore& sym_sim,
     const TrimConfig& config)
 {
@@ -536,7 +536,7 @@ janus::Function SymbolicTrim::BuildResidualFunction(
     const int n_residuals = static_cast<int>(config.zero_derivatives.size());
 
     // Create symbolic control variables
-    auto [u_vec, u_mx] = janus::sym_vec_pair("u", n_controls);
+    auto [u_vec, u_mx] = metis::sym_vec_pair("u", n_controls);
 
     // Apply symbolic controls to simulator
     for (int i = 0; i < n_controls; ++i) {
@@ -554,7 +554,7 @@ janus::Function SymbolicTrim::BuildResidualFunction(
 
     SymbolicScalar residuals = SymbolicScalar::vertcat(residual_elements);
 
-    return janus::Function("trim_residual", {u_mx}, {residuals});
+    return metis::Function("trim_residual", {u_mx}, {residuals});
 }
 ```
 
@@ -966,7 +966,7 @@ inline void Simulator::Stage() {
 - [ ] `SymbolicSimulatorCore` creates symbolic components
 - [ ] `SymbolicTrim` produces same results as numeric (within tolerance)
 - [ ] `SymbolicLinearizer` produces exact Jacobians
-- [ ] Symbolic dynamics graphs exportable as `janus::Function`
+- [ ] Symbolic dynamics graphs exportable as `metis::Function`
 
 ### Integration
 - [ ] Trim result applied to numeric sim before linearization

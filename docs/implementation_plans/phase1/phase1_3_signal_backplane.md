@@ -408,6 +408,6 @@ icarus_add_test(test_signal
 
 | Dependency | Purpose | Status |
 |:-----------|:--------|:-------|
-| Janus types (`Vec3<Scalar>`) | Vector signal support | ✅ Available via Types.hpp |
+| Metis types (`Vec3<Scalar>`) | Vector signal support | ✅ Available via Types.hpp |
 | GoogleTest | Test framework | ✅ Available |
 | Phase 1.2 Types | `IcarusScalar`, error types | ✅ Complete |

@@ -10,7 +10,7 @@
  */
 
 #include "icarus/core/Component.hpp"
-#include "janus/math/Quaternion.hpp"
+#include "metis/math/Quaternion.hpp"
 #include <cmath>
 
 namespace icarus {
@@ -80,7 +80,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
     Vec3<Scalar> body_position_ = Vec3<Scalar>::Zero();
 
     /// Rotation from body frame to component local frame (identity by default)
-    janus::Quaternion<Scalar> body_orientation_;
+    metis::Quaternion<Scalar> body_orientation_;
 
     /// True after ReadAttachmentFromConfig() is called
     bool has_body_attachment_ = false;
@@ -100,7 +100,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
      *
      * **Convention Note:**
      * The YAML config uses `body_orientation_euler_zyx: [yaw, pitch, roll]` (degrees,
-     * aerospace order), but Janus `from_euler()` expects `(roll, pitch, yaw)` (radians).
+     * aerospace order), but Metis `from_euler()` expects `(roll, pitch, yaw)` (radians).
      * This method handles the conversion.
      *
      * @pre GetConfig() returns valid ComponentConfig
@@ -129,8 +129,8 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
             double roll_rad = euler_deg[2] * deg2rad;
 
             // Build quaternion from ZYX Euler angles
-            // Note: Janus from_euler() takes (roll, pitch, yaw) order for ZYX sequence
-            body_orientation_ = janus::Quaternion<Scalar>::from_euler(
+            // Note: Metis from_euler() takes (roll, pitch, yaw) order for ZYX sequence
+            body_orientation_ = metis::Quaternion<Scalar>::from_euler(
                 static_cast<Scalar>(roll_rad), static_cast<Scalar>(pitch_rad),
                 static_cast<Scalar>(yaw_rad));
         } else if (config.template Has<std::vector<double>>("body_orientation")) {
@@ -142,7 +142,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
                 throw ConfigError("body_orientation must have 4 elements [w, x, y, z]");
             }
 
-            body_orientation_ = janus::Quaternion<Scalar>{
+            body_orientation_ = metis::Quaternion<Scalar>{
                 static_cast<Scalar>(q[0]), // w
                 static_cast<Scalar>(q[1]), // x
                 static_cast<Scalar>(q[2]), // y
@@ -164,7 +164,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
      * @param orientation Rotation from body to component frame
      */
     void SetBodyAttachment(const Vec3<Scalar> &position,
-                           const janus::Quaternion<Scalar> &orientation) {
+                           const metis::Quaternion<Scalar> &orientation) {
         body_position_ = position;
         body_orientation_ = orientation;
         has_body_attachment_ = true;
@@ -186,7 +186,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
 
     [[nodiscard]] Vec3<Scalar> GetBodyPosition() const override { return body_position_; }
 
-    [[nodiscard]] janus::Quaternion<Scalar> GetBodyOrientation() const override {
+    [[nodiscard]] metis::Quaternion<Scalar> GetBodyOrientation() const override {
         return body_orientation_;
     }
 
@@ -200,7 +200,7 @@ template <typename Scalar> class PhysicalComponent : public Component<Scalar> {
      *
      * @return Quaternion that transforms component vectors to body frame
      */
-    [[nodiscard]] janus::Quaternion<Scalar> GetComponentToBodyRotation() const {
+    [[nodiscard]] metis::Quaternion<Scalar> GetComponentToBodyRotation() const {
         return body_orientation_.conjugate();
     }
 

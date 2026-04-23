@@ -97,10 +97,10 @@ public:
     void GenerateDataDictionary(...) const;
     DataDictionary GetDataDictionary() const;
     std::size_t GetTotalStateSize() const;
-    JanusVector<Scalar> GetState() const;
-    void SetState(const JanusVector<Scalar>&);
-    const JanusVector<Scalar>& ComputeDerivatives(Scalar);
-    const JanusVector<Scalar>& GetDerivatives() const;
+    MetisVector<Scalar> GetState() const;
+    void SetState(const MetisVector<Scalar>&);
+    const MetisVector<Scalar>& ComputeDerivatives(Scalar);
+    const MetisVector<Scalar>& GetDerivatives() const;
     const std::vector<StateSlice<Scalar>>& GetStateLayout() const;
     void SetNominalDt(Scalar);
     Scalar GetNominalDt() const;
@@ -118,8 +118,8 @@ public:
     void SetLogFile(const std::string&);
     void SetProfilingEnabled(bool);
     void ApplyLogConfig(const LogConfig&);
-    janus::Function GenerateGraph();
-    janus::Function GenerateJacobian();
+    std::optional<metis::Function> GetDynamicsGraph() const;
+    std::optional<metis::Function> GetJacobian() const;
 };
 ```
 
@@ -179,7 +179,7 @@ Everything else is either:
 │  │              EXPERT (Advanced users only)               ││
 │  │  - GetBackplane() → for signal introspection            ││
 │  │  - GetState() / SetState() → for optimization           ││
-│  │  - GenerateGraph() → symbolic mode                      ││
+│  │  - GetDynamicsGraph() / GetJacobian() → symbolic mode   ││
 │  │  - AdaptiveStep() → advanced integration                ││
 │  └─────────────────────────────────────────────────────────┘│
 │                                                             │
@@ -337,14 +337,14 @@ public:
      * Available after Stage() if symbolics.enabled = true.
      * Returns the dynamics function f(t, x) -> x_dot as a CasADi function.
      */
-    [[nodiscard]] janus::Function GetDynamicsGraph() const;
+    [[nodiscard]] metis::Function GetDynamicsGraph() const;
 
     /**
      * @brief Get symbolic Jacobian
      *
      * Available after Stage() if symbolics.generate_jacobian = true.
      */
-    [[nodiscard]] janus::Function GetJacobian() const;
+    [[nodiscard]] metis::Function GetJacobian() const;
 
     /**
      * @brief Get linearized state-space model
@@ -385,8 +385,8 @@ private:
     Phase phase_ = Phase::Uninitialized;
 
     // Results from Stage() - available after staging
-    std::optional<janus::Function> dynamics_graph_;
-    std::optional<janus::Function> jacobian_;
+    std::optional<metis::Function> dynamics_graph_;
+    std::optional<metis::Function> jacobian_;
     std::optional<LinearModel> linear_model_;
 
     // External callbacks
@@ -550,14 +550,14 @@ public:
     void ZeroDerivatives();
 
     [[nodiscard]] std::size_t TotalSize() const;
-    [[nodiscard]] JanusVector<Scalar> GetState() const;
-    void SetState(const JanusVector<Scalar>& X);
-    [[nodiscard]] const JanusVector<Scalar>& GetDerivatives() const;
+    [[nodiscard]] MetisVector<Scalar> GetState() const;
+    void SetState(const MetisVector<Scalar>& X);
+    [[nodiscard]] const MetisVector<Scalar>& GetDerivatives() const;
     [[nodiscard]] const std::vector<StateSlice<Scalar>>& GetLayout() const;
 
 private:
-    JanusVector<Scalar> X_global_;
-    JanusVector<Scalar> X_dot_global_;
+    MetisVector<Scalar> X_global_;
+    MetisVector<Scalar> X_dot_global_;
     std::vector<StateSlice<Scalar>> layout_;
 };
 
@@ -577,15 +577,15 @@ class IntegrationManager {
 public:
     void Configure(const IntegratorConfig<Scalar>& config);
 
-    JanusVector<Scalar> Step(
-        std::function<JanusVector<Scalar>(Scalar, const JanusVector<Scalar>&)> deriv_func,
-        const JanusVector<Scalar>& X,
+    MetisVector<Scalar> Step(
+        std::function<MetisVector<Scalar>(Scalar, const MetisVector<Scalar>&)> deriv_func,
+        const MetisVector<Scalar>& X,
         Scalar t,
         Scalar dt);
 
     AdaptiveStepResult<Scalar> AdaptiveStep(
-        std::function<JanusVector<Scalar>(Scalar, const JanusVector<Scalar>&)> deriv_func,
-        const JanusVector<Scalar>& X,
+        std::function<MetisVector<Scalar>(Scalar, const MetisVector<Scalar>&)> deriv_func,
+        const MetisVector<Scalar>& X,
         Scalar t,
         Scalar dt_request);
 
@@ -653,7 +653,7 @@ private:
 - [ ] Clean 4-operation core API: `FromConfig()`, `Stage()`, `Step()`, `~Simulator()`
 - [ ] Query interface: `Time()`, `Peek<T>()`, `GetDataDictionary()`
 - [ ] Control interface: `Poke<T>()`, `Reset()`, `SetInputSource()`
-- [ ] Expert interface: `GetState()`, `GenerateGraph()`, `AdaptiveStep()`
+- [ ] Expert interface: `GetState()`, `GetDynamicsGraph()`, `GetJacobian()`, `AdaptiveStep()`
 
 ### Lifecycle Implementation
 

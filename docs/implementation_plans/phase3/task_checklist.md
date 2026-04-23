@@ -9,8 +9,8 @@
 
 These tasks verify the codebase is ready before writing new code.
 
-### 3.0.1 Janus Compliance Audit
-- [ ] Create `scripts/janus_audit.sh`
+### 3.0.1 Metis Compliance Audit
+- [ ] Create `scripts/metis_audit.sh`
 - [ ] Run audit on `include/`, `src/`, `components/`
 - [ ] Document violations found
 - [ ] Fix all violations (if any)
@@ -103,8 +103,8 @@ These tasks verify the codebase is ready before writing new code.
 - [ ] Test: Full lifecycle (Provision → Stage → Step)
 
 ### 3.2.2 Component Audit
-- [ ] Audit `PointMass3DOF.hpp` for Janus compliance
-- [ ] Audit `PointMassGravity.hpp` for Janus compliance
+- [ ] Audit `PointMass3DOF.hpp` for Metis compliance
+- [ ] Audit `PointMassGravity.hpp` for Metis compliance
 - [ ] Document any fixes required
 - [ ] Apply fixes and verify symbolic compilation
 
@@ -223,10 +223,10 @@ These tasks verify the codebase is ready before writing new code.
 Final checklist before marking Phase 3 complete:
 
 - [ ] `Simulator<SymbolicScalar>` compiles with all existing components
-- [ ] `GenerateGraph()` returns valid `janus::Function`
+- [ ] `GenerateGraph()` returns valid `metis::Function`
 - [ ] Numeric/symbolic outputs match within tolerance (< 1e-10)
 - [ ] Jacobian extraction works for point mass dynamics
-- [ ] Zero Janus violations (audit passes)
+- [ ] Zero Metis violations (audit passes)
 - [ ] Examples migrated to SimulationBuilder
 - [ ] CI includes symbolic mode build and test
 - [ ] All tests pass
@@ -239,7 +239,7 @@ Recommended sequence to minimize rework:
 
 ```
 Week 1: Validation & Foundation
-├── 3.0.1 Janus Audit
+├── 3.0.1 Metis Audit
 ├── 3.0.2 Vulcan Check
 ├── 3.0.3 Basic Compilation Test
 └── 3.2.2 Component Audit + fixes
@@ -287,7 +287,7 @@ Week 4: Testing & Examples
 ```
 
 Key dependencies:
-1. Janus audit must pass before component fixes
+1. Metis audit must pass before component fixes
 2. Builder must exist before runner
 3. Symbolic compilation must work before tracer
 4. Tracer must work before comparison tests

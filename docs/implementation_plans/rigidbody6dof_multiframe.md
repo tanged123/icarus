@@ -28,7 +28,7 @@ Users working with real-world scenarios (like the rocket example at 100km altitu
 | `vulcan::body_from_euler(ned, yaw, pitch, roll)` | Body frame from Euler angles |
 | `vulcan::quaternion_from_body(body, ned)` | Extract quaternion from body frame |
 | `vulcan::euler_from_body(body, ned)` | Extract Euler angles from body frame |
-| `janus::Quaternion::from_euler(roll, pitch, yaw)` | Quaternion from ZYX Euler |
+| `metis::Quaternion::from_euler(roll, pitch, yaw)` | Quaternion from ZYX Euler |
 
 ---
 
@@ -42,8 +42,8 @@ Users working with real-world scenarios (like the rocket example at 100km altitu
 
 ```cpp
 #include <vulcan/coordinates/Geodetic.hpp>
-#include <vulcan/coordinates/LocalFrames.hpp>
-#include <vulcan/coordinates/BodyFrames.hpp>
+#include <vulcan/coordinates/FrameLocal.hpp>
+#include <vulcan/coordinates/FrameVehicle.hpp>
 ```
 
 #### 1.2 Update Stage() method
@@ -127,7 +127,7 @@ if (config.template Has<Vec3<double>>("initial_euler_zyx")) {
 
     // Extract quaternion (body-to-ECEF, which is what we integrate)
     // The body frame axes in ECEF define the rotation
-    auto q_body_to_ecef = janus::Quaternion<double>::from_rotation_matrix(
+    auto q_body_to_ecef = metis::Quaternion<double>::from_rotation_matrix(
         (Mat3<double>() << body.x_axis, body.y_axis, body.z_axis).finished());
 
     attitude_ = Vec4<Scalar>{static_cast<Scalar>(q_body_to_ecef.w),
@@ -232,7 +232,7 @@ void Step(Scalar t, Scalar dt) override {
 
     // Attitude as Euler angles
     // Build body frame from quaternion
-    janus::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
+    metis::Quaternion<Scalar> quat{attitude_(0), attitude_(1), attitude_(2), attitude_(3)};
 
     // Body axes in ECEF
     Vec3<Scalar> x_body_ecef = quat.rotate(Vec3<Scalar>::UnitX());

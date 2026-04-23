@@ -10,7 +10,7 @@ The fundamental architectural decision for Icarus is to reject deep object-orien
 
 This approach aligns with:
 1. **Simulink/GNC Patterns:** Aerospace engineers model systems as block diagrams, not inheritance trees.
-2. **Janus Symbolic compatibility:** `casadi::MX` graph generation requires a linear or topologically sorted execution trace. Deep branching logic obscures this graph.
+2. **Metis Symbolic compatibility:** `casadi::MX` graph generation requires a linear or topologically sorted execution trace. Deep branching logic obscures this graph.
 3. **Data Locality:** Keeping state vectors contiguous for ODE solvers/optimizers.
 
 ### The Defining Rule
