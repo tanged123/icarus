@@ -15,12 +15,12 @@
 
     # Dependencies as flake inputs
     metis = {
-      url = "github:tanged123/metis";
+      url = "github:tanged123/metis/2.0.0";
       # For local development:
       #url = "path:/home/tanged/sources/metis";
     };
     vulcan = {
-      url = "github:tanged123/vulcan";
+      url = "github:tanged123/vulcan/0.4.0";
       # For local development:
       # url = "path:/home/tanged/sources/vulcan";
     };
